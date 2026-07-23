@@ -44,16 +44,21 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // PDP Logo Header
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF008751).withOpacity(0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF008751), width: 2),
+                // Official PDP Logo Header
+                Image.asset(
+                  'assets/pdp_logo.png',
+                  height: 90,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF008751).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF008751), width: 2),
+                    ),
+                    child: const Icon(Icons.shield_outlined, size: 48, color: Color(0xFF008751)),
                   ),
-                  child: const Icon(Icons.shield_outlined, size: 48, color: Color(0xFF008751)),
                 ),
                 const SizedBox(height: 16),
                 const Text(

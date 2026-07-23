@@ -12,10 +12,13 @@ export default function Header({
     <header className={`h-16 border-b px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200 ${
       isDark ? 'bg-[#0B132B] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
     }`}>
-      {/* Title & Breadcrumb */}
-      <div>
-        <h1 className="text-base font-bold tracking-tight">{title}</h1>
-        {subtitle && <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{subtitle}</p>}
+      {/* Title & Breadcrumb with PDP Logo Badge */}
+      <div className="flex items-center gap-3">
+        <img src="/pdp_logo.png" alt="PDP Logo" className="w-8 h-8 object-contain drop-shadow" />
+        <div>
+          <h1 className="text-base font-bold tracking-tight">{title}</h1>
+          {subtitle && <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{subtitle}</p>}
+        </div>
       </div>
 
       {/* Right Controls */}
@@ -84,7 +87,7 @@ export default function Header({
           </div>
           <div className="hidden lg:block leading-tight">
             <p className="text-xs font-bold">Abdullahi Usman</p>
-            <p className="text-[10px] text-pdp font-semibold flex items-center gap-1">
+            <p className="text-pdp font-semibold text-[10px] flex items-center gap-1">
               <Shield className="w-2.5 h-2.5" />
               <span>Situation Room Director</span>
             </p>

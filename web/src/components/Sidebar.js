@@ -46,12 +46,10 @@ export default function Sidebar() {
     <aside className={`w-64 flex-shrink-0 flex flex-col border-r h-screen sticky top-0 transition-colors duration-200 ${
       isDark ? 'bg-[#070D1E] border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
     }`}>
-      {/* Brand Header */}
+      {/* Brand Header with Official PDP Logo */}
       <div className={`p-4 border-b flex items-center gap-3 ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
-        <div className="w-10 h-10 rounded-full bg-pdp/20 border-2 border-pdp flex items-center justify-center text-pdp font-bold shadow-inner">
-          <svg className="w-6 h-6 fill-current text-pdp" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 3.88 2.21 7.24 5.46 8.93L12 13V2zm0 0c5.52 0 10 4.48 10 10 0 3.88-2.21 7.24-5.46 8.93L12 13V2z"/>
-          </svg>
+        <div className="w-11 h-11 rounded-xl bg-slate-900/40 p-1 flex items-center justify-center border border-pdp/30 shadow-sm flex-shrink-0">
+          <img src="/pdp_logo.png" alt="Peoples Democratic Party Logo" className="w-9 h-9 object-contain drop-shadow" />
         </div>
         <div>
           <h1 className="font-black text-sm tracking-tight leading-tight flex items-center gap-1">
