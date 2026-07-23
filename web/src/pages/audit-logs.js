@@ -1,18 +1,16 @@
 import { useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import { useTheme } from './_app'
 import { 
-  FileText, 
-  ShieldCheck, 
   Search, 
-  Download, 
-  Clock, 
-  UserCheck, 
-  MapPin,
-  Laptop
+  Download 
 } from 'lucide-react'
 
 export default function AuditLogsPage() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
   const [searchQuery, setSearchQuery] = useState('')
 
   const auditLogs = [
@@ -30,27 +28,32 @@ export default function AuditLogsPage() {
     log.id.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
+
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      <Sidebar theme="light" />
+    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
+      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
+    }`}>
+      <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Header 
           title="Security Audit Logs" 
           subtitle="Immutable timestamped activity history, GPS metadata, and user action tracking" 
-          theme="light"
         />
 
         <main className="p-6 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex justify-between items-center">
+          <div className={`${cardClass} rounded-xl p-4 flex justify-between items-center`}>
             <div className="relative w-72">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search audit log action, user, or IP..."
+                placeholder="Search audit log action, user..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none"
+                className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border ${
+                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
               />
             </div>
 
@@ -59,16 +62,16 @@ export default function AuditLogsPage() {
             </button>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h3 className="text-xs font-bold text-slate-900">Immutable Audit Trail</h3>
+          <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
+            <div className={`flex justify-between items-center pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+              <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Immutable Audit Trail</h3>
               <span className="text-xs font-mono text-slate-400">Showing {filteredLogs.length} Log Entries</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-y border-slate-200 text-slate-500 font-bold">
+                  <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                     <th className="py-2.5 px-3">Log ID</th>
                     <th className="py-2.5 px-3">User & Role</th>
                     <th className="py-2.5 px-3">Action Event</th>
@@ -78,21 +81,23 @@ export default function AuditLogsPage() {
                     <th className="py-2.5 px-3 text-right">Timestamp</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
                   {filteredLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50 transition">
+                    <tr key={log.id} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
                       <td className="py-3 px-3 font-mono font-bold text-pdp">{log.id}</td>
                       <td className="py-3 px-3">
-                        <span className="font-bold text-slate-900 block">{log.user}</span>
+                        <span className={`font-bold block ${isDark ? 'text-white' : 'text-slate-900'}`}>{log.user}</span>
                         <span className="text-[10px] text-slate-400">{log.role}</span>
                       </td>
                       <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                          isDark ? 'bg-slate-900 text-slate-300 border-slate-800' : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
                           {log.action}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-600 max-w-xs">{log.details}</td>
-                      <td className="py-3 px-3 font-mono text-slate-500">{log.ip}</td>
+                      <td className="py-3 px-3 text-slate-500 max-w-xs">{log.details}</td>
+                      <td className="py-3 px-3 font-mono text-slate-400">{log.ip}</td>
                       <td className="py-3 px-3 font-mono text-slate-400 text-[11px]">
                         {log.lat ? `${log.lat}, ${log.lng}` : 'N/A'}
                       </td>

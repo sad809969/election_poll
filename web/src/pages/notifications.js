@@ -1,19 +1,16 @@
 import { useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import { useTheme } from './_app'
 import { 
   Bell, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Info, 
-  ShieldAlert, 
-  Clock, 
-  Search, 
-  CheckCheck,
-  Trash2
+  CheckCheck 
 } from 'lucide-react'
 
 export default function NotificationsPage() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
   const [filter, setFilter] = useState('All')
 
   const notifications = [
@@ -25,28 +22,32 @@ export default function NotificationsPage() {
   ]
 
   const filteredNotifications = notifications.filter(n => filter === 'All' || n.type === filter)
+  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      <Sidebar theme="light" />
+    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
+      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
+    }`}>
+      <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Header 
           title="Notifications & System Alerts" 
           subtitle="Real-time alert log, system notifications, and operational activity feeds" 
-          theme="light"
         />
 
         <main className="p-6 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex justify-between items-center">
+          <div className={`${cardClass} rounded-xl p-4 flex justify-between items-center`}>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500">Filter Notifications:</span>
+              <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Filter Notifications:</span>
               {['All', 'Emergency', 'System', 'Incident', 'Audit'].map(f => (
                 <button 
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                    filter === f ? 'bg-pdp text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    filter === f 
+                      ? 'bg-pdp text-white shadow-sm' 
+                      : isDark ? 'bg-slate-900 text-slate-400 border border-slate-800' : 'bg-slate-100 text-slate-600 border border-slate-200'
                   }`}
                 >
                   {f}
@@ -59,12 +60,12 @@ export default function NotificationsPage() {
             </button>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
-            <h3 className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-2">Recent Notifications Stream</h3>
+          <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-3`}>
+            <h3 className={`text-xs font-bold border-b pb-2 ${isDark ? 'text-slate-200 border-slate-800' : 'text-slate-900 border-slate-100'}`}>Recent Notifications Stream</h3>
             <div className="space-y-3">
               {filteredNotifications.map((n) => (
                 <div key={n.id} className={`p-4 rounded-xl border transition flex items-start gap-4 ${
-                  n.isUnread ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-100'
+                  n.isUnread ? 'bg-emerald-500/10 border-emerald-500/30' : isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-100'
                 }`}>
                   <div className={`p-2.5 rounded-xl text-white ${
                     n.type === 'Emergency' ? 'bg-red-500' : n.type === 'Incident' ? 'bg-amber-500' : 'bg-pdp'
@@ -73,10 +74,10 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
-                      <h4 className="text-xs font-bold text-slate-900">{n.title}</h4>
+                      <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{n.title}</h4>
                       <span className="text-[10px] text-slate-400 font-mono">{n.time}</span>
                     </div>
-                    <p className="text-xs text-slate-600 mt-0.5">{n.desc}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{n.desc}</p>
                   </div>
                 </div>
               ))}
