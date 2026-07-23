@@ -78,16 +78,16 @@ export default function DarkMonitoringDashboard() {
           subtitle="Overview of election activities across Jigawa State" 
         />
 
-        <main className="p-6 space-y-6">
+        <main className="p-4 sm:p-6 space-y-6">
           {/* Top Date & Election Banner */}
-          <div className={`flex justify-between items-center rounded-xl px-5 py-3 border ${
+          <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center rounded-xl p-4 sm:px-5 sm:py-3 border gap-3 ${
             isDark ? 'bg-[#141E38] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
           }`}>
             <div>
-              <span className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Jigawa State PDP Election Command Center</span>
-              <h2 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <span className={`text-[11px] sm:text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Jigawa State PDP Election Command Center</span>
+              <h2 className={`text-xs sm:text-sm font-bold flex flex-wrap items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 <span>Governorship Election Situation Room</span>
-                <span className="bg-emerald-500/20 text-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">LIVE FEED</span>
+                <span className="bg-emerald-500/20 text-emerald-500 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">LIVE FEED</span>
               </h2>
             </div>
             <div className={`flex items-center gap-2 border px-3 py-1.5 rounded-lg text-xs font-semibold ${
@@ -99,7 +99,7 @@ export default function DarkMonitoringDashboard() {
           </div>
 
           {/* 5 Top KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
               <div className="flex justify-between items-start">
                 <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total Polling Units</span>
@@ -144,7 +144,7 @@ export default function DarkMonitoringDashboard() {
               </div>
             </div>
 
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
+            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between sm:col-span-2 lg:col-span-1`}>
               <div className="flex justify-between items-start">
                 <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Pending Reports</span>
                 <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500"><Clock className="w-4 h-4" /></div>
@@ -192,9 +192,9 @@ export default function DarkMonitoringDashboard() {
             </div>
           </div>
 
-          {/* Bottom Analytics 3-Column Grid */}
+          {/* Bottom Analytics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Reports Over Time (Line Chart) */}
+            {/* Reports Over Time */}
             <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px]`}>
               <div className="flex justify-between items-center">
                 <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Reports Over Time (Today)</span>
@@ -220,7 +220,7 @@ export default function DarkMonitoringDashboard() {
               </div>
             </div>
 
-            {/* Incidents by Type (Donut Chart) */}
+            {/* Incidents by Type */}
             <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px]`}>
               <div className="flex justify-between items-center">
                 <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Incidents by Type (Today)</span>
@@ -252,8 +252,8 @@ export default function DarkMonitoringDashboard() {
               </div>
             </div>
 
-            {/* Top LGAs Coverage + Critical Alert */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px]`}>
+            {/* Top LGAs Coverage */}
+            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px] md:col-span-2 lg:col-span-1`}>
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Top LGAs by Coverage</span>
