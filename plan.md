@@ -1,10 +1,10 @@
-# JIGAWA PDP POLLWATCH 2027 — Flutter Native Platforms Generation Plan
+# JIGAWA PDP POLLWATCH 2027 — Gradle Android Build Timeout Fix Plan
 
 ## 1. Overview
-Run `flutter create .` inside `/home/fox/poll/mobile` to generate native `android/`, `web/`, and `linux/` platform files.
+Update `mobile/android/settings.gradle.kts` with AGP version `8.1.2`, Kotlin `1.9.0`, and repository resolution.
 
 ## 2. Steps
-1. Run `flutter create .` in `/home/fox/poll/mobile`.
-2. Commit and push generated native platform files to GitHub `main` branch.
+1. Update `mobile/android/settings.gradle.kts`.
+2. Commit and push changes to GitHub `main` branch.
 
 ---
