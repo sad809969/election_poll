@@ -27,6 +27,18 @@ Jigawa PDP PollWatch is a secure, real-time Election Situation Room and Monitori
 
 ---
 
+## Database Operational Modes
+
+### Mode 1: Automatic SQLite (Default / Pre-seeded)
+- Backend automatically seeds all 27 Jigawa State LGAs and default accounts on startup (`/tmp/pollwatch.db` on Vercel).
+
+### Mode 2: Production PostgreSQL (Neon / Supabase / Vercel Postgres)
+Set environment variables in Vercel / server config:
+- `DATABASE_URL` = `postgresql+asyncpg://user:pass@host:5432/pollwatch`
+- `SYNC_DATABASE_URL` = `postgresql://user:pass@host:5432/pollwatch`
+
+---
+
 ## Quick Setup Instructions
 
 ### Backend Setup
@@ -59,14 +71,8 @@ flutter run
 
 ## Deployment (Vercel Host)
 The repository includes pre-configured Vercel hosting manifests:
-- `web/vercel.json` for Next.js Web Dashboard
-- `backend/vercel.json` & `backend/api/index.py` for FastAPI Serverless Functions
-
-To deploy to Vercel:
-```bash
-cd web && vercel --prod
-cd backend && vercel --prod
-```
+- `web/vercel.json` for Next.js Web Dashboard (Root Directory: `web`)
+- `backend/vercel.json` & `backend/api/index.py` for FastAPI Serverless Functions (Root Directory: `backend`)
 
 ---
 © 2027 Jigawa PDP PollWatch. All rights reserved.

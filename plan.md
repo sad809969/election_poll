@@ -1,8 +1,12 @@
-# JIGAWA PDP POLLWATCH 2027 — Vercel 500 Error Fix Plan
+# JIGAWA PDP POLLWATCH 2027 — Database Setup Plan
 
-## Execution Steps
-1. Update `backend/app/config.py` to route SQLite `.db` and `uploads` directory to writable `/tmp` when running under Vercel serverless environment.
-2. Update `backend/api/index.py` for ASGI serverless execution.
-3. Commit and push fix to GitHub origin `main` with PAT authentication.
+## 1. Overview
+Document the database options for Jigawa PDP PollWatch:
+- Mode 1: Automatic Pre-Seeded SQLite (runs out-of-the-box in `/tmp/pollwatch.db` on Vercel).
+- Mode 2: Managed PostgreSQL (Neon / Supabase / Vercel Postgres) for high-concurrency Election Day operations.
+
+## 2. Steps
+1. Document `DATABASE_URL` environment variable configuration for Vercel.
+2. Update README.md and commit to GitHub repository.
 
 ---
