@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "name": "jigawa-pdp-pollwatch-web",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/v1/(.*)",
+      "dest": "https://jigawa-pdp-pollwatch-backend.vercel.app/api/v1/$1"
+    }
+  ]
+}

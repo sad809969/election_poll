@@ -1,0 +1,28 @@
+name: jigawa_pdp_pollwatch_mobile
+description: "Field Agent Mobile Application for Jigawa PDP PollWatch 2027"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  http: ^1.2.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  geolocator: ^11.0.0
+  image_picker: ^1.0.7
+  intl: ^0.19.0
+  provider: ^6.1.1
+  connectivity_plus: ^5.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
