@@ -1,11 +1,8 @@
-# JIGAWA PDP POLLWATCH 2027 — Vercel Setup & Deployment Plan
+# JIGAWA PDP POLLWATCH 2027 — Vercel 500 Error Fix Plan
 
-## 1. Overview
-Configure `web/next.config.js` for standard Vercel Next.js deployment and provide step-by-step guidance for importing the repository subfolders (`web` and `backend`) into Vercel.
-
-## 2. Steps
-1. Update `web/next.config.js` to enable native Vercel Next.js server features.
-2. Commit and push updated config to GitHub origin `main`.
-3. Provide exact Vercel Dashboard Root Directory settings for `web` and `backend`.
+## Execution Steps
+1. Update `backend/app/config.py` to route SQLite `.db` and `uploads` directory to writable `/tmp` when running under Vercel serverless environment.
+2. Update `backend/api/index.py` for ASGI serverless execution.
+3. Commit and push fix to GitHub origin `main` with PAT authentication.
 
 ---
