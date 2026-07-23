@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'timeline_tracker_screen.dart';
 import 'incident_report_screen.dart';
 import 'result_submission_screen.dart';
+import 'login_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String agentName;
@@ -22,37 +23,63 @@ class HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<HomeDashboard> {
-  int _pendingOfflineCount = 0;
   bool _isOnline = true;
+  int _offlineQueueCount = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF070D1E),
       appBar: AppBar(
-        title: const Text('Agent Field Command', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF0B132B),
+        title: Row(
+          children: [
+            Image.asset('assets/pdp_logo.png', height: 32, fit: BoxFit.contain),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('JIGAWA PDP POLLWATCH', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF008751))),
+                Text(widget.lgaName, style: const TextStyle(fontSize: 10, color: Colors.slate400)),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: Icon(_isOnline ? Icons.wifi : Icons.wifi_off, color: _isOnline ? Colors.lightGreenAccent : Colors.orange),
+            icon: Icon(_isOnline ? Icons.wifi : Icons.wifi_off, color: _isOnline ? const Color(0xFF10B981) : Colors.red),
+            onPressed: () => setState(() => _isOnline = !_isOnline),
+            tooltip: _isOnline ? 'Online (Connected)' : 'Offline (Queue Mode)',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.slate400),
             onPressed: () {
-              setState(() => _isOnline = !_isOnline);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(_isOnline ? 'Online Mode Active' : 'Offline Mode Active — Reports Queued Locally')),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
             },
-          )
+          ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Assigned PU Banner
-            Card(
-              color: const Color(0xFF008751),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Agent & PU Info Banner Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF008751), Color(0xFF0B132B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF008751).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                  ],
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -65,113 +92,163 @@ class _HomeDashboardState extends State<HomeDashboard> {
                             color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text('EXCLUSIVE AGENT ASSIGNMENT', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.check_circle, size: 12, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text('AGENT CHECKED-IN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                            ],
+                          ),
                         ),
-                        Text(widget.puCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                        const Text('PDP POWER TO THE PEOPLE!', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(widget.assignedPu, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(widget.agentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
                     const SizedBox(height: 4),
-                    Text('LGA: ${widget.lgaName} • Agent: ${widget.agentName}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text('Assigned: ${widget.assignedPu}', style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-            // Offline Sync Status Banner
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _pendingOfflineCount > 0 ? Colors.amber.shade50 : Colors.green.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _pendingOfflineCount > 0 ? Colors.amber.shade300 : Colors.green.shade300),
-              ),
-              child: Row(
+              const Text('FIELD OPERATIVE ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.slate400, letterSpacing: 0.8)),
+              const SizedBox(height: 12),
+
+              // 4 Main Action Cards Grid
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.15,
                 children: [
-                  Icon(_pendingOfflineCount > 0 ? Icons.sync : Icons.cloud_done, color: _pendingOfflineCount > 0 ? Colors.amber.shade800 : Colors.green.shade800),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _pendingOfflineCount > 0 ? 'Queued Offline Items: $_pendingOfflineCount' : 'All Data Synchronized',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _pendingOfflineCount > 0 ? Colors.amber.shade900 : Colors.green.shade900),
-                        ),
-                        Text(
-                          _isOnline ? 'Automatic background sync connected' : 'Offline mode — Encrypted & saved locally',
-                          style: const TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                      ],
-                    ),
+                  _buildActionCard(
+                    context,
+                    title: 'Timeline Tracker',
+                    subtitle: 'Accreditation & Voting',
+                    icon: Icons.access_time_filled,
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TimelineTrackerScreen())),
+                  ),
+                  _buildActionCard(
+                    context,
+                    title: 'Report Incident',
+                    subtitle: 'Violence, BVAS, Queue',
+                    icon: Icons.warning_amber_rounded,
+                    color: const Color(0xFFEF4444),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncidentReportScreen())),
+                  ),
+                  _buildActionCard(
+                    context,
+                    title: 'Form EC8A Result',
+                    subtitle: 'Vote Counts & Photo',
+                    icon: Icons.fact_check,
+                    color: const Color(0xFF10B981),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResultSubmissionScreen())),
+                  ),
+                  _buildActionCard(
+                    context,
+                    title: 'Situation Desk',
+                    subtitle: 'Call Coordinator',
+                    icon: Icons.phone_in_talk,
+                    color: const Color(0xFF8B5CF6),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Calling LGA Coordinator: 0812 345 6789...')),
+                      );
+                    },
                   ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: 20),
-            const Text('ELECTION DAY ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-            const SizedBox(height: 12),
+              const SizedBox(height: 20),
 
-            // Action Launchers Grid
-            _buildActionCard(
-              context,
-              title: 'Timeline & Check-in Tracker',
-              subtitle: 'Log Accreditation, Voting & Counting milestones',
-              icon: Icons.timeline,
-              color: Colors.blue.shade700,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TimelineTrackerScreen(puCode: widget.puCode))),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              title: 'Report Field Incident',
-              subtitle: 'Violence, BVAS issues, security & late officials',
-              icon: Icons.warning_amber_rounded,
-              color: Colors.amber.shade800,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => IncidentReportScreen(puCode: widget.puCode))),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              title: 'Submit Election Result (EC8A)',
-              subtitle: 'Input party votes & upload official result sheet photo',
-              icon: Icons.how_to_vote,
-              color: const Color(0xFF008751),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ResultSubmissionScreen(puCode: widget.puCode))),
-            ),
-          ],
+              // Queue Status Footer
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141E38),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF1E293B)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isOnline ? Icons.cloud_done : Icons.cloud_off,
+                      color: _isOnline ? const Color(0xFF10B981) : Colors.amber,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isOnline ? 'Real-Time Sync Active' : 'Offline Queue Active',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _isOnline ? const Color(0xFF10B981) : Colors.amber),
+                          ),
+                          Text(
+                            _isOnline ? 'All telemetry synced with Situation Room' : '$_offlineQueueCount items queued for automatic sync',
+                            style: const TextStyle(fontSize: 10, color: Colors.slate400),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildActionCard(BuildContext context, {
+  Widget _buildActionCard(
+    BuildContext context, {
     required String title,
     required String subtitle,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 24),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141E38),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 3)),
+          ],
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 9, color: Colors.slate400, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
