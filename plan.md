@@ -1,13 +1,10 @@
-# JIGAWA PDP POLLWATCH 2027 — Mobile Responsiveness Overhaul Plan
+# JIGAWA PDP POLLWATCH 2027 — Database Documentation Plan
 
 ## 1. Overview
-Implement mobile menu drawer, hamburger toggle, and fluid responsive grid breakpoints across all 13 pages.
+Create a standalone `database.md` file in the workspace root containing the complete, professional database schema specification and architectural breakdown for sharing.
 
 ## 2. Steps
-1. Update `web/src/pages/_app.js` with `isMobileOpen` state in `ThemeContext`.
-2. Update `web/src/components/Header.js` with Mobile Hamburger button.
-3. Update `web/src/components/Sidebar.js` with slide-over drawer overlay for mobile.
-4. Refactor all 13 page components for mobile responsiveness.
-5. Commit and push changes to GitHub `main` branch to update live Vercel deployment.
+1. Create `database.md` in workspace root.
+2. Commit and push `database.md` to GitHub `main` branch.
 
 ---
