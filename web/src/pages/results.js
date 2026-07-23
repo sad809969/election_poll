@@ -1,336 +1,166 @@
 import { useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import { useTheme } from './_app'
 import { 
   BarChart3, 
-  CheckCircle, 
-  Building2, 
-  Trophy, 
-  Clock, 
-  AlertCircle, 
-  FileSpreadsheet, 
+  CheckCircle2, 
   FileText, 
-  Archive,
-  Download,
-  Image as ImageIcon,
-  CheckCheck
+  Download, 
+  Building2, 
+  Search, 
+  Filter, 
+  ShieldAlert, 
+  Eye 
 } from 'lucide-react'
-import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts'
+import { 
+  ResponsiveContainer, 
+  PieChart as RePieChart, 
+  Pie, 
+  Cell 
+} from 'recharts'
 
-export default function ResultsDashboard() {
-  const partyShare = [
-    { name: 'PDP', votes: '562,430', pct: 45.1, color: '#008751' },
-    { name: 'APC', votes: '418,765', pct: 33.6, color: '#1E40AF' },
-    { name: 'NNPP', votes: '153,890', pct: 12.3, color: '#7C3AED' },
-    { name: 'LP', votes: '72,341', pct: 5.8, color: '#EAB308' },
-    { name: 'Others', votes: '41,167', pct: 3.2, color: '#64748B' },
+export default function ResultsDashboardPage() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
+  const [selectedLga, setSelectedLga] = useState('All LGAs')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const partyVoteShare = [
+    { name: 'PDP (Peoples Democratic Party)', votes: 562430, pct: '52.4%', color: '#10B981' },
+    { name: 'APC (All Progressives Congress)', votes: 418765, pct: '39.0%', color: '#3B82F6' },
+    { name: 'NNPP (New Nigeria Peoples Party)', votes: 68420, pct: '6.4%', color: '#8B5CF6' },
+    { name: 'LP (Labour Party)', votes: 23640, pct: '2.2%', color: '#F59E0B' },
   ]
 
-  const lgaResults = [
-    { lga: 'Dutse', pdp: '78,654', apc: '55,430', nnpp: '21,600', lp: '8,620', others: '4,300', valid: '168,604', pct: 95 },
-    { lga: 'Hadejia', pdp: '65,432', apc: '48,721', nnpp: '18,340', lp: '7,100', others: '3,210', valid: '142,803', pct: 90 },
-    { lga: 'Kazaure', pdp: '62,112', apc: '44,875', nnpp: '16,922', lp: '6,420', others: '2,988', valid: '133,317', pct: 88 },
-    { lga: 'Gumel', pdp: '54,331', apc: '43,210', nnpp: '15,443', lp: '5,310', others: '2,450', valid: '120,744', pct: 85 },
-    { lga: 'Kiyawa', pdp: '48,231', apc: '36,543', nnpp: '14,200', lp: '4,800', others: '2,112', valid: '105,886', pct: 82 },
+  const lgaCollationTable = [
+    { lga: 'Dutse', totalPus: 240, collatedPus: 228, pdp: 78654, apc: 55430, nnpp: 21600, lp: 8620, pct: '95%' },
+    { lga: 'Hadejia', totalPus: 210, collatedPus: 189, pdp: 65432, apc: 48721, nnpp: 18340, lp: 7100, pct: '90%' },
+    { lga: 'Kazaure', totalPus: 195, collatedPus: 171, pdp: 62112, apc: 44875, nnpp: 16922, lp: 6420, pct: '88%' },
+    { lga: 'Gumel', totalPus: 180, collatedPus: 153, pdp: 54331, apc: 43210, nnpp: 15443, lp: 5310, pct: '85%' },
+    { lga: 'Kiyawa', totalPus: 170, collatedPus: 139, pdp: 48231, apc: 36543, nnpp: 14200, lp: 4800, pct: '82%' },
   ]
 
-  const recentPuResults = [
-    { pu: 'PU 023', ward: 'Guri Ward A', lga: 'Guri LGA', pdp: 245, apc: 198, nnpp: 76, lp: 34, others: 12, valid: 565, status: 'Completed', time: '10:45 AM' },
-    { pu: 'PU 078', ward: 'Gumel Central', lga: 'Gumel LGA', pdp: 233, apc: 176, nnpp: 54, lp: 28, others: 9, valid: 500, status: 'Completed', time: '10:42 AM' },
-    { pu: 'PU 105', ward: 'Hadejia Ward B', lga: 'Hadejia LGA', pdp: 198, apc: 154, nnpp: 61, lp: 23, others: 8, valid: 444, status: 'Completed', time: '10:38 AM' },
-    { pu: 'PU 002', ward: 'Jahun Ward A', lga: 'Jahun LGA', pdp: 187, apc: 143, nnpp: 59, lp: 21, others: 7, valid: 417, status: 'Completed', time: '10:35 AM' },
-    { pu: 'PU 056', ward: 'Kazaure Ward C', lga: 'Kazaure LGA', pdp: 176, apc: 132, nnpp: 47, lp: 18, others: 6, valid: 379, status: 'Completed', time: '10:30 AM' },
-  ]
-
-  const trendData = [
-    { time: '12PM', received: 1200 },
-    { time: '3PM', received: 2100 },
-    { time: '6PM', received: 3100 },
-    { time: '9PM', received: 3500 },
-    { time: '12AM', received: 3750 },
-    { time: '3AM', received: 3850 },
-    { time: '6AM', received: 3912 },
-  ]
+  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      <Sidebar theme="light" />
+    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
+      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
+    }`}>
+      <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Header 
-          title="Results Dashboard" 
-          subtitle="Real-time results from polling units across Jigawa State" 
-          theme="light" 
+          title="Results Dashboard & Collation Engine" 
+          subtitle="Real-time vote collation, EC8A proof verification, and candidate vote share analytics" 
         />
 
         <main className="p-6 space-y-6">
-          {/* Top Filter Bar */}
-          <div className="flex justify-between items-center bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">Filter View:</span>
-              <select className="border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-xs font-bold text-slate-700 outline-none">
-                <option>Governorship Election 2027</option>
-              </select>
-              <select className="border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 text-xs font-bold text-slate-700 outline-none">
-                <option>State Level</option>
-                <option>LGA Level</option>
-              </select>
+          {/* Top 4 KPI Banner Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className={`${cardClass} rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+              <div>
+                <span className="text-xs font-bold text-slate-400">Total Collated Votes</span>
+                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>1,073,255</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">From 3,928 Polling Units</p>
+              </div>
+              <div className="p-3 rounded-xl bg-pdp/20 text-pdp"><BarChart3 className="w-6 h-6" /></div>
             </div>
-            <div className="text-[11px] text-slate-500 font-mono">
-              Last Updated: <strong>20 Apr 2027, 10:46 AM</strong>
+
+            <div className={`${cardClass} border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+              <div>
+                <span className="text-xs font-bold text-emerald-500">PDP Total Votes</span>
+                <h3 className={`text-2xl font-extrabold text-emerald-500 mt-1`}>562,430 <span className="text-xs font-bold">(52.4%)</span></h3>
+                <p className="text-[10px] text-emerald-500 mt-0.5">Lead margin: +143,665</p>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><CheckCircle2 className="w-6 h-6" /></div>
+            </div>
+
+            <div className={`${cardClass} border-blue-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+              <div>
+                <span className="text-xs font-bold text-blue-500">APC Total Votes</span>
+                <h3 className={`text-2xl font-extrabold text-blue-500 mt-1`}>418,765 <span className="text-xs font-bold">(39.0%)</span></h3>
+                <p className="text-[10px] text-blue-500 mt-0.5">Runner-up party</p>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-500"><Building2 className="w-6 h-6" /></div>
+            </div>
+
+            <div className={`${cardClass} border-purple-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+              <div>
+                <span className="text-xs font-bold text-purple-500">EC8A Proof Verification</span>
+                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>3,812 / 4,827</h3>
+                <p className="text-[10px] text-purple-500 mt-0.5">79.0% result sheets uploaded</p>
+              </div>
+              <div className="p-3 rounded-xl bg-purple-500/20 text-purple-500"><FileText className="w-6 h-6" /></div>
             </div>
           </div>
 
-          {/* 5 Top KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold text-slate-500">Total Polling Units</span>
-                <div className="p-2 rounded-lg bg-emerald-50 text-pdp"><Building2 className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-2">
-                <h3 className="text-2xl font-extrabold text-slate-900">4,827</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Across 27 LGAs</p>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold text-slate-500">Results Received</span>
-                <div className="p-2 rounded-lg bg-blue-50 text-blue-600"><CheckCircle className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-2">
-                <h3 className="text-2xl font-extrabold text-slate-900">3,912 <span className="text-xs font-bold text-blue-600">(81.1%)</span></h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">From 27 LGAs</p>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold text-slate-500">Total Valid Votes</span>
-                <div className="p-2 rounded-lg bg-purple-50 text-purple-600"><FileText className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-2">
-                <h3 className="text-2xl font-extrabold text-slate-900">1,248,593</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Today, 20 Apr 2027</p>
-              </div>
-            </div>
-
-            <div className="bg-emerald-500 text-white border border-emerald-600 rounded-xl p-4 shadow-md">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold opacity-90">Leading Party</span>
-                <div className="p-2 rounded-lg bg-white/20 text-white"><Trophy className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-2">
-                <h3 className="text-2xl font-black">PDP</h3>
-                <p className="text-[11px] font-bold opacity-90 mt-0.5">562,430 (45.1%)</p>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold text-slate-500">Pending Results</span>
-                <div className="p-2 rounded-lg bg-rose-50 text-rose-600"><Clock className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-2">
-                <h3 className="text-2xl font-extrabold text-slate-900">915 <span className="text-xs font-bold text-rose-500">(18.9%)</span></h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">From 12 LGAs</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 1: Party Summary Donut + Results by LGA Table */}
+          {/* Party Vote Share + LGA Collation Table Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Party Donut Chart */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-2">Results Summary by Party (State Level)</h3>
-              <div className="h-[180px] w-full relative flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePieChart>
-                    <Pie data={partyShare} innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="pct">
-                      {partyShare.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </RePieChart>
-                </ResponsiveContainer>
-                <div className="absolute text-center leading-tight">
-                  <span className="text-xs font-bold text-slate-400 block">Total Valid</span>
-                  <span className="text-sm font-black text-slate-900">1,248,593</span>
+            {/* Donut Chart (1 Column) */}
+            <div className={`${cardClass} rounded-xl p-5 space-y-4 flex flex-col justify-between`}>
+              <div>
+                <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Statewide Party Vote Share</h3>
+                <div className="h-[200px] w-full mt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RePieChart>
+                      <Pie data={partyVoteShare} innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="votes">
+                        {partyVoteShare.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </RePieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2 text-xs pt-2">
+                  {partyVoteShare.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }}></span>
+                        <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{p.name}</span>
+                      </div>
+                      <span className={`font-bold font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>{p.votes.toLocaleString()} ({p.pct})</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              <div className="space-y-2 text-xs">
-                {partyShare.map((p, idx) => (
-                  <div key={idx} className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></span>
-                      <span className="font-bold text-slate-800">{p.name}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold text-slate-900">{p.votes}</span>
-                      <span className="text-[10px] text-slate-500 font-mono ml-1">({p.pct}%)</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
 
-            {/* Results by LGA Table */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                <h3 className="text-xs font-bold text-slate-900">Results by LGA</h3>
-                <button className="text-[10px] font-bold text-pdp hover:underline">View Full Report</button>
+            {/* LGA Collation Table (2 Columns) */}
+            <div className={`lg:col-span-2 ${cardClass} rounded-xl p-5 space-y-4`}>
+              <div className="flex justify-between items-center border-b pb-2 border-slate-100 dark:border-slate-800">
+                <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>27 LGA Collation Breakdown</h3>
+                <button className="bg-pdp hover:bg-pdp-dark text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
+                  <Download className="w-3.5 h-3.5" /> Export PDF Report
+                </button>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-y border-slate-200 text-slate-500 font-bold">
+                    <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                       <th className="py-2.5 px-3">LGA</th>
-                      <th className="py-2.5 px-3 text-pdp font-extrabold">PDP</th>
-                      <th className="py-2.5 px-3 text-blue-700">APC</th>
-                      <th className="py-2.5 px-3 text-purple-700">NNPP</th>
-                      <th className="py-2.5 px-3 text-amber-700">LP</th>
-                      <th className="py-2.5 px-3">Others</th>
-                      <th className="py-2.5 px-3">Total Valid Votes</th>
-                      <th className="py-2.5 px-3">Completed</th>
+                      <th className="py-2.5 px-3">Collated PUs</th>
+                      <th className="py-2.5 px-3 text-emerald-500 font-bold">PDP Votes</th>
+                      <th className="py-2.5 px-3 text-blue-500 font-bold">APC Votes</th>
+                      <th className="py-2.5 px-3 text-purple-500 font-bold">NNPP Votes</th>
+                      <th className="py-2.5 px-3">Collation %</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
-                    {lgaResults.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition">
-                        <td className="py-2.5 px-3 font-bold text-slate-900">{r.lga}</td>
-                        <td className="py-2.5 px-3 font-extrabold text-pdp">{r.pdp}</td>
-                        <td className="py-2.5 px-3 text-blue-700 font-semibold">{r.apc}</td>
-                        <td className="py-2.5 px-3 text-purple-700">{r.nnpp}</td>
-                        <td className="py-2.5 px-3 text-amber-700">{r.lp}</td>
-                        <td className="py-2.5 px-3 text-slate-500">{r.others}</td>
-                        <td className="py-2.5 px-3 font-bold text-slate-900">{r.valid}</td>
-                        <td className="py-2.5 px-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-700">{r.pct}%</span>
-                            <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                              <div className="bg-pdp h-full rounded-full" style={{ width: `${r.pct}%` }}></div>
-                            </div>
-                          </div>
-                        </td>
+                  <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
+                    {lgaCollationTable.map((l, idx) => (
+                      <tr key={idx} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
+                        <td className={`py-3 px-3 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{l.lga}</td>
+                        <td className="py-3 px-3 text-slate-500 font-mono">{l.collatedPus} / {l.totalPus}</td>
+                        <td className="py-3 px-3 font-extrabold text-emerald-500">{l.pdp.toLocaleString()}</td>
+                        <td className="py-3 px-3 font-bold text-blue-500">{l.apc.toLocaleString()}</td>
+                        <td className="py-3 px-3 text-purple-500">{l.nnpp.toLocaleString()}</td>
+                        <td className="py-3 px-3 font-bold font-mono">{l.pct}</td>
                       </tr>
                     ))}
-                    <tr className="bg-slate-100 font-black border-t-2 border-slate-300">
-                      <td className="py-2.5 px-3">Total</td>
-                      <td className="py-2.5 px-3 text-pdp">562,430</td>
-                      <td className="py-2.5 px-3 text-blue-700">418,765</td>
-                      <td className="py-2.5 px-3 text-purple-700">153,890</td>
-                      <td className="py-2.5 px-3 text-amber-700">72,341</td>
-                      <td className="py-2.5 px-3 text-slate-600">41,167</td>
-                      <td className="py-2.5 px-3">1,248,593</td>
-                      <td className="py-2.5 px-3">81.1%</td>
-                    </tr>
                   </tbody>
                 </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Recent Polling Unit Results Stream */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-              <h3 className="text-xs font-bold text-slate-900">Polling Unit Results (Recent)</h3>
-              <button className="text-[10px] font-bold text-pdp hover:underline">View All Results</button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-y border-slate-200 text-slate-500 font-bold">
-                    <th className="py-2 px-3">Polling Unit</th>
-                    <th className="py-2 px-3">Ward</th>
-                    <th className="py-2 px-3">LGA</th>
-                    <th className="py-2 px-3 text-pdp font-bold">PDP</th>
-                    <th className="py-2 px-3 text-blue-700 font-bold">APC</th>
-                    <th className="py-2 px-3 text-purple-700 font-bold">NNPP</th>
-                    <th className="py-2 px-3 text-amber-700 font-bold">LP</th>
-                    <th className="py-2 px-3">Others</th>
-                    <th className="py-2 px-3 font-bold">Total Valid</th>
-                    <th className="py-2 px-3">Status</th>
-                    <th className="py-2 px-3 text-right">Reported At</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {recentPuResults.map((pu, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{pu.pu}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{pu.ward}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{pu.lga}</td>
-                      <td className="py-2.5 px-3 font-extrabold text-pdp">{pu.pdp}</td>
-                      <td className="py-2.5 px-3 font-bold text-blue-700">{pu.apc}</td>
-                      <td className="py-2.5 px-3 text-purple-700">{pu.nnpp}</td>
-                      <td className="py-2.5 px-3 text-amber-700">{pu.lp}</td>
-                      <td className="py-2.5 px-3 text-slate-500">{pu.others}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{pu.valid}</td>
-                      <td className="py-2.5 px-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                          {pu.status}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-slate-400 font-mono text-[11px]">{pu.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Row 3: Verification + Note + Download Center */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
-              <h4 className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-1.5">Results Verification</h4>
-              <div className="space-y-2 text-xs pt-1">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-emerald-600" /> With Result Sheet Photo
-                  </span>
-                  <span className="font-bold text-slate-900">3,765 (76.5%)</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500" /> Without Result Sheet Photo
-                  </span>
-                  <span className="font-bold text-amber-700">147 (3.0%)</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" /> Pending Verification
-                  </span>
-                  <span className="font-bold text-slate-700">1,062 (21.5%)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm space-y-2">
-              <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-amber-600" /> Important Note
-              </h4>
-              <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                Results are displayed as reported by authorized PDP agents from the field across Jigawa State.
-              </p>
-              <p className="text-xs font-bold text-amber-900">
-                These are NOT official INEC results.
-              </p>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
-              <h4 className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-1.5">Download Center</h4>
-              <div className="space-y-1.5 text-xs pt-1">
-                <button className="w-full flex items-center justify-between p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition font-bold text-slate-700">
-                  <span className="flex items-center gap-2"><FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> Download State Results (Excel)</span>
-                  <Download className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-                <button className="w-full flex items-center justify-between p-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition font-bold text-slate-700">
-                  <span className="flex items-center gap-2"><FileText className="w-3.5 h-3.5 text-rose-600" /> Download State Results (PDF)</span>
-                  <Download className="w-3.5 h-3.5 text-slate-400" />
-                </button>
               </div>
             </div>
           </div>

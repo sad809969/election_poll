@@ -1,10 +1,14 @@
-# JIGAWA PDP POLLWATCH 2027 — Universal Page-Level Dark & Light Theme Refactor Plan
+# JIGAWA PDP POLLWATCH 2027 — Quick Actions & Page Theme Fix Plan
 
 ## 1. Overview
-Make all 13 pages consume `useTheme()` so that toggling Light/Dark mode transforms the entire page layout, backgrounds, cards, tables, and text elements seamlessly.
+1. Connect router navigation for Sidebar Quick Actions buttons (`Send Broadcast`, `Add Announcement`, `Export Reports`).
+2. Refactor `admin.js`, `communication.js`, and `results.js` to consume `useTheme()` for full Dark/Light theme switching.
 
 ## 2. Steps
-1. Update `map.js`, `incidents.js`, `agents.js`, `polling-units.js`, `results.js`, `collation.js`, `communication.js`, `broadcast.js`, `notifications.js`, `admin.js`, `settings.js`, `audit-logs.js`.
-2. Commit and push changes to GitHub `main` branch to update live Vercel deployment.
+1. Update `Sidebar.js`.
+2. Update `admin.js`.
+3. Update `communication.js`.
+4. Update `results.js`.
+5. Commit and push changes to GitHub `main` branch to update live Vercel deployment.
 
 ---

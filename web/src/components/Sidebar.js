@@ -133,19 +133,28 @@ export default function Sidebar() {
               <Activity className="w-4 h-4" />
               <span>Quick Actions</span>
             </div>
-            <button className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-pdp hover:bg-pdp-dark text-white text-[11px] font-semibold transition">
+            <button 
+              onClick={() => router.push('/broadcast')}
+              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-pdp hover:bg-pdp-dark text-white text-[11px] font-semibold transition shadow-sm"
+            >
               <Send className="w-3.5 h-3.5" />
               <span>Send Broadcast</span>
             </button>
-            <button className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-            }`}>
+            <button 
+              onClick={() => router.push('/communication')}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+            >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Add Announcement</span>
             </button>
-            <button className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-            }`}>
+            <button 
+              onClick={() => router.push('/results')}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+            >
               <Download className="w-3.5 h-3.5" />
               <span>Export Reports</span>
             </button>
