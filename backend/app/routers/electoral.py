@@ -1,138 +1,515 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import LGA, Ward, PollingUnit, User, UserRole
-from app.schemas import LGAResponse, WardResponse, PollingUnitResponse, UserResponse
-from app.security import get_current_user, get_password_hash
+from app.models import LGA, Ward, PollingUnit, User
+from app.schemas import (
+    LGACreate,
+    LGAUpdate,
+    LGAResponse,
 
-router = APIRouter(prefix="/electoral", tags=["Electoral Hierarchy"])
+    WardCreate,
+    WardUpdate,
+    WardResponse,
 
-@router.get("/lgas", response_model=List[LGAResponse])
-async def get_all_lgas(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(LGA).order_by(LGA.name))
-    return result.scalars().all()
+    PollingUnitCreate,
+    PollingUnitUpdate,
+    PollingUnitResponse,
 
-@router.get("/wards", response_model=List[WardResponse])
-async def get_wards_by_lga(lga_id: Optional[int] = None, db: AsyncSession = Depends(get_db)):
-    query = select(Ward)
-    if lga_id:
-        query = query.where(Ward.lga_id == lga_id)
-    result = await db.execute(query.order_by(Ward.name))
-    return result.scalars().all()
+    MessageResponse,
+)
+from app.core.permissions import require_admin
 
-@router.get("/polling-units", response_model=List[PollingUnitResponse])
-async def get_polling_units(
-    lga_id: Optional[int] = None,
-    ward_id: Optional[int] = None,
-    status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+router = APIRouter(
+    prefix="/electoral",
+    tags=["Electoral Management"],
+)
+
+# ==========================================================
+# LGA ENDPOINTS
+# ==========================================================
+
+
+@router.get(
+    "/lgas",
+    response_model=list[LGAResponse],
+)
+def get_lgas(
+    db: Session = Depends(get_db),
 ):
-    query = select(PollingUnit).options(
-        selectinload(PollingUnit.lga),
-        selectinload(PollingUnit.ward),
-        selectinload(PollingUnit.agent)
+    return (
+        db.query(LGA)
+        .order_by(LGA.name)
+        .all()
     )
-    if lga_id:
-        query = query.where(PollingUnit.lga_id == lga_id)
-    if ward_id:
-        query = query.where(PollingUnit.ward_id == ward_id)
-    if status:
-        query = query.where(PollingUnit.status == status)
 
-    result = await db.execute(query.order_by(PollingUnit.code))
-    pus = result.scalars().all()
 
-    response = []
-    for pu in pus:
-        response.append(PollingUnitResponse(
-            id=pu.id,
-            lga_id=pu.lga_id,
-            ward_id=pu.ward_id,
-            code=pu.code,
-            name=pu.name,
-            registered_voters=pu.registered_voters,
-            status=pu.status,
-            latitude=pu.latitude,
-            longitude=pu.longitude,
-            agent_name=pu.agent.full_name if pu.agent else "Unassigned",
-            agent_phone=pu.agent.phone_number if pu.agent else None,
-            lga_name=pu.lga.name if pu.lga else None,
-            ward_name=pu.ward.name if pu.ward else None
-        ))
-    return response
-
-@router.get("/users", response_model=List[UserResponse])
-async def get_users_list(
-    role: Optional[str] = None,
-    lga_id: Optional[int] = None,
-    search: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+@router.get(
+    "/lgas/{lga_id}",
+    response_model=LGAResponse,
+)
+def get_lga(
+    lga_id: int,
+    db: Session = Depends(get_db),
 ):
-    query = select(User).options(
-        selectinload(User.lga),
-        selectinload(User.ward),
-        selectinload(User.polling_unit)
+
+    lga = (
+        db.query(LGA)
+        .filter(LGA.id == lga_id)
+        .first()
     )
-    if role:
-        query = query.where(User.role == role)
-    if lga_id:
-        query = query.where(User.lga_id == lga_id)
-    if search:
-        query = query.where(
-            (User.full_name.contains(search)) | (User.username.contains(search)) | (User.phone_number.contains(search))
+
+    if not lga:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="LGA not found",
         )
-    
-    result = await db.execute(query.order_by(User.id.desc()))
-    users = result.scalars().all()
 
-    res = []
-    for u in users:
-        res.append(UserResponse(
-            id=u.id,
-            full_name=u.full_name,
-            username=u.username,
-            phone_number=u.phone_number,
-            role=u.role,
-            is_active=u.is_active,
-            lga_id=u.lga_id,
-            ward_id=u.ward_id,
-            polling_unit_id=u.polling_unit_id,
-            last_login=u.last_login,
-            created_at=u.created_at,
-            lga_name=u.lga.name if u.lga else None,
-            ward_name=u.ward.name if u.ward else None,
-            pu_code=u.polling_unit.code if u.polling_unit else None
-        ))
-    return res
+    return lga
 
-@router.post("/import-agents-csv")
-async def import_agents_csv(
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+
+@router.post(
+    "/lgas",
+    response_model=LGAResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_lga(
+    payload: LGACreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
-    contents = await file.read()
-    lines = contents.decode("utf-8").splitlines()
-    imported_count = 0
-    # Simulate processing CSV rows
-    for line in lines[1:]: # Skip header
-        parts = line.split(",")
-        if len(parts) >= 3:
-            name, phone, username = parts[0].strip(), parts[1].strip(), parts[2].strip()
-            existing = await db.execute(select(User).where(User.username == username))
-            if not existing.scalars().first():
-                user = User(
-                    full_name=name,
-                    username=username,
-                    phone_number=phone,
-                    hashed_password=get_password_hash("password123"),
-                    role=UserRole.POLLING_UNIT_AGENT.value
-                )
-                db.add(user)
-                imported_count += 1
-    await db.commit()
-    return {"status": "success", "imported_count": imported_count, "message": f"{imported_count} agents imported successfully"}
+
+    existing = (
+        db.query(LGA)
+        .filter(
+            (LGA.name == payload.name)
+            | (LGA.code == payload.code)
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="LGA already exists",
+        )
+
+    lga = LGA(
+        name=payload.name,
+        code=payload.code,
+        registered_voters=payload.registered_voters,
+    )
+
+    db.add(lga)
+    db.commit()
+    db.refresh(lga)
+
+    return lga
+
+
+@router.put(
+    "/lgas/{lga_id}",
+    response_model=LGAResponse,
+)
+def update_lga(
+    lga_id: int,
+    payload: LGAUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    lga = (
+        db.query(LGA)
+        .filter(LGA.id == lga_id)
+        .first()
+    )
+
+    if not lga:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="LGA not found",
+        )
+
+    data = payload.model_dump(exclude_unset=True)
+
+    for key, value in data.items():
+        setattr(lga, key, value)
+
+    db.commit()
+    db.refresh(lga)
+
+    return lga
+
+
+@router.delete(
+    "/lgas/{lga_id}",
+    response_model=MessageResponse,
+)
+def delete_lga(
+    lga_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    lga = (
+        db.query(LGA)
+        .filter(LGA.id == lga_id)
+        .first()
+    )
+
+    if not lga:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="LGA not found",
+        )
+
+    db.delete(lga)
+    db.commit()
+
+    return {
+        "message": "LGA deleted successfully"
+    }
+# ==========================================================
+# WARD ENDPOINTS
+# ==========================================================
+
+@router.get(
+    "/wards",
+    response_model=list[WardResponse],
+)
+def get_wards(
+    lga_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Ward)
+
+    if lga_id is not None:
+        query = query.filter(Ward.lga_id == lga_id)
+
+    return query.order_by(Ward.name).all()
+
+
+@router.get(
+    "/wards/{ward_id}",
+    response_model=WardResponse,
+)
+def get_ward(
+    ward_id: int,
+    db: Session = Depends(get_db),
+):
+    ward = (
+        db.query(Ward)
+        .filter(Ward.id == ward_id)
+        .first()
+    )
+
+    if not ward:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ward not found",
+        )
+
+    return ward
+
+
+@router.post(
+    "/wards",
+    response_model=WardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_ward(
+    payload: WardCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    lga = (
+        db.query(LGA)
+        .filter(LGA.id == payload.lga_id)
+        .first()
+    )
+
+    if not lga:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="LGA not found",
+        )
+
+    existing = (
+        db.query(Ward)
+        .filter(
+            Ward.lga_id == payload.lga_id,
+            Ward.name == payload.name,
+        )
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ward already exists in this LGA",
+        )
+
+    ward = Ward(
+        lga_id=payload.lga_id,
+        name=payload.name,
+        code=payload.code,
+    )
+
+    db.add(ward)
+    db.commit()
+    db.refresh(ward)
+
+    return ward
+
+
+@router.put(
+    "/wards/{ward_id}",
+    response_model=WardResponse,
+)
+def update_ward(
+    ward_id: int,
+    payload: WardCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    ward = (
+        db.query(Ward)
+        .filter(Ward.id == ward_id)
+        .first()
+    )
+
+    if not ward:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ward not found",
+        )
+
+    ward.lga_id = payload.lga_id
+    ward.name = payload.name
+    ward.code = payload.code
+
+    db.commit()
+    db.refresh(ward)
+
+    return ward
+
+
+@router.delete(
+    "/wards/{ward_id}",
+    response_model=MessageResponse,
+)
+def delete_ward(
+    ward_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    ward = (
+        db.query(Ward)
+        .filter(Ward.id == ward_id)
+        .first()
+    )
+
+    if not ward:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ward not found",
+        )
+
+    db.delete(ward)
+    db.commit()
+
+    return {
+        "message": "Ward deleted successfully"
+    }
+
+# ==========================================================
+# POLLING UNIT ENDPOINTS
+# ==========================================================
+
+@router.get(
+    "/polling-units",
+    response_model=list[PollingUnitResponse],
+)
+def get_polling_units(
+    ward_id: int | None = None,
+    lga_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+
+    query = db.query(PollingUnit)
+
+    if lga_id is not None:
+        query = query.filter(PollingUnit.lga_id == lga_id)
+
+    if ward_id is not None:
+        query = query.filter(PollingUnit.ward_id == ward_id)
+
+    return query.order_by(PollingUnit.name).all()
+
+
+@router.get(
+    "/polling-units/{polling_unit_id}",
+    response_model=PollingUnitResponse,
+)
+def get_polling_unit(
+    polling_unit_id: int,
+    db: Session = Depends(get_db),
+):
+
+    polling_unit = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.id == polling_unit_id)
+        .first()
+    )
+
+    if not polling_unit:
+        raise HTTPException(
+            status_code=404,
+            detail="Polling Unit not found",
+        )
+
+    return polling_unit
+
+
+@router.post(
+    "/polling-units",
+    response_model=PollingUnitResponse,
+    status_code=201,
+)
+def create_polling_unit(
+    payload: PollingUnitCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    lga = (
+        db.query(LGA)
+        .filter(LGA.id == payload.lga_id)
+        .first()
+    )
+
+    if not lga:
+        raise HTTPException(
+            status_code=404,
+            detail="LGA not found",
+        )
+
+    ward = (
+        db.query(Ward)
+        .filter(Ward.id == payload.ward_id)
+        .first()
+    )
+
+    if not ward:
+        raise HTTPException(
+            status_code=404,
+            detail="Ward not found",
+        )
+
+    existing = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.code == payload.code)
+        .first()
+    )
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Polling Unit code already exists",
+        )
+
+    polling_unit = PollingUnit(
+        lga_id=payload.lga_id,
+        ward_id=payload.ward_id,
+        code=payload.code,
+        name=payload.name,
+        registered_voters=payload.registered_voters,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+    )
+
+    db.add(polling_unit)
+
+    ward.total_polling_units += 1
+    lga.total_polling_units += 1
+
+    db.commit()
+    db.refresh(polling_unit)
+
+    return polling_unit
+
+
+@router.put(
+    "/polling-units/{polling_unit_id}",
+    response_model=PollingUnitResponse,
+)
+def update_polling_unit(
+    polling_unit_id: int,
+    payload: PollingUnitUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    polling_unit = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.id == polling_unit_id)
+        .first()
+    )
+
+    if not polling_unit:
+        raise HTTPException(
+            status_code=404,
+            detail="Polling Unit not found",
+        )
+
+    data = payload.model_dump(exclude_unset=True)
+
+    for key, value in data.items():
+        setattr(polling_unit, key, value)
+
+    db.commit()
+    db.refresh(polling_unit)
+
+    return polling_unit
+
+
+@router.delete(
+    "/polling-units/{polling_unit_id}",
+    response_model=MessageResponse,
+)
+def delete_polling_unit(
+    polling_unit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    polling_unit = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.id == polling_unit_id)
+        .first()
+    )
+
+    if not polling_unit:
+        raise HTTPException(
+            status_code=404,
+            detail="Polling Unit not found",
+        )
+
+    ward = polling_unit.ward
+    lga = polling_unit.lga
+
+    if ward and ward.total_polling_units > 0:
+        ward.total_polling_units -= 1
+
+    if lga and lga.total_polling_units > 0:
+        lga.total_polling_units -= 1
+
+    db.delete(polling_unit)
+    db.commit()
+
+    return {
+        "message": "Polling Unit deleted successfully"
+    }
