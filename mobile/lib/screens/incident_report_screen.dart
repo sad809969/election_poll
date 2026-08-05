@@ -1,123 +1,126 @@
 import 'package:flutter/material.dart';
 
 class IncidentReportScreen extends StatefulWidget {
-  final String puCode;
-  const IncidentReportScreen({super.key, required this.puCode});
+  const IncidentReportScreen({super.key});
 
   @override
   State<IncidentReportScreen> createState() => _IncidentReportScreenState();
 }
 
 class _IncidentReportScreenState extends State<IncidentReportScreen> {
-  String _selectedCategory = 'BVAS Issues';
-  String _selectedSeverity = 'MEDIUM';
-  final _descriptionController = TextEditingController();
-  bool _hasPhoto = false;
+  String _category = 'Violence';
+  String _severity = 'HIGH';
+  final _descController = TextEditingController();
+  bool _isSubmitting = false;
 
   final List<String> _categories = [
-    'Violence',
-    'Intimidation',
-    'BVAS Issues',
-    'Vote Buying',
-    'Ballot Shortage',
-    'Late Arrival of Officials',
-    'Others'
+    'Violence', 'Intimidation', 'BVAS Issues', 'Vote Buying', 'Ballot Shortage', 'Late Officials', 'Others'
   ];
 
-  void _submitIncident() {
-    if (_descriptionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please describe the incident')));
+  void _submitIncident() async {
+    if (_descController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an incident description.')),
+      );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFF008751),
-        content: Text('Incident report encrypted & queued with GPS metadata (Lat: 27.02, Lng: 12.34)'),
-      ),
-    );
+    setState(() => _isSubmitting = true);
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() => _isSubmitting = false);
 
-    Navigator.pop(context);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Field Incident Report Dispatched to Situation Room!')),
+      );
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Report Incident — ${widget.puCode}')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Incident Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      decoration: const InputDecoration(border: OutlineInputBorder()),
-                      items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                      onChanged: (val) => setState(() => _selectedCategory = val!),
-                    ),
+      backgroundColor: const Color(0xFF070D1E),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B132B),
+        title: const Text('Report Field Incident', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('INCIDENT CATEGORY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _category,
+                dropdownColor: const Color(0xFF141E38),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF141E38),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF334155))),
+                ),
+                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (val) => setState(() => _category = val!),
+              ),
 
-                    const SizedBox(height: 16),
-                    const Text('Severity Level', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((sev) {
-                        final isSelected = _selectedSeverity == sev;
-                        final color = sev == 'CRITICAL' ? Colors.red : sev == 'HIGH' ? Colors.orange : Colors.blue;
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                            child: ChoiceChip(
-                              label: Text(sev, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black)),
-                              selected: isSelected,
-                              selectedColor: color,
-                              onSelected: (_) => setState(() => _selectedSeverity = sev),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+              const SizedBox(height: 16),
 
-                    const SizedBox(height: 16),
-                    const Text('Detailed Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _descriptionController,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Describe what happened at the polling unit...',
-                        border: OutlineInputBorder(),
+              const Text('SEVERITY TRIAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const SizedBox(height: 6),
+              Row(
+                children: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((sev) {
+                  final bool isSelected = _severity == sev;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                      child: ChoiceChip(
+                        label: Text(sev, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.slate400)),
+                        selected: isSelected,
+                        selectedColor: sev == 'CRITICAL' ? Colors.red : sev == 'HIGH' ? Colors.amber : const Color(0xFF008751),
+                        backgroundColor: const Color(0xFF141E38),
+                        onSelected: (_) => setState(() => _severity = sev),
                       ),
                     ),
+                  );
+                }).toList(),
+              ),
 
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: () => setState(() => _hasPhoto = !_hasPhoto),
-                      icon: Icon(_hasPhoto ? Icons.check_circle : Icons.camera_alt, color: _hasPhoto ? Colors.green : Colors.grey),
-                      label: Text(_hasPhoto ? 'Photo Attached (1 file)' : 'Attach Photo / Short Video'),
-                    ),
-                  ],
+              const SizedBox(height: 16),
+
+              const Text('INCIDENT DESCRIPTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _descController,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Describe exact details of the incident occurring at your polling unit...',
+                  hintStyle: const TextStyle(color: Colors.slate500, fontSize: 12),
+                  filled: true,
+                  fillColor: const Color(0xFF141E38),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF334155))),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _submitIncident,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber.shade900,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+
+              const SizedBox(height: 24),
+
+              ElevatedButton.icon(
+                onPressed: _isSubmitting ? null : _submitIncident,
+                icon: const Icon(Icons.send),
+                label: Text(_isSubmitting ? 'DISPATCHING...' : 'DISPATCH INCIDENT REPORT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
               ),
-              child: const Text('SUBMIT INCIDENT REPORT', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

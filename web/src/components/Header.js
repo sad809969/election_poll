@@ -1,27 +1,41 @@
-import { Search, Bell, Mail, Sun, Moon, Shield } from 'lucide-react'
+import { Search, Bell, Mail, Sun, Moon, Shield, Menu } from 'lucide-react'
+import { useTheme } from '../pages/_app'
 
 export default function Header({ 
   title = "Dashboard", 
-  subtitle = "Overview of election activities across Jigawa State",
-  theme = "dark",
-  onToggleTheme
+  subtitle = "Overview of election activities across Jigawa State"
 }) {
+  const { theme, toggleTheme, toggleMobile } = useTheme()
   const isDark = theme === 'dark'
 
   return (
-    <header className={`h-16 border-b px-6 flex items-center justify-between sticky top-0 z-30 ${
+    <header className={`h-16 border-b px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200 ${
       isDark ? 'bg-[#0B132B] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
     }`}>
-      {/* Title & Breadcrumb */}
-      <div>
-        <h1 className="text-base font-bold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-xs text-slate-400 font-medium">{subtitle}</p>}
+      {/* Title & Breadcrumb with PDP Logo & Mobile Hamburger */}
+      <div className="flex items-center gap-3">
+        {/* Mobile Hamburger Toggle Button */}
+        <button 
+          onClick={toggleMobile}
+          className={`lg:hidden p-2 rounded-lg border transition ${
+            isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
+          }`}
+          title="Open Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <img src="/pdp_logo.png" alt="PDP Logo" className="w-8 h-8 object-contain drop-shadow" />
+        <div>
+          <h1 className="text-sm sm:text-base font-bold tracking-tight">{title}</h1>
+          {subtitle && <p className={`text-[11px] sm:text-xs font-medium hidden sm:block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{subtitle}</p>}
+        </div>
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-4">
-        {/* Search Input */}
-        <div className="relative w-64 hidden md:block">
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Search Input (Hidden on mobile) */}
+        <div className="relative w-48 xl:w-64 hidden md:block">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input 
             type="text" 
@@ -34,41 +48,57 @@ export default function Header({
           />
         </div>
 
-        {/* Theme Toggle */}
+        {/* Global Dark / Light Theme Toggle Button */}
         <button 
-          onClick={onToggleTheme}
-          className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition ${
+          onClick={toggleTheme}
+          title="Toggle Dark / Light Theme"
+          className={`px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition-all shadow-sm ${
             isDark 
-              ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' 
-              : 'bg-slate-100 border-slate-300 text-slate-700 hover:text-black'
+              ? 'bg-slate-800 border-slate-700 text-slate-200 hover:text-white hover:border-pdp' 
+              : 'bg-slate-100 border-slate-300 text-slate-800 hover:text-black hover:border-pdp'
           }`}
         >
-          {isDark ? <Moon className="w-3.5 h-3.5 text-pdp" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
-          <span className="capitalize">{theme}</span>
+          {isDark ? (
+            <>
+              <Moon className="w-4 h-4 text-pdp fill-pdp" />
+              <span className="hidden sm:inline">Dark</span>
+            </>
+          ) : (
+            <>
+              <Sun className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span className="hidden sm:inline">Light</span>
+            </>
+          )}
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-slate-800/50 transition text-slate-400 hover:text-slate-100">
+        <button className={`relative p-2 rounded-lg transition ${
+          isDark ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+        }`}>
           <Bell className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">12</span>
+          <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center">12</span>
         </button>
 
-        {/* Messages */}
-        <button className="relative p-2 rounded-lg hover:bg-slate-800/50 transition text-slate-400 hover:text-slate-100">
+        {/* Messages (Hidden on very small screens) */}
+        <button className={`relative p-2 rounded-lg transition hidden sm:block ${
+          isDark ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+        }`}>
           <Mail className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">5</span>
+          <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center">5</span>
         </button>
 
         {/* User Profile */}
-        <div className="flex items-center gap-3 pl-2 border-l border-slate-800">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pdp to-emerald-400 p-0.5 shadow">
-            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-xs font-bold text-white">
+        <div className={`flex items-center gap-2.5 pl-2 border-l ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pdp to-emerald-400 p-0.5 shadow flex-shrink-0">
+            <div className={`w-full h-full rounded-full flex items-center justify-center text-xs font-bold text-white ${
+              isDark ? 'bg-slate-900' : 'bg-pdp-dark'
+            }`}>
               AU
             </div>
           </div>
-          <div className="hidden lg:block leading-tight">
+          <div className="hidden xl:block leading-tight">
             <p className="text-xs font-bold">Abdullahi Usman</p>
-            <p className="text-[10px] text-pdp font-semibold flex items-center gap-1">
+            <p className="text-pdp font-semibold text-[10px] flex items-center gap-1">
               <Shield className="w-2.5 h-2.5" />
               <span>Situation Room Director</span>
             </p>

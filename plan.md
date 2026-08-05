@@ -1,12 +1,10 @@
-# JIGAWA PDP POLLWATCH 2027 — Database Setup Plan
+# JIGAWA PDP POLLWATCH 2027 — Gradle Android Build Timeout Fix Plan
 
 ## 1. Overview
-Document the database options for Jigawa PDP PollWatch:
-- Mode 1: Automatic Pre-Seeded SQLite (runs out-of-the-box in `/tmp/pollwatch.db` on Vercel).
-- Mode 2: Managed PostgreSQL (Neon / Supabase / Vercel Postgres) for high-concurrency Election Day operations.
+Update `mobile/android/settings.gradle.kts` with AGP version `8.1.2`, Kotlin `1.9.0`, and repository resolution.
 
 ## 2. Steps
-1. Document `DATABASE_URL` environment variable configuration for Vercel.
-2. Update README.md and commit to GitHub repository.
+1. Update `mobile/android/settings.gradle.kts`.
+2. Commit and push changes to GitHub `main` branch.
 
 ---
