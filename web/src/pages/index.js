@@ -1,7 +1,9 @@
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import JigawaMap from '../components/JigawaMap'
-import { useTheme } from './_app'
+import { useState, useEffect } from "react";
+import { useTheme } from "./_app";
+import { apiFetch } from "../lib/api";
 import { 
   Building2, 
   Users, 
@@ -27,44 +29,201 @@ export default function DarkMonitoringDashboard() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const timelineData = [
-    { time: '6AM', reports: 120 },
-    { time: '8AM', reports: 450 },
-    { time: '10AM', reports: 720 },
-    { time: '12PM', reports: 980 },
-    { time: '2PM', reports: 850 },
-    { time: '4PM', reports: 610 },
-    { time: '6PM', reports: 340 },
-  ]
+  const cardClass = isDark
+  ? "bg-[#141E38] border border-slate-800 shadow-lg"
+  : "bg-white border border-slate-200 shadow";
 
-  const incidentPieData = [
-    { name: 'Violence', value: 42, color: '#EF4444' },
-    { name: 'Intimidation', value: 31, color: '#F59E0B' },
-    { name: 'BVAS Issues', value: 28, color: '#3B82F6' },
-    { name: 'Vote Buying', value: 21, color: '#10B981' },
-    { name: 'Ballot Shortage', value: 18, color: '#8B5CF6' },
-    { name: 'Others', value: 16, color: '#64748B' },
-  ]
+  const [dashboard, setDashboard] = useState(null);
 
-  const recentReports = [
-    { pu: 'PU 012, Kaugama LGA', msg: 'Voting in progress smoothly', time: '10:45 AM', agent: 'Musa A.', status: 'Normal' },
-    { pu: 'PU 078, Gumel LGA', msg: 'BVAS malfunction resolved', time: '10:42 AM', agent: 'Aisha M.', status: 'Normal' },
-    { pu: 'PU 023, Guri LGA', msg: 'Minor crowd at the unit', time: '10:40 AM', agent: 'Ibrahim Y.', status: 'Attention' },
-    { pu: 'PU 105, Hadejia LGA', msg: 'Security presence is high', time: '10:38 AM', agent: 'Sani R.', status: 'Normal' },
-    { pu: 'PU 002, Jahun LGA', msg: 'Violence reported, situation tense', time: '10:35 AM', agent: 'Usman K.', status: 'Critical' },
-  ]
+const [timelineData, setTimelineData] = useState([]);
 
-  const topLgas = [
-    { name: 'Kazaure', pct: 98 },
-    { name: 'Gumel', pct: 96 },
-    { name: 'Hadejia', pct: 95 },
-    { name: 'Guri', pct: 93 },
-    { name: 'Dutse', pct: 91 },
-  ]
+const [incidentPieData, setIncidentPieData] = useState([]);
 
-  const cardClass = isDark 
-    ? 'bg-[#141E38] border border-slate-800' 
-    : 'bg-white border border-slate-200 shadow-sm'
+const [recentReports, setRecentReports] = useState([]);
+
+const [topLgas, setTopLgas] = useState([]);
+
+const [loading, setLoading] = useState(true);
+
+const [error, setError] = useState("");
+
+useEffect(() => {
+  loadDashboard();
+}, []);
+
+async function loadDashboard() {
+  try {
+    setLoading(true);
+    setError("");
+
+    const [
+      results,
+      incidents,
+      lgas,
+      agents,
+      pollingUnits,
+    ] = await Promise.all([
+      apiFetch("/results"),
+      apiFetch("/incidents"),
+      apiFetch("/electoral/lgas"),
+      apiFetch("/agents"),
+      apiFetch("/electoral/polling-units"),
+    ]);
+
+    //---------------------------------------
+    // Dashboard Numbers
+    //---------------------------------------
+
+    const totalPollingUnits = pollingUnits.length;
+
+    const activeAgents = agents.filter(
+      (a) => a.is_active === true
+    ).length;
+
+    const totalReports = results.length;
+
+    const totalIncidents = incidents.length;
+
+    const pendingReports =
+      pollingUnits.length - results.length;
+
+    //---------------------------------------
+    // Timeline
+    //---------------------------------------
+
+    const hourly = {};
+
+    results.forEach((r) => {
+      const hour = new Date(r.created_at).getHours();
+
+      hourly[hour] = (hourly[hour] || 0) + 1;
+    });
+
+    const timeline = [];
+
+    for (let i = 0; i < 24; i++) {
+      timeline.push({
+        time: `${i}:00`,
+        reports: hourly[i] || 0,
+      });
+    }
+
+    //---------------------------------------
+    // Incidents Pie
+    //---------------------------------------
+
+    const types = {};
+
+    incidents.forEach((i) => {
+      types[i.incident_type] =
+        (types[i.incident_type] || 0) + 1;
+    });
+
+    const colors = [
+      "#EF4444",
+      "#F59E0B",
+      "#10B981",
+      "#3B82F6",
+      "#8B5CF6",
+      "#EC4899",
+    ];
+
+    const pie = Object.entries(types).map(
+      ([name, value], index) => ({
+        name,
+        value,
+        color: colors[index % colors.length],
+      })
+    );
+
+    //---------------------------------------
+    // Recent Reports
+    //---------------------------------------
+
+    const recent = results
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.created_at) -
+          new Date(a.created_at)
+      )
+      .slice(0, 10)
+      .map((r) => ({
+        pu:
+          r.polling_unit_name ??
+          `PU ${r.polling_unit_id}`,
+
+        msg: `PDP ${r.pdp_votes} | APC ${r.apc_votes}`,
+
+        status:
+          r.verification_status === "VERIFIED"
+            ? "Normal"
+            : "Attention",
+
+        agent:
+          r.agent_name ??
+          `Agent ${r.agent_id}`,
+
+        time: new Date(
+          r.created_at
+        ).toLocaleTimeString(),
+      }));
+
+    //---------------------------------------
+    // Top LGAs
+    //---------------------------------------
+
+    const coverage = lgas.map((lga) => {
+      const total = pollingUnits.filter(
+        (p) => p.lga_id === lga.id
+      ).length;
+
+      const reported = results.filter(
+        (r) => r.lga_id === lga.id
+      ).length;
+
+      return {
+        name: lga.name,
+        pct:
+          total === 0
+            ? 0
+            : Math.round(
+                (reported / total) * 100
+              ),
+      };
+    });
+
+    coverage.sort((a, b) => b.pct - a.pct);
+
+    //---------------------------------------
+
+    setTimelineData(timeline);
+
+    setIncidentPieData(pie);
+
+    setRecentReports(recent);
+
+    setTopLgas(
+      coverage.slice(0, 5)
+    );
+
+    setDashboard({
+      totalPollingUnits,
+      activeAgents,
+      totalReports,
+      totalIncidents,
+      pendingReports,
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    setError(err.message);
+
+  } finally {
+    setLoading(false);
+  }
+}
 
   return (
     <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
@@ -106,7 +265,7 @@ export default function DarkMonitoringDashboard() {
                 <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><Building2 className="w-4 h-4" /></div>
               </div>
               <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>4,827</h3>
+                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalPollingUnits ?? 0}</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">Across 27 LGAs</p>
               </div>
             </div>
@@ -117,7 +276,7 @@ export default function DarkMonitoringDashboard() {
                 <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500"><Users className="w-4 h-4" /></div>
               </div>
               <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>4,512</h3>
+                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.activeAgents ?? 0}</h3>
                 <p className="text-[10px] text-emerald-500 font-semibold mt-0.5">93.5% of total agents</p>
               </div>
             </div>
@@ -128,7 +287,7 @@ export default function DarkMonitoringDashboard() {
                 <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><FileText className="w-4 h-4" /></div>
               </div>
               <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>2,842</h3>
+                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalReports ?? 0}</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">Today, 20th Apr 2027</p>
               </div>
             </div>
@@ -139,7 +298,7 @@ export default function DarkMonitoringDashboard() {
                 <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500"><AlertTriangle className="w-4 h-4" /></div>
               </div>
               <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>156</h3>
+                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalIncidents ?? 0}</h3>
                 <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Today, 20th Apr 2027</p>
               </div>
             </div>
@@ -150,7 +309,7 @@ export default function DarkMonitoringDashboard() {
                 <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500"><Clock className="w-4 h-4" /></div>
               </div>
               <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>315</h3>
+                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.pendingReports ?? 0}</h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">From 289 Polling Units</p>
               </div>
             </div>

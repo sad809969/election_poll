@@ -1,204 +1,202 @@
-import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, ForeignKey, Text, Enum
-from sqlalchemy.orm import relationship
-from app.database import Base
+from sqlalchemy import (
+    Column, Integer, String, Float, Boolean, Text, DateTime, ForeignKey,
+    UniqueConstraint, CheckConstraint, func
+)
+from sqlalchemy.orm import declarative_base, relationship
 
-class UserRole(str, enum.Enum):
-    SUPER_ADMIN = "Super Admin"
-    STATE_CHAIRMAN = "State Chairman"
-    GOVERNORSHIP_CANDIDATE = "Governorship Candidate"
-    DEPUTY_CANDIDATE = "Deputy Governorship Candidate"
-    DIRECTOR_GENERAL = "Director General"
-    SITUATION_ROOM_OFFICER = "Situation Room Officer"
-    LGA_COORDINATOR = "LGA Coordinator"
-    WARD_COORDINATOR = "Ward Coordinator"
-    POLLING_UNIT_AGENT = "Polling Unit Agent"
+Base = declarative_base()
 
-class IncidentSeverity(str, enum.Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    CRITICAL = "CRITICAL"
-
-class IncidentStatus(str, enum.Enum):
-    REPORTED = "REPORTED"
-    INVESTIGATING = "INVESTIGATING"
-    RESOLVED = "RESOLVED"
-    DISMISSED = "DISMISSED"
-
-class ResultVerificationStatus(str, enum.Enum):
-    VERIFIED = "VERIFIED"
-    PENDING_PHOTO = "PENDING_PHOTO"
-    FLAGGED = "FLAGGED"
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
-    phone_number = Column(String, nullable=True)
-    hashed_password = Column(String, nullable=False)
-    role = Column(String, default=UserRole.POLLING_UNIT_AGENT.value, index=True)
-    is_active = Column(Boolean, default=True)
-    
-    # Location Scope Mapping
-    lga_id = Column(Integer, ForeignKey("lgas.id"), nullable=True)
-    ward_id = Column(Integer, ForeignKey("wards.id"), nullable=True)
-    polling_unit_id = Column(Integer, ForeignKey("polling_units.id"), nullable=True)
-    
-    last_login = Column(DateTime, nullable=True, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    lga = relationship("LGA", back_populates="users")
-    ward = relationship("Ward", back_populates="users")
-    polling_unit = relationship("PollingUnit", back_populates="agent")
-    incidents = relationship("Incident", back_populates="reported_by_user")
-    activities = relationship("ElectionActivity", back_populates="agent")
-    vote_result = relationship("VoteResult", back_populates="agent", uselist=False)
+# =============================================================================
+# 1. ELECTORAL GEOGRAPHY SUBSYSTEM
+# =============================================================================
 
 class LGA(Base):
     __tablename__ = "lgas"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True, nullable=False)
-    code = Column(String, unique=True, nullable=False)
-    total_polling_units = Column(Integer, default=0)
-    registered_voters = Column(Integer, default=0)
+    name = Column(String(100), nullable=False, unique=True, index=True)
+    code = Column(String(20), nullable=False, unique=True)
+    total_polling_units = Column(Integer, default=0, nullable=False)
+    registered_voters = Column(Integer, default=0, nullable=False)
 
-    # Relationships
-    wards = relationship("Ward", back_populates="lga")
+    wards = relationship("Ward", back_populates="lga", cascade="all, delete-orphan")
+    polling_units = relationship("PollingUnit", back_populates="lga", cascade="all, delete-orphan")
     users = relationship("User", back_populates="lga")
-    polling_units = relationship("PollingUnit", back_populates="lga")
+
 
 class Ward(Base):
     __tablename__ = "wards"
 
     id = Column(Integer, primary_key=True, index=True)
-    lga_id = Column(Integer, ForeignKey("lgas.id"), nullable=False)
-    name = Column(String, index=True, nullable=False)
-    code = Column(String, nullable=False)
-    total_polling_units = Column(Integer, default=0)
+    lga_id = Column(Integer, ForeignKey("lgas.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False, index=True)
+    code = Column(String(20), nullable=True)
+    total_polling_units = Column(Integer, default=0, nullable=False)
 
-    # Relationships
     lga = relationship("LGA", back_populates="wards")
-    polling_units = relationship("PollingUnit", back_populates="ward")
+    polling_units = relationship("PollingUnit", back_populates="ward", cascade="all, delete-orphan")
     users = relationship("User", back_populates="ward")
+
+    __table_args__ = (
+        UniqueConstraint("lga_id", "name", name="uq_ward_per_lga"),
+    )
+
 
 class PollingUnit(Base):
     __tablename__ = "polling_units"
 
     id = Column(Integer, primary_key=True, index=True)
-    lga_id = Column(Integer, ForeignKey("lgas.id"), nullable=False)
-    ward_id = Column(Integer, ForeignKey("wards.id"), nullable=False)
-    code = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=False)
-    registered_voters = Column(Integer, default=500)
+    lga_id = Column(Integer, ForeignKey("lgas.id", ondelete="CASCADE"), nullable=False, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id", ondelete="CASCADE"), nullable=False, index=True)
+    code = Column(String(50), nullable=False, unique=True, index=True)
+    name = Column(String(200), nullable=False)
+    registered_voters = Column(Integer, default=500, nullable=False)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    status = Column(String, default="Normal") # Normal, Attention, Critical, No Report
+    status = Column(String(20), default="Normal", nullable=False)
 
-    # Relationships
     lga = relationship("LGA", back_populates="polling_units")
     ward = relationship("Ward", back_populates="polling_units")
-    agent = relationship("User", back_populates="polling_unit", uselist=False)
-    incidents = relationship("Incident", back_populates="polling_unit")
-    activities = relationship("ElectionActivity", back_populates="polling_unit")
-    vote_result = relationship("VoteResult", back_populates="polling_unit", uselist=False)
+    users = relationship("User", back_populates="polling_unit")
+    activities = relationship("ElectionActivity", back_populates="polling_unit", cascade="all, delete-orphan")
+    incidents = relationship("Incident", back_populates="polling_unit", cascade="all, delete-orphan")
+    vote_result = relationship("VoteResult", back_populates="polling_unit", uselist=False, cascade="all, delete-orphan")
+
+
+# =============================================================================
+# 2. USER ACCESS & ROLE HIERARCHY SUBSYSTEM
+# =============================================================================
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String(150), nullable=False)
+    username = Column(String(100), nullable=False, unique=True, index=True)
+    phone_number = Column(String(20), nullable=True)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(50), nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    lga_id = Column(Integer, ForeignKey("lgas.id", ondelete="SET NULL"), nullable=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id", ondelete="SET NULL"), nullable=True, index=True)
+    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="SET NULL"), nullable=True)
+
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    lga = relationship("LGA", back_populates="users")
+    ward = relationship("Ward", back_populates="users")
+    polling_unit = relationship("PollingUnit", back_populates="users")
+    activities = relationship("ElectionActivity", back_populates="agent")
+    incidents = relationship("Incident", back_populates="reporter")
+    vote_results = relationship("VoteResult", back_populates="agent")
+
+
+# =============================================================================
+# 3. FIELD OPERATIONS & VOTE AGGREGATION SUBSYSTEM
+# =============================================================================
 
 class ElectionActivity(Base):
     __tablename__ = "election_activities"
 
     id = Column(Integer, primary_key=True, index=True)
-    polling_unit_id = Column(Integer, ForeignKey("polling_units.id"), nullable=False)
-    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    activity_type = Column(String, nullable=False) # Check-in, Accreditation Started, Voting Started, Voting Ended, Counting Started, Counting Completed
+    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    activity_type = Column(String(50), nullable=False)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow) # Creation time
-    synced_at = Column(DateTime, default=datetime.utcnow) # Sync time
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    synced_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     polling_unit = relationship("PollingUnit", back_populates="activities")
     agent = relationship("User", back_populates="activities")
+
 
 class Incident(Base):
     __tablename__ = "incidents"
 
     id = Column(Integer, primary_key=True, index=True)
-    polling_unit_id = Column(Integer, ForeignKey("polling_units.id"), nullable=False)
-    reported_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    incident_type = Column(String, nullable=False) # Violence, Intimidation, BVAS Issues, Vote Buying, Ballot Shortage, Late Officials, Others
-    severity = Column(String, default=IncidentSeverity.MEDIUM.value)
+    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="CASCADE"), nullable=False, index=True)
+    reported_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    incident_type = Column(String(50), nullable=False)
+    severity = Column(String(20), default="MEDIUM", nullable=False, index=True)
     description = Column(Text, nullable=False)
-    status = Column(String, default=IncidentStatus.REPORTED.value)
-    media_url = Column(String, nullable=True)
+    status = Column(String(20), default="REPORTED", nullable=False, index=True)
+    media_url = Column(String(500), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow) # Offline creation timestamp
-    synced_at = Column(DateTime, default=datetime.utcnow) # Online sync timestamp
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    synced_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     polling_unit = relationship("PollingUnit", back_populates="incidents")
-    reported_by_user = relationship("User", back_populates="incidents")
+    reporter = relationship("User", back_populates="incidents")
+
 
 class VoteResult(Base):
     __tablename__ = "vote_results"
 
     id = Column(Integer, primary_key=True, index=True)
-    polling_unit_id = Column(Integer, ForeignKey("polling_units.id"), unique=True, nullable=False)
-    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
-    # Party Votes
-    pdp_votes = Column(Integer, default=0)
-    apc_votes = Column(Integer, default=0)
-    nnpp_votes = Column(Integer, default=0)
-    lp_votes = Column(Integer, default=0)
-    others_votes = Column(Integer, default=0)
-    
-    total_valid_votes = Column(Integer, default=0)
-    rejected_votes = Column(Integer, default=0)
-    total_votes_cast = Column(Integer, default=0)
-    
-    ec8a_photo_url = Column(String, nullable=True)
-    verification_status = Column(String, default=ResultVerificationStatus.VERIFIED.value)
+    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    agent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    pdp_votes = Column(Integer, default=0, nullable=False)
+    apc_votes = Column(Integer, default=0, nullable=False)
+    nnpp_votes = Column(Integer, default=0, nullable=False)
+    lp_votes = Column(Integer, default=0, nullable=False)
+    others_votes = Column(Integer, default=0, nullable=False)
+
+    total_valid_votes = Column(Integer, default=0, nullable=False)
+    rejected_votes = Column(Integer, default=0, nullable=False)
+    total_votes_cast = Column(Integer, default=0, nullable=False)
+
+    ec8a_photo_url = Column(String(500), nullable=True)
+    verification_status = Column(String(30), default="VERIFIED", nullable=False)
     notes = Column(Text, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    synced_at = Column(DateTime, default=datetime.utcnow)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    synced_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     polling_unit = relationship("PollingUnit", back_populates="vote_result")
-    agent = relationship("User", back_populates="vote_result")
+    agent = relationship("User", back_populates="vote_results")
+
+
+# =============================================================================
+# 4. COMMUNICATION & SECURITY AUDIT SUBSYSTEM
+# =============================================================================
 
 class Announcement(Base):
     __tablename__ = "announcements"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
+    title = Column(String(200), nullable=False)
     message = Column(Text, nullable=False)
-    sender_name = Column(String, nullable=False)
-    urgency = Column(String, default="Normal") # Normal, Emergency
-    target_role = Column(String, default="All") # All, LGA Coordinators, Ward Coordinators, Polling Unit Agents
-    target_lga_id = Column(Integer, nullable=True)
-    is_pinned = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    sender_name = Column(String(100), nullable=False)
+    urgency = Column(String(20), default="Normal", nullable=False)
+    target_role = Column(String(50), default="All", nullable=False)
+    target_lga_id = Column(Integer, ForeignKey("lgas.id", ondelete="SET NULL"), nullable=True)
+    is_pinned = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    channel = Column(String, default="General") # All Agents, LGA Coordinators, Ward Coordinators, etc.
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    channel = Column(String(50), default="General", nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=True)
-    username = Column(String, nullable=True)
-    action = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    username = Column(String(100), nullable=True)
+    action = Column(String(100), nullable=False)
     details = Column(Text, nullable=True)
-    ip_address = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    ip_address = Column(String(45), nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

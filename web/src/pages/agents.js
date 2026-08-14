@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import { apiFetch } from '../lib/api'
 import { useTheme } from './_app'
 import { 
   Users, 
@@ -21,23 +22,33 @@ export default function AgentsPage() {
   const [lgaFilter, setLgaFilter] = useState('All LGAs')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const agentsList = [
-    { id: 1, name: 'Murtala A.', role: 'Polling Unit Agent', pu: 'PU 023 - Guri Ward A', puCode: 'PU 023', lga: 'Guri', ward: 'Guri Ward A', phone: '0812 345 6789', status: 'Online', battery: '92%', network: '4G LTE', lastActive: '2 mins ago' },
-    { id: 2, name: 'Aisha M.', role: 'Polling Unit Agent', pu: 'PU 078 - Gumel Central', puCode: 'PU 078', lga: 'Gumel', ward: 'Gumel Central', phone: '0807 111 2233', status: 'Online', battery: '85%', network: '4G LTE', lastActive: 'Just now' },
-    { id: 3, name: 'Sani R.', role: 'Polling Unit Agent', pu: 'PU 105 - Hadejia Ward B', puCode: 'PU 105', lga: 'Hadejia', ward: 'Hadejia Ward B', phone: '0809 876 5432', status: 'Online', battery: '78%', network: '3G', lastActive: '5 mins ago' },
-    { id: 4, name: 'Usman K.', role: 'Polling Unit Agent', pu: 'PU 002 - Jahun Ward A', puCode: 'PU 002', lga: 'Jahun', ward: 'Jahun Ward A', phone: '0810 555 1122', status: 'Offline', battery: '15%', network: 'No Service', lastActive: '45 mins ago' },
-    { id: 5, name: 'Yusuf B.', role: 'Polling Unit Agent', pu: 'PU 056 - Kazaure Ward C', puCode: 'PU 056', lga: 'Kazaure', ward: 'Kazaure Ward C', phone: '0706 111 2233', status: 'Online', battery: '95%', network: '4G LTE', lastActive: '1 min ago' },
-    { id: 6, name: 'Musa A.', role: 'Polling Unit Agent', pu: 'PU 012 - Kaugama Ward 1', puCode: 'PU 012', lga: 'Kaugama', ward: 'Kaugama Ward 1', phone: '0803 123 4567', status: 'Online', battery: '88%', network: '4G LTE', lastActive: '3 mins ago' },
-  ]
+  const [agentsList, setAgentsList] = useState([])
+  useEffect(() => {
+    loadAgents()
+}, [])
 
-  const filteredAgents = agentsList.filter(agent => {
-    const matchesStatus = statusFilter === 'All' || agent.status === statusFilter
-    const matchesLga = lgaFilter === 'All LGAs' || agent.lga === lgaFilter
-    const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          agent.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          agent.puCode.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesStatus && matchesLga && matchesSearch
-  })
+async function loadAgents() {
+    try {
+        const data = await apiFetch("/agents")
+        setAgentsList(data)
+    } catch (err) {
+        console.error(err)
+    }
+}
+
+  const filteredAgents = agentsList.filter((agent) => {
+  const matchesStatus =
+    statusFilter === "All" ||
+    (statusFilter === "Online" && agent.is_active) ||
+    (statusFilter === "Offline" && !agent.is_active);
+
+  const matchesSearch =
+    (agent.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (agent.phone_number || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (agent.username || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+  return matchesStatus && matchesSearch;
+});
 
   const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
 
@@ -150,7 +161,7 @@ export default function AgentsPage() {
           <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
             <div className={`flex justify-between items-center pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
               <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Field Agent Telemetry Roster</h3>
-              <span className="text-xs font-mono text-slate-400">Showing {filteredAgents.length} Agents</span>
+              <span className="text-xs font-mono text-slate-400">Showing {agentsList.length} Agents</span>
             </div>
 
             <div className="overflow-x-auto">
@@ -170,32 +181,60 @@ export default function AgentsPage() {
                 </thead>
                 <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
                   {filteredAgents.map((ag) => (
-                    <tr key={ag.id} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
-                      <td className={`py-3 px-3 font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        <span className={`w-2.5 h-2.5 rounded-full ${ag.status === 'Online' ? 'bg-emerald-400' : 'bg-rose-500'}`}></span>
-                        <span>{ag.name}</span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-500">{ag.role}</td>
-                      <td className={`py-3 px-3 font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{ag.pu}</td>
-                      <td className="py-3 px-3 text-slate-400">{ag.lga}</td>
-                      <td className="py-3 px-3 text-pdp font-mono">{ag.phone}</td>
-                      <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
-                        <span>{ag.battery}</span> • <span>{ag.network}</span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          ag.status === 'Online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'
-                        }`}>
-                          {ag.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right text-slate-400 font-mono">{ag.lastActive}</td>
-                      <td className="py-3 px-3 text-right">
-                        <button className="bg-pdp hover:bg-pdp-dark text-white text-[10px] font-bold px-2.5 py-1 rounded transition flex items-center gap-1 ml-auto">
-                          <Phone className="w-3 h-3" /> Call Agent
-                        </button>
-                      </td>
-                    </tr>
+                   <tr
+                    key={ag.id}
+                     className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}
+                      >
+                       <td className={`py-3 px-3 font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        <span
+                         className={`w-2.5 h-2.5 rounded-full ${
+                          ag.is_active ? 'bg-emerald-400' : 'bg-rose-500'
+                         }`}
+                        ></span>
+
+                  {ag.full_name}
+                   </td>
+
+      <td className="py-3 px-3">
+        {ag.role}
+      </td>
+
+      <td className="py-3 px-3">
+        {ag.polling_unit_id ?? "-"}
+      </td>
+
+      <td className="py-3 px-3">
+        {ag.lga_id ?? "-"}
+      </td>
+
+      <td className="py-3 px-3">
+        {ag.phone_number}
+      </td>
+
+      <td className="py-3 px-3">
+        -
+      </td>
+
+      <td className="py-3 px-3">
+        <span
+          className={`px-2 py-1 rounded-full text-white ${
+            ag.is_active ? 'bg-green-600' : 'bg-red-600'
+          }`}
+        >
+          {ag.is_active ? "Active" : "Inactive"}
+        </span>
+      </td>
+
+      <td className="py-3 px-3 text-right">
+        -
+      </td>
+
+      <td className="py-3 px-3 text-right">
+        <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+          Edit
+        </button>
+      </td>
+    </tr>
                   ))}
                 </tbody>
               </table>

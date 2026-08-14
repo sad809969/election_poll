@@ -1,124 +1,228 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from datetime import datetime
-import os
-import uuid
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Incident, PollingUnit, User, IncidentSeverity, IncidentStatus
-from app.schemas import IncidentCreate, IncidentResponse
-from app.security import get_current_user
-from app.config import settings
+from app.models import Incident, PollingUnit, User
+from app.schemas import (
+    IncidentCreate,
+    IncidentResponse,
+    IncidentStatusUpdate,
+    MessageResponse,
+)
+from app.core.permissions import require_admin, require_agent
+from app.core.audit import write_audit_log
 
-router = APIRouter(prefix="/incidents", tags=["Incident Management"])
+router = APIRouter(
+    prefix="/incidents",
+    tags=["Incident Management"],
+)
 
-@router.get("", response_model=List[IncidentResponse])
-async def list_incidents(
-    severity: Optional[str] = None,
-    status: Optional[str] = None,
-    lga_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db)
+# ==========================================================
+# LIST INCIDENTS
+# ==========================================================
+
+@router.get(
+    "",
+    response_model=list[IncidentResponse],
+)
+def get_incidents(
+    polling_unit_id: int | None = None,
+    status: str | None = None,
+    severity: str | None = None,
+    db: Session = Depends(get_db),
 ):
-    query = select(Incident).options(
-        selectinload(Incident.polling_unit).selectinload(PollingUnit.lga),
-        selectinload(Incident.reported_by_user)
+
+    query = db.query(Incident)
+
+    if polling_unit_id is not None:
+        query = query.filter(
+            Incident.polling_unit_id == polling_unit_id
+        )
+
+    if status is not None:
+        query = query.filter(
+            Incident.status == status
+        )
+
+    if severity is not None:
+        query = query.filter(
+            Incident.severity == severity
+        )
+
+    return query.order_by(
+        Incident.created_at.desc()
+    ).all()
+
+
+# ==========================================================
+# GET ONE INCIDENT
+# ==========================================================
+
+@router.get(
+    "/{incident_id}",
+    response_model=IncidentResponse,
+)
+def get_incident(
+    incident_id: int,
+    db: Session = Depends(get_db),
+):
+
+    incident = (
+        db.query(Incident)
+        .filter(Incident.id == incident_id)
+        .first()
     )
-    if severity:
-        query = query.where(Incident.severity == severity)
-    if status:
-        query = query.where(Incident.status == status)
-    if lga_id:
-        query = query.join(PollingUnit).where(PollingUnit.lga_id == lga_id)
 
-    result = await db.execute(query.order_by(Incident.created_at.desc()))
-    incidents = result.scalars().all()
+    if not incident:
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
 
-    res = []
-    for inc in incidents:
-        res.append(IncidentResponse(
-            id=inc.id,
-            polling_unit_id=inc.polling_unit_id,
-            reported_by=inc.reported_by,
-            incident_type=inc.incident_type,
-            severity=inc.severity,
-            description=inc.description,
-            status=inc.status,
-            media_url=inc.media_url,
-            latitude=inc.latitude,
-            longitude=inc.longitude,
-            created_at=inc.created_at,
-            synced_at=inc.synced_at,
-            pu_name=inc.polling_unit.name if inc.polling_unit else None,
-            pu_code=inc.polling_unit.code if inc.polling_unit else None,
-            lga_name=inc.polling_unit.lga.name if (inc.polling_unit and inc.polling_unit.lga) else None,
-            reporter_name=inc.reported_by_user.full_name if inc.reported_by_user else None
-        ))
-    return res
+    return incident
 
-@router.post("", response_model=IncidentResponse)
-async def create_incident(
+
+# ==========================================================
+# CREATE INCIDENT
+# ==========================================================
+
+@router.post(
+    "",
+    response_model=IncidentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_incident(
     payload: IncidentCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_agent),
 ):
-    created_time = payload.created_at or datetime.utcnow()
-    synced_time = datetime.utcnow()
 
-    # Find PU to update status if critical
-    pu_res = await db.execute(select(PollingUnit).where(PollingUnit.id == payload.polling_unit_id))
-    pu = pu_res.scalars().first()
-    if pu and payload.severity in [IncidentSeverity.HIGH.value, IncidentSeverity.CRITICAL.value]:
-        pu.status = "Critical" if payload.severity == IncidentSeverity.CRITICAL.value else "Attention"
+    polling_unit = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.id == payload.polling_unit_id)
+        .first()
+    )
+
+    if not polling_unit:
+        raise HTTPException(
+            status_code=404,
+            detail="Polling Unit not found",
+        )
 
     incident = Incident(
+
         polling_unit_id=payload.polling_unit_id,
+
         reported_by=current_user.id,
+
         incident_type=payload.incident_type,
+
         severity=payload.severity,
+
         description=payload.description,
+
         media_url=payload.media_url,
+
         latitude=payload.latitude,
+
         longitude=payload.longitude,
-        status=IncidentStatus.REPORTED.value,
-        created_at=created_time,
-        synced_at=synced_time
     )
+
+    write_audit_log(
+    db=db,
+    user=current_user,
+    action="REPORT_INCIDENT",
+    details=f"{payload.incident_type} at Polling Unit {payload.polling_unit_id}",
+   )
+
     db.add(incident)
-    await db.commit()
-    await db.refresh(incident)
 
-    return IncidentResponse(
-        id=incident.id,
-        polling_unit_id=incident.polling_unit_id,
-        reported_by=incident.reported_by,
-        incident_type=incident.incident_type,
-        severity=incident.severity,
-        description=incident.description,
-        status=incident.status,
-        media_url=incident.media_url,
-        latitude=incident.latitude,
-        longitude=incident.longitude,
-        created_at=incident.created_at,
-        synced_at=incident.synced_at,
-        pu_name=pu.name if pu else None,
-        pu_code=pu.code if pu else None,
-        reporter_name=current_user.full_name
+    db.commit()
+
+    db.refresh(incident)
+
+    return incident
+
+
+# ==========================================================
+# UPDATE INCIDENT STATUS
+# ==========================================================
+
+@router.patch(
+    "/{incident_id}/status",
+    response_model=IncidentResponse,
+)
+def update_incident_status(
+    incident_id: int,
+    payload: IncidentStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+
+    incident = (
+        db.query(Incident)
+        .filter(Incident.id == incident_id)
+        .first()
     )
 
-@router.post("/upload-media")
-async def upload_incident_media(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    if not incident:
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    incident.status = payload.status
+    write_audit_log(
+    db=db,
+    user=current_user,
+    action="UPDATE_INCIDENT",
+    details=f"Incident ID {incident.id}",
+)
+
+    db.commit()
+
+    db.refresh(incident)
+
+    return incident
+
+
+# ==========================================================
+# DELETE INCIDENT
+# ==========================================================
+
+@router.delete(
+    "/{incident_id}",
+    response_model=MessageResponse,
+)
+def delete_incident(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}_{file.filename}"
-    filepath = os.path.join(settings.UPLOAD_DIR, filename)
 
-    with open(filepath, "wb") as f:
-        content = await file.read()
-        f.write(content)
+    incident = (
+        db.query(Incident)
+        .filter(Incident.id == incident_id)
+        .first()
+    )
 
-    return {"url": f"/uploads/{filename}", "filename": filename}
+    if not incident:
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found",
+        )
+
+    write_audit_log(
+    db=db,
+    user=current_user,
+    action="DELETE_INCIDENT",
+    details=f"Incident ID {incident.id}",
+)
+
+    db.delete(incident)
+
+    db.commit()
+
+    return {
+        "message": "Incident deleted successfully"
+    }

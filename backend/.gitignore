@@ -1,0 +1,41 @@
+# Environment & Secret Variables (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python Byte Code & Cache Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.venv
+venv/
+ENV/
+env/
+
+# Uploaded Files & Temporary Assets
+uploads/
+/uploads/*
+!uploads/.gitkeep
+
+# Local Databases & Logs
+*.db
+*.sqlite3
+*.log
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Node / Web Build Artifacts (for Next.js web directory)
+node_modules/
+.next/
+out/
+build/
+dist/
