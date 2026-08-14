@@ -170,8 +170,9 @@ export default function AdminPage() {
               <div className="flex justify-between items-center">
                 <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>User Management</h3>
                 <button 
+                  type="button"
                   onClick={() => setShowAddModal(true)}
-                  className="bg-pdp hover:bg-pdp-dark text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition shadow-sm"
+                  className="bg-pdp hover:bg-pdp-dark text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition shadow-sm cursor-pointer relative z-10"
                 >
                   <Plus className="w-4 h-4" /> Add New User
                 </button>
