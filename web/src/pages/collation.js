@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
+import { apiFetch } from '../lib/api'
 import { 
   Building2, 
   Award, 
@@ -16,8 +17,41 @@ export default function CollationCenterPage() {
 
   const [selectedLga, setSelectedLga] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
+  const [liveCollation, setLiveCollation] = useState([])
+  const [liveSummary, setLiveSummary] = useState(null)
 
-  const lgaCollationData = [
+  useEffect(() => {
+    async function loadCollationData() {
+      try {
+        const data = await apiFetch('/results');
+        if (data) {
+          if (data.lga_breakdown) {
+            const formatted = data.lga_breakdown.map(item => ({
+              lga: item.lga,
+              totalPus: item.totalPus,
+              collatedPus: item.collatedPus,
+              pct: parseInt(item.pct) || 0,
+              pdp: item.pdp,
+              apc: item.apc,
+              nnpp: item.nnpp,
+              lp: item.lp,
+              status: item.collatedPus > 0 ? 'Sign-off Ready' : 'In Progress',
+              ec8c: item.collatedPus > 0 ? 'Verified' : 'Pending'
+            }));
+            setLiveCollation(formatted);
+          }
+          if (data.summary) {
+            setLiveSummary(data.summary);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load collation data:', e);
+      }
+    }
+    loadCollationData();
+  }, []);
+
+  const fallbackLgaData = [
     { lga: 'Dutse', totalPus: 240, collatedPus: 228, pct: 95, pdp: 78654, apc: 55430, nnpp: 21600, lp: 8620, status: 'Sign-off Ready', ec8c: 'Verified' },
     { lga: 'Hadejia', totalPus: 210, collatedPus: 189, pct: 90, pdp: 65432, apc: 48721, nnpp: 18340, lp: 7100, status: 'Sign-off Ready', ec8c: 'Verified' },
     { lga: 'Kazaure', totalPus: 195, collatedPus: 171, pct: 88, pdp: 62112, apc: 44875, nnpp: 16922, lp: 6420, status: 'In Progress', ec8c: 'Pending Sign-off' },
@@ -25,6 +59,8 @@ export default function CollationCenterPage() {
     { lga: 'Kiyawa', totalPus: 170, collatedPus: 139, pct: 82, pdp: 48231, apc: 36543, nnpp: 14200, lp: 4800, status: 'In Progress', ec8c: 'Pending Sign-off' },
     { lga: 'Jahun', totalPus: 200, collatedPus: 140, pct: 70, pdp: 42100, apc: 38900, nnpp: 12400, lp: 3900, status: 'Flagged Discrepancy', ec8c: 'Under Audit' },
   ]
+
+  const lgaCollationData = liveCollation.length > 0 ? liveCollation : fallbackLgaData
 
   const filteredData = lgaCollationData.filter(d => 
     (selectedLga === 'All' || d.lga === selectedLga) &&

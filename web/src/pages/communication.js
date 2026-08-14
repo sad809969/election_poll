@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
+import { apiFetch } from '../lib/api'
 import { 
   MessageSquare, 
   Users, 
@@ -23,6 +24,21 @@ export default function CommunicationCenterPage() {
   const [selectedChannel, setSelectedChannel] = useState('All Agents (Broadcast)')
   const [searchQuery, setSearchQuery] = useState('')
   const [messageText, setMessageText] = useState('')
+  const [liveMessages, setLiveMessages] = useState([])
+
+  useEffect(() => {
+    async function loadMessages() {
+      try {
+        const data = await apiFetch('/communication/messages');
+        if (data && Array.isArray(data)) {
+          setLiveMessages(data);
+        }
+      } catch (e) {
+        console.error('Failed to load communication messages:', e);
+      }
+    }
+    loadMessages();
+  }, []);
 
   const channels = [
     { name: 'All Agents (Broadcast)', sub: '4,327 recipients targeted', count: '10:45 AM', active: true },

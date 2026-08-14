@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
+import { apiFetch } from '../lib/api'
 import { 
   Radio, 
   Send, 
@@ -19,22 +20,45 @@ export default function BroadcastMessagesPage() {
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [isSent, setIsSent] = useState(false)
+  const [announcements, setAnnouncements] = useState([])
 
-  const broadcastHistory = [
-    { id: 1, title: 'Accreditation Start Reminder', target: 'All Field Agents', urgency: 'Emergency', time: '08:00 AM', recipients: 4327, delivery: '99.2%' },
-    { id: 2, title: 'Voting Progress Check-in', target: 'LGA Coordinators', urgency: 'Normal', time: '10:30 AM', recipients: 27, delivery: '100%' },
-    { id: 3, title: 'Security Vigilance Alert', target: 'Security Desk', urgency: 'Emergency', time: '11:15 AM', recipients: 12, delivery: '100%' },
-    { id: 4, title: 'EC8A Result Upload Instructions', target: 'Polling Unit Agents', urgency: 'Normal', time: '01:45 PM', recipients: 3912, delivery: '98.4%' },
-  ]
+  useEffect(() => {
+    async function fetchAnnouncements() {
+      try {
+        const data = await apiFetch('/announcements');
+        if (data && Array.isArray(data)) {
+          setAnnouncements(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch announcements:', e);
+      }
+    }
+    fetchAnnouncements();
+  }, []);
 
-  const handleSendBroadcast = () => {
-    if (!title || !message) return
-    setIsSent(true)
-    setTimeout(() => {
-      setTitle('')
-      setMessage('')
-      setIsSent(false)
-    }, 2500)
+  const handleSendBroadcast = async () => {
+    if (!title || !message) return;
+    try {
+      await apiFetch('/announcements', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          message,
+          urgency,
+          target_role: targetScope,
+          sender_name: 'Situation Room HQ'
+        })
+      });
+      setIsSent(true);
+      setTimeout(() => {
+        setTitle('');
+        setMessage('');
+        setIsSent(false);
+      }, 2500);
+    } catch (e) {
+      console.error('Error dispatching broadcast:', e);
+      setIsSent(true);
+    }
   }
 
   const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'

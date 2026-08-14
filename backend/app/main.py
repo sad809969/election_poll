@@ -72,20 +72,13 @@ app.include_router(results.router, prefix=settings.API_V1_STR)
 app.include_router(incidents.router, prefix=settings.API_V1_STR)
 app.include_router(agents.router, prefix=settings.API_V1_STR)
 app.include_router(electoral.router, prefix=settings.API_V1_STR)
-app.include_router(communication.router, prefix=settings.API_V1_STR)
-app.include_router(audit.router, prefix=settings.API_V1_STR)
-app.include_router(dashboard.router,prefix=settings.API_V1_STR)
-
-
-# Optional Routers (Included if available in your project)
-if electoral:
-    app.include_router(electoral.router, prefix=settings.API_V1_STR)
 if communication:
     app.include_router(communication.router, prefix=settings.API_V1_STR)
+app.include_router(audit.router, prefix=settings.API_V1_STR)
+app.include_router(dashboard.router, prefix=settings.API_V1_STR)
+
 if ws:
     app.include_router(ws.router)
-
-app.include_router(audit.router, prefix=settings.API_V1_STR,)
 
 @app.get("/")
 def root():

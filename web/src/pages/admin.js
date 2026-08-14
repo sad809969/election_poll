@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
+import { apiFetch } from '../lib/api'
 import { 
   Users, 
   UserCheck, 
@@ -33,8 +34,34 @@ export default function AdminPage() {
   const [lgaFilter, setLgaFilter] = useState('All LGAs')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [liveUsers, setLiveUsers] = useState([])
 
-  const usersList = [
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const data = await apiFetch('/agents');
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((u, i) => ({
+            id: u.id || i + 1,
+            name: u.full_name || u.username,
+            username: u.username,
+            role: u.role || 'Polling Unit Agent',
+            roleBadge: u.role === 'Super Admin' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-slate-500/20 text-slate-400',
+            lga: u.lga_name || 'Jigawa State',
+            phone: u.phone_number || '0800 000 0000',
+            status: u.is_active ? 'Active' : 'Inactive',
+            lastLogin: 'Today'
+          }));
+          setLiveUsers(mapped);
+        }
+      } catch (e) {
+        console.error('Failed to load admin users:', e);
+      }
+    }
+    loadUsers();
+  }, []);
+
+  const fallbackUsersList = [
     { id: 1, name: 'Abdullahi Usman', username: 'admin', role: 'Super Admin', roleBadge: 'bg-emerald-500/20 text-emerald-500', lga: 'Jigawa State', phone: '0803 123 4567', status: 'Active', lastLogin: 'Today, 08:45 AM' },
     { id: 2, name: 'Musa Kiyawa', username: 'statechairman', role: 'State Chairman', roleBadge: 'bg-blue-500/20 text-blue-500', lga: 'Jigawa State', phone: '0802 987 6543', status: 'Active', lastLogin: 'Today, 07:32 AM' },
     { id: 3, name: 'Aliyu A. Babura', username: 'dg', role: 'Director General', roleBadge: 'bg-purple-500/20 text-purple-500', lga: 'Jigawa State', phone: '0806 555 1234', status: 'Active', lastLogin: 'Today, 09:12 AM' },
@@ -42,6 +69,8 @@ export default function AdminPage() {
     { id: 5, name: 'Aisha Muhammad', username: 'gumel_agent', role: 'Polling Unit Agent', roleBadge: 'bg-slate-500/20 text-slate-400', lga: 'Gumel (PU 078)', phone: '0807 111 2233', status: 'Active', lastLogin: 'Today, 10:42 AM' },
     { id: 6, name: 'Ibrahim Y. Dutse', username: 'dutse_coord', role: 'Ward Coordinator', roleBadge: 'bg-indigo-500/20 text-indigo-500', lga: 'Dutse Central', phone: '0703 444 5566', status: 'Inactive', lastLogin: 'Yesterday, 04:20 PM' },
   ]
+
+  const usersList = liveUsers.length > 0 ? liveUsers : fallbackUsersList
 
   const roleDistribution = [
     { name: 'Polling Unit Agents', value: 3912, pct: '69.2%', color: '#EF4444' },
@@ -269,6 +298,82 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4`}>
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+              <h3 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                <Plus className="w-4 h-4 text-pdp" /> Add New System User
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target;
+              try {
+                await apiFetch('/agents', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    full_name: form.full_name.value,
+                    username: form.username.value,
+                    password: form.password.value,
+                    role: form.role.value,
+                    phone_number: form.phone_number.value
+                  })
+                });
+                alert('User created successfully!');
+                setShowAddModal(false);
+                window.location.reload();
+              } catch (err) {
+                alert('Error creating user: ' + err.message);
+              }
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Full Name</label>
+                <input required name="full_name" type="text" placeholder="e.g. Murtala Abubakar" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Username</label>
+                <input required name="username" type="text" placeholder="e.g. murtala_guri" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Password</label>
+                <input required name="password" type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Authorization Role (9 Tiers)</label>
+                <select name="role" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
+                  <option value="Super Admin">Super Admin</option>
+                  <option value="State Chairman">State Chairman</option>
+                  <option value="Governorship Candidate">Governorship Candidate</option>
+                  <option value="Deputy Governorship Candidate">Deputy Governorship Candidate</option>
+                  <option value="Director General">Director General</option>
+                  <option value="Situation Room Officer">Situation Room Officer</option>
+                  <option value="LGA Coordinator">LGA Coordinator</option>
+                  <option value="Ward Coordinator">Ward Coordinator</option>
+                  <option value="Polling Unit Agent">Polling Unit Agent</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Phone Number</label>
+                <input name="phone_number" type="text" placeholder="0812 345 6789" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark">Create User</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

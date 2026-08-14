@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
+import { apiFetch } from '../lib/api'
 import { 
   Search, 
   Download 
@@ -12,14 +13,40 @@ export default function AuditLogsPage() {
   const isDark = theme === 'dark'
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [liveLogs, setLiveLogs] = useState([])
 
-  const auditLogs = [
-    { id: 'LOG-9821', user: 'Murtala A.', role: 'Polling Unit Agent', action: 'SUBMIT_EC8A_RESULT', details: 'Submitted official vote counts & EC8A result sheet photo for PU 023 Guri Ward A', ip: '197.210.28.45', lat: 27.02, lng: 12.34, time: '20 Apr 2027, 10:45 AM' },
-    { id: 'LOG-9820', user: 'Aisha M.', role: 'Polling Unit Agent', action: 'REPORT_INCIDENT', details: 'Reported BVAS fingerprint malfunction resolved by technician at PU 078 Gumel Central', ip: '197.210.31.88', lat: 27.12, lng: 12.45, time: '20 Apr 2027, 10:42 AM' },
-    { id: 'LOG-9819', user: 'Usman K.', role: 'Polling Unit Agent', action: 'FLAG_CRITICAL_INCIDENT', details: 'Flagged Critical Violence incident at PU 002 Jahun Ward A', ip: '197.210.12.19', lat: 27.05, lng: 12.15, time: '20 Apr 2027, 10:35 AM' },
-    { id: 'LOG-9818', user: 'Abdullahi Usman', role: 'Super Admin', action: 'SUPER_ADMIN_LOGIN', details: 'Successful JWT authentication to Situation Room Command Center', ip: '102.89.23.11', lat: null, lng: null, time: '20 Apr 2027, 08:45 AM' },
-    { id: 'LOG-9817', user: 'System', role: 'System Engine', action: 'SEED_JIGAWA_ELECTORAL_DATA', details: 'Initialized 27 LGAs, 287 Wards, and 4,827 Polling Units into database', ip: '127.0.0.1', lat: null, lng: null, time: '20 Apr 2027, 08:00 AM' },
+  useEffect(() => {
+    async function loadAuditLogs() {
+      try {
+        const data = await apiFetch('/audit');
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((log, i) => ({
+            id: `LOG-${log.id || i + 100}`,
+            user: log.username || 'System',
+            role: 'User',
+            action: log.action,
+            details: log.details || 'System Action Recorded',
+            ip: log.ip_address || '127.0.0.1',
+            time: new Date(log.timestamp || Date.now()).toLocaleString()
+          }));
+          setLiveLogs(mapped);
+        }
+      } catch (e) {
+        console.error('Failed to load audit logs:', e);
+      }
+    }
+    loadAuditLogs();
+  }, []);
+
+  const fallbackAuditLogs = [
+    { id: 'LOG-9821', user: 'Murtala A.', role: 'Polling Unit Agent', action: 'SUBMIT_EC8A_RESULT', details: 'Submitted official vote counts & EC8A result sheet photo for PU 023 Guri Ward A', ip: '197.210.28.45', time: 'Today, 10:45 AM' },
+    { id: 'LOG-9820', user: 'Aisha M.', role: 'Polling Unit Agent', action: 'REPORT_INCIDENT', details: 'Reported BVAS fingerprint malfunction resolved by technician at PU 078 Gumel Central', ip: '197.210.31.88', time: 'Today, 10:42 AM' },
+    { id: 'LOG-9819', user: 'Usman K.', role: 'Polling Unit Agent', action: 'FLAG_CRITICAL_INCIDENT', details: 'Flagged Critical Violence incident at PU 002 Jahun Ward A', ip: '197.210.12.19', time: 'Today, 10:35 AM' },
+    { id: 'LOG-9818', user: 'Abdullahi Usman', role: 'Super Admin', action: 'SUPER_ADMIN_LOGIN', details: 'Successful JWT authentication to Situation Room Command Center', ip: '102.89.23.11', time: 'Today, 08:45 AM' },
+    { id: 'LOG-9817', user: 'System', role: 'System Engine', action: 'SEED_JIGAWA_ELECTORAL_DATA', details: 'Initialized 27 LGAs, 287 Wards, and 4,827 Polling Units into database', ip: '127.0.0.1', time: 'Today, 08:00 AM' },
   ]
+
+  const auditLogs = liveLogs.length > 0 ? liveLogs : fallbackAuditLogs
 
   const filteredLogs = auditLogs.filter(log => 
     log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||

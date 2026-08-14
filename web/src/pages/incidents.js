@@ -37,7 +37,7 @@ export default function IncidentTrackerPage() {
       try {
         setLoading(true)
         setError(null)
-        const data = await apiFetch('/incidents/list')
+        const data = await apiFetch('/incidents')
         
         if (Array.isArray(data) && data.length > 0) {
           // Normalize API properties to component standard
