@@ -1,31 +1,32 @@
-# JIGAWA PDP POLLWATCH 2027 — ALL 27 LGAS REAL DATA SEEDING PLAN
+# JIGAWA PDP POLLWATCH 2027 — ADMIN CONTROL & REAL DATA SUITE PLAN
 
 ## 🎯 Goal
-Upgrade [backend/app/seed.py](file:///home/fox/election_poll/backend/app/seed.py) to seed **100% complete, realistic election data across all 27 Local Government Areas of Jigawa State** into the database (`pollwatch.db` / PostgreSQL).
+Provide full Admin Control Forms across the system so the Admin can manually create, enter, and edit all system data (**Polling Units**, **System Users & 9 Roles**, **Form EC8A Results**, **Field Incidents**, **Parties & Candidates**), and ensure all web dashboards display 100% real database data directly from FastAPI backend endpoints.
 
 ---
 
-## 📊 Complete 27 LGA Seeding Matrix
+## 🛠️ Admin Manual Control Forms & Modals
 
-The database will be populated with comprehensive electoral records across all 27 Jigawa LGAs:
+1. **[admin.js](file:///home/fox/election_poll/web/src/pages/admin.js)**:
+   - **"+ Add New User" Modal**: Create accounts for all 9 tiers (*Super Admin, State Chairman, Candidate, Deputy Candidate, DG, Situation Room Officer, LGA Coordinator, Ward Coordinator, Polling Unit Agent*).
+   - Dynamic user role filters and live fetching from `GET /api/agents`.
 
-1. **27 LGAs**: *Dutse, Hadejia, Gumel, Kazaure, Ringim, Birnin Kudu, Babura, Jahun, Guri, Kaugama, Kiyawa, Buji, Gwaram, Gwiwa, Yankwashi, Roni, Sule Tankarkar, Taura, Maigatari, Miga, Malam Madori, Kafin Hausa, Kirikasamma, Auyo, Birniwa, Gagarawa, Gwaram Central*.
-2. **Wards**: Real wards created for every LGA (e.g. *Chamo, Limawa, Takur, Kudai, Gumel Central, Hadejia Ward A/B, Kazaure Ward 1, Jahun Ward A, Guri Central, etc.*).
-3. **Polling Units**: Multiple polling units per LGA with unique codes (*DUT-001*, *HAD-012*, *GUM-023*, *KAZ-045*, *RIN-019*, etc.), voter registers (500–950 voters per unit), GPS coordinates, and status markers (`Normal`, `Attention`, `Critical`).
-4. **Form EC8A Vote Tallies**: Real vote count submissions across all 27 LGAs:
-   - PDP Votes
-   - APC Votes
-   - NNPP Votes
-   - LP Votes
-   - Others & Rejected votes
-   - EC8A Photo Verification status (`VERIFIED`, `FLAGGED`, `PENDING_PHOTO`).
-5. **Field Agents**: Assigned agent user accounts for every Polling Unit.
-6. **Field Incidents**: Incident reports across LGAs categorized by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and status (`REPORTED`, `INVESTIGATING`, `RESOLVED`).
-7. **Security Audit Logs**: Action history logs.
+2. **[polling-units.js](file:///home/fox/election_poll/web/src/pages/polling-units.js)**:
+   - **"+ Add Polling Unit" Modal**: Manually create new Polling Units across all 27 LGAs & Wards with unique PU code, registered voter count, WGS84 GPS coordinates.
+   - Live fetching from `GET /api/electoral/polling-units`.
+
+3. **[results.js](file:///home/fox/election_poll/web/src/pages/results.js)**:
+   - **"+ Manual Form EC8A Entry" Modal**: Allows Admins to select a Polling Unit and manually enter Form EC8A vote tallies (PDP votes, APC votes, NNPP votes, LP votes, Rejected votes).
+   - Submits to `POST /api/results`.
+
+4. **[incidents.js](file:///home/fox/election_poll/web/src/pages/incidents.js)**:
+   - **"+ Report New Incident" Modal**: Allows Admins to manually log security/BVAS/field incidents for any Polling Unit with severity level (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and category.
+   - Submits to `POST /api/incidents`.
 
 ---
 
 ## ⚡ Execution Steps
-1. Update `backend/app/seed.py` with full 27-LGA seeding logic.
-2. Execute `./venv/bin/python -m app.seed` to populate `pollwatch.db`.
-3. Commit and push to GitHub `main` branch so Vercel automatically deploys the complete dataset cloud-wide.
+1. Add **"+ Manual Form EC8A Entry"** modal on `web/src/pages/results.js`.
+2. Add **"+ Report New Incident"** modal on `web/src/pages/incidents.js`.
+3. Update API fallbacks so all pages prefer live database arrays over static fallback data.
+4. Commit and push to GitHub `main` branch.

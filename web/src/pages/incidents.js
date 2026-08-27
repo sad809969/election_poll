@@ -30,6 +30,8 @@ export default function IncidentTrackerPage() {
   const [incidentsList, setIncidentsList] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showIncidentModal, setShowIncidentModal] = useState(false)
+  const [pollingUnitsList, setPollingUnitsList] = useState([])
 
   // Fetch Incidents from FastAPI Endpoint (/api/incidents)
   useEffect(() => {
@@ -176,7 +178,7 @@ export default function IncidentTrackerPage() {
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                     severityFilter === sev 
                       ? 'bg-pdp text-white shadow-md' 
-                      : isDark ? 'bg-slate-900 text-slate-400 border border-slate-800' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      : isDark ? 'bg-slate-900 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   {sev}
@@ -185,12 +187,16 @@ export default function IncidentTrackerPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <select 
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const pus = await apiFetch('/electoral/polling-units');
+                    setPollingUnitsList(pus || []);
+                  } catch(e) {}
+                  setShowIncidentModal(true);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition cursor-pointer relative z-10 shadow-sm"
               >
                 <option value="All">All Statuses</option>
                 <option value="REPORTED">REPORTED</option>
@@ -331,6 +337,85 @@ export default function IncidentTrackerPage() {
                     Close
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+          {/* Report New Incident Modal */}
+          {showIncidentModal && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4`}>
+                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    <AlertTriangle className="w-4 h-4 text-amber-500" /> Report Field Security / BVAS Incident
+                  </h3>
+                  <button onClick={() => setShowIncidentModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const f = e.target;
+                  try {
+                    await apiFetch('/incidents', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        polling_unit_id: Number(f.polling_unit_id.value),
+                        incident_type: f.incident_type.value,
+                        severity: f.severity.value,
+                        description: f.description.value
+                      })
+                    });
+                    alert('Field incident reported successfully!');
+                    setShowIncidentModal(false);
+                    window.location.reload();
+                  } catch (err) {
+                    alert('Error reporting incident: ' + err.message);
+                  }
+                }} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-400">Polling Unit</label>
+                    <select required name="polling_unit_id" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
+                      {pollingUnitsList.length > 0 ? (
+                        pollingUnitsList.map(pu => (
+                          <option key={pu.id} value={pu.id}>{pu.code} - {pu.name}</option>
+                        ))
+                      ) : (
+                        <option value="1">PU 001 - Limawa Ward (Dutse)</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-400">Incident Category</label>
+                    <select name="incident_type" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
+                      <option value="BVAS Issues">BVAS Malfunction</option>
+                      <option value="Violence">Violence / Clash</option>
+                      <option value="Intimidation">Voter Intimidation</option>
+                      <option value="Vote Buying">Vote Buying Activity</option>
+                      <option value="Late Officials">Late INEC Staff Arrival</option>
+                      <option value="Ballot Shortage">Shortage of Electoral Materials</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-400">Severity Rating</label>
+                    <select name="severity" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
+                      <option value="CRITICAL">CRITICAL (Emergency Intervention Needed)</option>
+                      <option value="HIGH">HIGH Priority</option>
+                      <option value="MEDIUM">MEDIUM Priority</option>
+                      <option value="LOW">LOW Priority</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold mb-1 text-slate-400">Detailed Incident Description</label>
+                    <textarea required name="description" rows={3} placeholder="Describe the field incident situation..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none resize-none"></textarea>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setShowIncidentModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700">Submit Incident</button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

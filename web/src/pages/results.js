@@ -34,6 +34,8 @@ export default function ResultsDashboardPage() {
   const [summaryData, setSummaryData] = useState(null)
   const [partyVoteShare, setPartyVoteShare] = useState([])
   const [lgaCollationTable, setLgaCollationTable] = useState([])
+  const [showEc8aModal, setShowEc8aModal] = useState(false)
+  const [pollingUnitsList, setPollingUnitsList] = useState([])
 
   // Default fallback party colors
   const partyColors = {
@@ -215,9 +217,24 @@ export default function ResultsDashboardPage() {
             <div className={`lg:col-span-2 ${cardClass} rounded-xl p-5 space-y-4`}>
               <div className="flex justify-between items-center border-b pb-2 border-slate-100 dark:border-slate-800">
                 <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>27 LGA Collation Breakdown</h3>
-                <button className="bg-pdp hover:bg-pdp-dark text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
-                  <Download className="w-3.5 h-3.5" /> Export PDF Report
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const pus = await apiFetch('/electoral/polling-units');
+                        setPollingUnitsList(pus || []);
+                      } catch(e) {}
+                      setShowEc8aModal(true);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer relative z-10"
+                  >
+                    + Manual Form EC8A Entry
+                  </button>
+                  <button className="bg-pdp hover:bg-pdp-dark text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1">
+                    <Download className="w-3.5 h-3.5" /> Export PDF Report
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -250,6 +267,88 @@ export default function ResultsDashboardPage() {
           </div>
         </main>
       </div>
+
+      {/* Manual EC8A Entry Modal */}
+      {showEc8aModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4`}>
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+              <h3 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                <FileText className="w-4 h-4 text-emerald-500" /> Form EC8A Manual Vote Entry
+              </h3>
+              <button onClick={() => setShowEc8aModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const f = e.target;
+              try {
+                await apiFetch('/results', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    polling_unit_id: Number(f.polling_unit_id.value),
+                    pdp_votes: Number(f.pdp_votes.value),
+                    apc_votes: Number(f.apc_votes.value),
+                    nnpp_votes: Number(f.nnpp_votes.value),
+                    lp_votes: Number(f.lp_votes.value),
+                    rejected_votes: Number(f.rejected_votes.value || 0)
+                  })
+                });
+                alert('Form EC8A vote tally recorded successfully!');
+                setShowEc8aModal(false);
+                window.location.reload();
+              } catch (err) {
+                alert('Error submitting EC8A votes: ' + err.message);
+              }
+            }} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Target Polling Unit</label>
+                <select required name="polling_unit_id" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
+                  {pollingUnitsList.length > 0 ? (
+                    pollingUnitsList.map(pu => (
+                      <option key={pu.id} value={pu.id}>{pu.code} - {pu.name}</option>
+                    ))
+                  ) : (
+                    <option value="1">PU 001 - Limawa Ward (Dutse)</option>
+                  )}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-emerald-500">PDP Votes</label>
+                  <input required name="pdp_votes" type="number" defaultValue="250" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-blue-500">APC Votes</label>
+                  <input required name="apc_votes" type="number" defaultValue="180" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-purple-500">NNPP Votes</label>
+                  <input required name="nnpp_votes" type="number" defaultValue="35" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-amber-500">LP Votes</label>
+                  <input required name="lp_votes" type="number" defaultValue="12" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Rejected Votes</label>
+                <input name="rejected_votes" type="number" defaultValue="5" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowEc8aModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700">Submit EC8A Votes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
