@@ -74,106 +74,107 @@ def seed_database(db: Session = None):
         db.commit()
         print("Seeded 27 Jigawa LGAs.")
 
-        # Seed sample Wards & Polling Units
+        # Comprehensive Seeding Across ALL 27 Jigawa LGAs
         from app.models import Ward, PollingUnit, Incident, VoteResult
 
-        dutse_lga = db.query(LGA).filter(LGA.name == "Dutse").first()
-        guri_lga = db.query(LGA).filter(LGA.name == "Guri").first()
-        gumel_lga = db.query(LGA).filter(LGA.name == "Gumel").first()
-        hadejia_lga = db.query(LGA).filter(LGA.name == "Hadejia").first()
-        jahun_lga = db.query(LGA).filter(LGA.name == "Jahun").first()
-        kazaure_lga = db.query(LGA).filter(LGA.name == "Kazaure").first()
-        kaugama_lga = db.query(LGA).filter(LGA.name == "Kaugama").first()
+        all_lgas = db.query(LGA).all()
+        statuses = ["Normal", "Normal", "Normal", "Attention", "Normal", "Critical", "Normal"]
+        categories = ["BVAS Issues", "Late Officials", "Minor Crowd", "Intimidation", "Vote Buying", "Ballot Shortage"]
 
-        sample_wards_pus = [
-            (guri_lga, "Guri Ward A", "PU 023", "PU 023 - Guri Ward A", "Attention", 650, 245, 198, 45, 12, "Agent Murtala"),
-            (gumel_lga, "Gumel Central", "PU 078", "PU 078 - Gumel Central", "Normal", 580, 233, 176, 35, 10, "Agent Aisha"),
-            (hadejia_lga, "Hadejia Ward B", "PU 105", "PU 105 - Hadejia Ward B", "Normal", 620, 198, 154, 28, 8, "Agent Sani"),
-            (jahun_lga, "Jahun Ward A", "PU 002", "PU 002 - Jahun Ward A", "Critical", 710, 187, 143, 50, 15, "Agent Usman"),
-            (kazaure_lga, "Kazaure Ward C", "PU 056", "PU 056 - Kazaure Ward C", "Normal", 520, 176, 132, 20, 5, "Agent Yusuf"),
-            (kaugama_lga, "Kaugama Ward 1", "PU 012", "PU 012 - Kaugama Ward 1", "Normal", 600, 210, 160, 30, 7, "Agent Musa"),
-            (dutse_lga, "Limawa Ward", "PU 001", "PU 001 - Limawa Ward", "Normal", 800, 310, 220, 40, 15, "Agent Ibrahim"),
-        ]
+        for index, lga in enumerate(all_lgas):
+            for w_idx in [1, 2]:
+                ward_name = f"{lga.name} Ward {w_idx}"
+                ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.name == ward_name).first()
+                if not ward:
+                    ward = Ward(lga_id=lga.id, name=ward_name, code=f"{lga.code}-W{w_idx}")
+                    db.add(ward)
+                    db.commit()
+                    db.refresh(ward)
 
-        for lga, ward_name, pu_code, pu_name, status, registered, pdp, apc, nnpp, lp, agent_name in sample_wards_pus:
-            if not lga:
-                continue
-            ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.name == ward_name).first()
-            if not ward:
-                ward = Ward(lga_id=lga.id, name=ward_name, code=f"{lga.code}-W1")
-                db.add(ward)
-                db.commit()
-                db.refresh(ward)
+                for p_idx in [1, 2]:
+                    pu_code = f"{lga.code}-{w_idx:02d}{p_idx:02d}"
+                    pu_name = f"{pu_code} - {ward_name} Unit {p_idx}"
+                    status = statuses[(index + w_idx + p_idx) % len(statuses)]
+                    registered = 500 + ((index * 37 + w_idx * 13 + p_idx * 7) % 450)
 
-            pu = db.query(PollingUnit).filter(PollingUnit.code == pu_code).first()
-            if not pu:
-                pu = PollingUnit(
-                    lga_id=lga.id,
-                    ward_id=ward.id,
-                    code=pu_code,
-                    name=pu_name,
-                    status=status,
-                    registered_voters=registered,
-                    latitude=11.7,
-                    longitude=9.3
-                )
-                db.add(pu)
-                db.commit()
-                db.refresh(pu)
+                    pu = db.query(PollingUnit).filter(PollingUnit.code == pu_code).first()
+                    if not pu:
+                        pu = PollingUnit(
+                            lga_id=lga.id,
+                            ward_id=ward.id,
+                            code=pu_code,
+                            name=pu_name,
+                            status=status,
+                            registered_voters=registered,
+                            latitude=11.7 + (index * 0.03),
+                            longitude=9.3 + (w_idx * 0.02)
+                        )
+                        db.add(pu)
+                        db.commit()
+                        db.refresh(pu)
 
-                # Seed Agent user
-                agent = User(
-                    full_name=agent_name,
-                    username=f"agent_{pu_code.lower().replace(' ', '')}",
-                    hashed_password=get_password_hash("agent123"),
-                    role="Polling Unit Agent",
-                    polling_unit_id=pu.id,
-                    lga_id=lga.id,
-                    ward_id=ward.id
-                )
-                db.add(agent)
-                db.commit()
-                db.refresh(agent)
+                        # Agent User
+                        agent_uname = f"agent_{lga.code.lower()}_w{w_idx}_p{p_idx}"
+                        agent = db.query(User).filter(User.username == agent_uname).first()
+                        if not agent:
+                            agent = User(
+                                full_name=f"Agent {lga.name} W{w_idx}P{p_idx}",
+                                username=agent_uname,
+                                hashed_password=get_password_hash("agent123"),
+                                role="Polling Unit Agent",
+                                polling_unit_id=pu.id,
+                                lga_id=lga.id,
+                                ward_id=ward.id
+                            )
+                            db.add(agent)
+                            db.commit()
+                            db.refresh(agent)
 
-                # Seed Vote Result (Form EC8A)
-                total_valid = pdp + apc + nnpp + lp
-                result = VoteResult(
-                    polling_unit_id=pu.id,
-                    agent_id=agent.id,
-                    pdp_votes=pdp,
-                    apc_votes=apc,
-                    nnpp_votes=nnpp,
-                    lp_votes=lp,
-                    others_votes=5,
-                    rejected_votes=10,
-                    total_valid_votes=total_valid + 5,
-                    total_votes_cast=total_valid + 15,
-                    verification_status="VERIFIED" if status == "Normal" else "FLAGGED"
-                )
-                db.add(result)
-                db.commit()
+                        # Form EC8A Vote Results
+                        pdp = 210 + ((index * 19 + w_idx * 11 + p_idx * 5) % 160)
+                        apc = 160 + ((index * 13 + w_idx * 7 + p_idx * 3) % 110)
+                        nnpp = 35 + ((index * 5 + w_idx * 3) % 45)
+                        lp = 12 + ((index * 3) % 25)
+                        rejected = 8 + (index % 10)
 
-        # Seed sample incidents
-        pu_critical = db.query(PollingUnit).filter(PollingUnit.code == "PU 002").first()
-        admin_user = db.query(User).filter(User.username == "admin").first()
+                        res_exist = db.query(VoteResult).filter(VoteResult.polling_unit_id == pu.id).first()
+                        if not res_exist:
+                            total_valid = pdp + apc + nnpp + lp
+                            total_cast = total_valid + rejected
+                            result = VoteResult(
+                                polling_unit_id=pu.id,
+                                agent_id=agent.id,
+                                pdp_votes=pdp,
+                                apc_votes=apc,
+                                nnpp_votes=nnpp,
+                                lp_votes=lp,
+                                others_votes=5,
+                                rejected_votes=rejected,
+                                total_valid_votes=total_valid,
+                                total_votes_cast=total_cast,
+                                verification_status="VERIFIED" if status == "Normal" else ("FLAGGED" if status == "Critical" else "PENDING_PHOTO")
+                            )
+                            db.add(result)
+                            db.commit()
 
-        if pu_critical and admin_user:
-            existing_inc = db.query(Incident).filter(Incident.polling_unit_id == pu_critical.id).first()
-            if not existing_inc:
-                inc = Incident(
-                    polling_unit_id=pu_critical.id,
-                    reported_by=admin_user.id,
-                    incident_type="Violence",
-                    severity="CRITICAL",
-                    description="Clash between party supporters near polling booth. Security intervention requested.",
-                    status="REPORTED",
-                    latitude=11.7,
-                    longitude=9.3
-                )
-                db.add(inc)
-                db.commit()
+                        # Seed Incidents for Attention/Critical PUs
+                        if status in ["Attention", "Critical"]:
+                            inc_exist = db.query(Incident).filter(Incident.polling_unit_id == pu.id).first()
+                            if not inc_exist:
+                                inc = Incident(
+                                    polling_unit_id=pu.id,
+                                    reported_by=agent.id,
+                                    incident_type=categories[index % len(categories)],
+                                    severity="CRITICAL" if status == "Critical" else "MEDIUM",
+                                    description=f"{categories[index % len(categories)]} reported at {pu_name}. Field intervention in progress.",
+                                    status="INVESTIGATING" if status == "Attention" else "REPORTED",
+                                    latitude=11.7 + (index * 0.03),
+                                    longitude=9.3 + (w_idx * 0.02)
+                                )
+                                db.add(inc)
+                                db.commit()
 
-        print("Seeded sample Wards, Polling Units, Agents, Results, and Incidents successfully.")
+        print("Successfully seeded all 27 Jigawa State LGAs, Wards, Polling Units, Agents, Results, and Incidents!")
 
     except Exception as e:
         db.rollback()
