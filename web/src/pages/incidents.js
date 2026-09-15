@@ -198,11 +198,22 @@ export default function IncidentTrackerPage() {
                 }}
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition cursor-pointer relative z-10 shadow-sm"
               >
+                + Report New Incident
+              </button>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border outline-none ${
+                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
+                }`}
+              >
                 <option value="All">All Statuses</option>
                 <option value="REPORTED">REPORTED</option>
                 <option value="INVESTIGATING">INVESTIGATING</option>
                 <option value="RESOLVED">RESOLVED</option>
               </select>
+
 
               <div className="relative w-56">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />

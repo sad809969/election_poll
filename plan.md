@@ -1,32 +1,27 @@
-# JIGAWA PDP POLLWATCH 2027 — ADMIN CONTROL & REAL DATA SUITE PLAN
+# JIGAWA PDP POLLWATCH 2027 — SYSTEM ANALYSIS & IMPLEMENTATION PLAN
 
-## 🎯 Goal
-Provide full Admin Control Forms across the system so the Admin can manually create, enter, and edit all system data (**Polling Units**, **System Users & 9 Roles**, **Form EC8A Results**, **Field Incidents**, **Parties & Candidates**), and ensure all web dashboards display 100% real database data directly from FastAPI backend endpoints.
+## 🛠️ System Overview & Status
 
----
+### 1. FastAPI Backend (`/backend`)
+- **Architecture**: FastAPI, SQLAlchemy ORM (SQLite/PostgreSQL support), Async WebSockets, Pydantic v2.
+- **Data Coverage**: Pre-seeded with all **27 Jigawa State LGAs**, 287 Wards, 4,827 Polling Units, and 9 authorization roles.
+- **Core Endpoints**: Auth, Agents, Electoral Hierarchy, Results Collation, Incident Tracker, Communications, Audit Trail, Dashboard Aggregates.
 
-## 🛠️ Admin Manual Control Forms & Modals
+### 2. Next.js Command Center Dashboard (`/web`)
+- **Situation Room Monitoring Center**: Interactive Jigawa vector map, color-coded PU health pins, live report feed, hourly timeline graph, LGA progress bars.
+- **Admin Control Suite Implemented**:
+  - `admin.js`: `+ Add New User` Modal for user governance across 9 roles.
+  - `polling-units.js`: `+ Add Polling Unit` Modal.
+  - `results.js`: `+ Manual Form EC8A Entry` Modal.
+  - `incidents.js`: `+ Report New Incident` Modal.
 
-1. **[admin.js](file:///home/fox/election_poll/web/src/pages/admin.js)**:
-   - **"+ Add New User" Modal**: Create accounts for all 9 tiers (*Super Admin, State Chairman, Candidate, Deputy Candidate, DG, Situation Room Officer, LGA Coordinator, Ward Coordinator, Polling Unit Agent*).
-   - Dynamic user role filters and live fetching from `GET /api/agents`.
-
-2. **[polling-units.js](file:///home/fox/election_poll/web/src/pages/polling-units.js)**:
-   - **"+ Add Polling Unit" Modal**: Manually create new Polling Units across all 27 LGAs & Wards with unique PU code, registered voter count, WGS84 GPS coordinates.
-   - Live fetching from `GET /api/electoral/polling-units`.
-
-3. **[results.js](file:///home/fox/election_poll/web/src/pages/results.js)**:
-   - **"+ Manual Form EC8A Entry" Modal**: Allows Admins to select a Polling Unit and manually enter Form EC8A vote tallies (PDP votes, APC votes, NNPP votes, LP votes, Rejected votes).
-   - Submits to `POST /api/results`.
-
-4. **[incidents.js](file:///home/fox/election_poll/web/src/pages/incidents.js)**:
-   - **"+ Report New Incident" Modal**: Allows Admins to manually log security/BVAS/field incidents for any Polling Unit with severity level (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) and category.
-   - Submits to `POST /api/incidents`.
+### 3. Flutter Field Agent Mobile App (`/mobile`)
+- **Features**: Agent PU-locked login, offline queue with Hive/SQLite auto-sync, Form EC8A result entry with photo proof upload, incident reporting with GPS tags, and election timeline tracker.
 
 ---
 
-## ⚡ Execution Steps
-1. Add **"+ Manual Form EC8A Entry"** modal on `web/src/pages/results.js`.
-2. Add **"+ Report New Incident"** modal on `web/src/pages/incidents.js`.
-3. Update API fallbacks so all pages prefer live database arrays over static fallback data.
-4. Commit and push to GitHub `main` branch.
+## ⚡ Next Execution Steps
+
+1. **Backend Testing & Dependencies**: Add `httpx` to `backend/requirements.txt` to run `pytest` unit test suite cleanly.
+2. **Web Environment Optimization**: Ensure local `node_modules` binaries in `/web` enable clean `npm run build` and `npm run dev` builds.
+3. **Local Testing & Preview**: Launch local backend and web dev server to verify end-to-end data flow.

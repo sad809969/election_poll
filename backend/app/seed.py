@@ -17,8 +17,9 @@ def seed_database(db: Session = None):
         close_session = True
 
     try:
-        # Create all tables
-        Base.metadata.create_all(bind=engine)
+        # Create all tables on current session bind or engine
+        Base.metadata.create_all(bind=db.get_bind() if db else engine)
+
 
         # Check if admin exists
         admin = db.query(User).filter(User.username == "admin").first()
