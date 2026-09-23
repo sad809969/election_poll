@@ -49,9 +49,36 @@ def get_incidents(
             Incident.severity == severity
         )
 
-    return query.order_by(
+    incidents = query.order_by(
         Incident.created_at.desc()
     ).all()
+
+    enriched = []
+    for inc in incidents:
+        pu = inc.polling_unit
+        reporter = inc.reporter
+        lga = pu.lga if pu else None
+        enriched.append(
+            IncidentResponse(
+                id=inc.id,
+                polling_unit_id=inc.polling_unit_id,
+                incident_type=inc.incident_type,
+                severity=inc.severity,
+                description=inc.description,
+                media_url=inc.media_url,
+                latitude=inc.latitude,
+                longitude=inc.longitude,
+                reported_by=inc.reported_by,
+                status=inc.status,
+                created_at=inc.created_at,
+                polling_unit_code=pu.code if pu else None,
+                polling_unit_name=pu.name if pu else None,
+                lga_name=lga.name if lga else None,
+                reporter_name=reporter.full_name if reporter else None,
+                reporter_phone=reporter.phone_number if reporter else None,
+            )
+        )
+    return enriched
 
 
 # ==========================================================
@@ -79,7 +106,28 @@ def get_incident(
             detail="Incident not found",
         )
 
-    return incident
+    pu = incident.polling_unit
+    reporter = incident.reporter
+    lga = pu.lga if pu else None
+
+    return IncidentResponse(
+        id=incident.id,
+        polling_unit_id=incident.polling_unit_id,
+        incident_type=incident.incident_type,
+        severity=incident.severity,
+        description=incident.description,
+        media_url=incident.media_url,
+        latitude=incident.latitude,
+        longitude=incident.longitude,
+        reported_by=incident.reported_by,
+        status=incident.status,
+        created_at=incident.created_at,
+        polling_unit_code=pu.code if pu else None,
+        polling_unit_name=pu.name if pu else None,
+        lga_name=lga.name if lga else None,
+        reporter_name=reporter.full_name if reporter else None,
+        reporter_phone=reporter.phone_number if reporter else None,
+    )
 
 
 # ==========================================================

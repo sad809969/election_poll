@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { apiFetch } from '../lib/api'
+import { apiFetch, loginUser } from '../lib/api'
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -14,7 +14,9 @@ import {
   Phone, 
   MapPin, 
   X, 
-  Send
+  Send,
+  Loader2,
+  ShieldCheck
 } from 'lucide-react'
 
 export default function IncidentTrackerPage() {
@@ -32,43 +34,69 @@ export default function IncidentTrackerPage() {
   const [error, setError] = useState(null)
   const [showIncidentModal, setShowIncidentModal] = useState(false)
   const [pollingUnitsList, setPollingUnitsList] = useState([])
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [statusMsg, setStatusMsg] = useState(null)
 
   // Fetch Incidents from FastAPI Endpoint (/api/incidents)
-  useEffect(() => {
-    async function loadIncidents() {
-      try {
-        setLoading(true)
-        setError(null)
-        const data = await apiFetch('/incidents')
-        
-        if (Array.isArray(data) && data.length > 0) {
-          // Normalize API properties to component standard
-          const mappedData = data.map((inc, index) => ({
-            id: inc.id || index + 1,
-            pu: inc.pu || inc.polling_unit || `PU ${inc.pu_code || '001'}`,
-            lga: inc.lga || 'Jigawa',
-            category: inc.category || inc.type || 'General',
-            severity: (inc.severity || 'MEDIUM').toUpperCase(),
-            status: (inc.status || 'REPORTED').toUpperCase(),
-            reporter: inc.reporter || inc.reported_by || 'Field Agent',
-            phone: inc.phone || inc.contact || 'N/A',
-            time: inc.time || inc.created_at || '10:00 AM',
-            desc: inc.desc || inc.description || inc.title || 'No description provided.',
-            lat: inc.lat || 27.05,
-            lng: inc.lng || 12.15
-          }))
-          setIncidentsList(mappedData)
-        }
-      } catch (err) {
-        console.error('Failed to load incidents:', err)
-        setError(err.message)
-      } finally {
-        setLoading(false)
+  const loadIncidents = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await apiFetch('/incidents')
+      
+      if (Array.isArray(data) && data.length > 0) {
+        // Normalize API properties to component standard
+        const mappedData = data.map((inc, index) => ({
+          id: inc.id || index + 1,
+          pu: inc.polling_unit_name || inc.pu || (inc.polling_unit_code ? `PU ${inc.polling_unit_code}` : `PU ${inc.pu_code || '001'}`),
+          lga: inc.lga_name || inc.lga || 'Jigawa',
+          category: inc.incident_type || inc.category || inc.type || 'General',
+          severity: (inc.severity || 'MEDIUM').toUpperCase(),
+          status: (inc.status || 'REPORTED').toUpperCase(),
+          reporter: inc.reporter_name || inc.reporter || (typeof inc.reported_by === 'string' ? inc.reported_by : 'Field Agent'),
+          phone: inc.reporter_phone || inc.phone || inc.contact || 'N/A',
+          time: inc.created_at ? new Date(inc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (inc.time || '10:00 AM'),
+          desc: inc.description || inc.desc || inc.title || 'No description provided.',
+          lat: inc.latitude || inc.lat || 11.7,
+          lng: inc.longitude || inc.lng || 9.3
+        }))
+        setIncidentsList(mappedData)
       }
+    } catch (err) {
+      console.error('Failed to load incidents:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadIncidents()
   }, [])
+
+  const handleStatusUpdate = async (incidentId, newStatus) => {
+    setUpdatingStatus(true)
+    setStatusMsg(null)
+    try {
+      let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      if (!token) {
+        await loginUser('admin', 'password')
+      }
+
+      await apiFetch(`/incidents/${incidentId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      setStatusMsg({ type: 'success', text: `Status updated to ${newStatus}` })
+      setSelectedIncident(prev => prev ? { ...prev, status: newStatus } : null)
+      loadIncidents()
+    } catch (err) {
+      setStatusMsg({ type: 'error', text: `Update failed: ${err.message}` })
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
 
   // Default Mock Data (Fallback if backend list is empty or unreachable)
   const defaultIncidents = [
@@ -338,11 +366,50 @@ export default function IncidentTrackerPage() {
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Description</span>
                     <p className="mt-1 leading-relaxed text-slate-300">{selectedIncident.desc}</p>
                   </div>
+
+                  {/* Situation Room Escalation & Status Updater */}
+                  <div className={`p-3 rounded-lg ${subcardClass} space-y-2`}>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      Situation Room Escalation & Dispatch Action
+                    </span>
+
+                    {statusMsg && (
+                      <div className={`p-2 rounded text-xs flex items-center gap-1.5 ${
+                        statusMsg.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300'
+                      }`}>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{statusMsg.text}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {['REPORTED', 'INVESTIGATING', 'RESOLVED', 'DISMISSED'].map((st) => (
+                        <button
+                          key={st}
+                          disabled={updatingStatus || selectedIncident.status === st}
+                          onClick={() => handleStatusUpdate(selectedIncident.id, st)}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-[10px] transition flex items-center gap-1 ${
+                            selectedIncident.status === st
+                              ? 'bg-emerald-600 text-white font-extrabold cursor-default shadow-sm'
+                              : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                          } disabled:opacity-50`}
+                        >
+                          {updatingStatus && selectedIncident.status !== st ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : null}
+                          {st === 'RESOLVED' ? '✓ Mark Resolved' : st === 'INVESTIGATING' ? '⚡ Dispatch / Investigate' : st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2">
                   <button 
-                    onClick={() => setSelectedIncident(null)}
+                    onClick={() => {
+                      setSelectedIncident(null)
+                      setStatusMsg(null)
+                    }}
                     className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
                     Close

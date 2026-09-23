@@ -1,0 +1,16 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pollwatch_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./pollwatch.db
+      - SECRET_KEY=jigawa-pdp-pollwatch-2027-secret-key-123456789
+      - DEBUG=True
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data

@@ -87,6 +87,11 @@ class IncidentResponse(IncidentCreate):
     reported_by: int
     status: str
     created_at: datetime
+    polling_unit_code: Optional[str] = None
+    polling_unit_name: Optional[str] = None
+    lga_name: Optional[str] = None
+    reporter_name: Optional[str] = None
+    reporter_phone: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -229,6 +234,7 @@ class AnnouncementCreate(BaseModel):
     urgency: str = "Normal"
     target_role: str = "All"
     target_lga_id: int | None = None
+    sender_name: Optional[str] = None
     is_pinned: bool = False
 
 

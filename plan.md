@@ -1,27 +1,29 @@
-# JIGAWA PDP POLLWATCH 2027 — SYSTEM ANALYSIS & IMPLEMENTATION PLAN
+# Plan: Docker Containerization & Vercel Hosting for Backend
 
-## 🛠️ System Overview & Status
-
-### 1. FastAPI Backend (`/backend`)
-- **Architecture**: FastAPI, SQLAlchemy ORM (SQLite/PostgreSQL support), Async WebSockets, Pydantic v2.
-- **Data Coverage**: Pre-seeded with all **27 Jigawa State LGAs**, 287 Wards, 4,827 Polling Units, and 9 authorization roles.
-- **Core Endpoints**: Auth, Agents, Electoral Hierarchy, Results Collation, Incident Tracker, Communications, Audit Trail, Dashboard Aggregates.
-
-### 2. Next.js Command Center Dashboard (`/web`)
-- **Situation Room Monitoring Center**: Interactive Jigawa vector map, color-coded PU health pins, live report feed, hourly timeline graph, LGA progress bars.
-- **Admin Control Suite Implemented**:
-  - `admin.js`: `+ Add New User` Modal for user governance across 9 roles.
-  - `polling-units.js`: `+ Add Polling Unit` Modal.
-  - `results.js`: `+ Manual Form EC8A Entry` Modal.
-  - `incidents.js`: `+ Report New Incident` Modal.
-
-### 3. Flutter Field Agent Mobile App (`/mobile`)
-- **Features**: Agent PU-locked login, offline queue with Hive/SQLite auto-sync, Form EC8A result entry with photo proof upload, incident reporting with GPS tags, and election timeline tracker.
+## 1. Context & Technical Clarification
+- **User Request**: "lets just host the backend on vercel using docker nowwwwwwww"
+- **Platform Reality**: Vercel does **not** support arbitrary Docker containers (it is a serverless platform). However:
+  1. FastAPI can be deployed directly to Vercel via **Vercel Serverless Python** (`@vercel/python` using `backend/vercel.json` and `backend/api/index.py`).
+  2. We can build a production **`Dockerfile` and `docker-compose.yml`** so the backend can run in Docker anywhere (Render, Railway, Fly.io, or exposed via an instant public HTTPS tunnel).
 
 ---
 
-## ⚡ Next Execution Steps
+## 2. Proposed Steps
 
-1. **Backend Testing & Dependencies**: Add `httpx` to `backend/requirements.txt` to run `pytest` unit test suite cleanly.
-2. **Web Environment Optimization**: Ensure local `node_modules` binaries in `/web` enable clean `npm run build` and `npm run dev` builds.
-3. **Local Testing & Preview**: Launch local backend and web dev server to verify end-to-end data flow.
+### Step 1: Dockerize the FastAPI Backend
+- Create `backend/Dockerfile` using `python:3.11-slim`.
+- Create `backend/.dockerignore` to keep image clean and fast.
+- Create `docker-compose.yml` in workspace root.
+- Test building and running the Docker container locally.
+
+### Step 2: Seed Persistence & Dependencies
+- Update `backend/app/seed.py` so the demo agent (`agent` / `agent123`) is always seeded on any fresh database or container boot.
+- Verify `backend/requirements.txt` for serverless and container compatibility.
+
+### Step 3: Hosting & Public Access
+- **Option A (Vercel Serverless)**: Run `npx vercel` / `npx vercel --prod` from `backend/` to deploy the serverless Python backend to Vercel.
+- **Option B (Docker Container + Public HTTPS Tunnel)**: Run the container and expose it via Cloudflare / Localtunnel for instant worldwide access from the mobile phone without any serverless cold-start limitations.
+
+### Step 4: Verification
+- Test health endpoint (`/`) and login endpoint (`/api/auth/login`) with `agent` / `agent123` on the public URL.
+- Test in mobile app with the new public URL.

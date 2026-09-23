@@ -1,7 +1,8 @@
+require('./patch-node')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
 }
-
 
 module.exports = nextConfig

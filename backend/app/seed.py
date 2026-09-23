@@ -55,6 +55,30 @@ def seed_database(db: Session = None):
             print("Default admin created.")
             logger.info("Default admin created.")
 
+        # Ensure friendly demo polling unit agent exists
+        agent = db.query(User).filter(User.username == "agent").first()
+        if not agent:
+            agent = User(
+                full_name="Ibrahim Suleiman (Agent)",
+                username="agent",
+                phone_number="08012345678",
+                hashed_password=get_password_hash("agent123"),
+                role="Polling Unit Agent",
+                is_active=True,
+                lga_id=1,
+                ward_id=1,
+                polling_unit_id=1,
+            )
+            db.add(agent)
+            db.commit()
+            db.refresh(agent)
+            logger.info("Demo agent (agent/agent123) seeded.")
+        else:
+            agent.hashed_password = get_password_hash("agent123")
+            agent.phone_number = "08012345678"
+            agent.is_active = True
+            db.commit()
+
         # Seed all 27 Jigawa LGAs
         jigawa_lgas = [
             ("Dutse", "DUT"), ("Hadejia", "HAD"), ("Gumel", "GUM"), ("Kazaure", "KAZ"), 
@@ -63,7 +87,7 @@ def seed_database(db: Session = None):
             ("Gwaram", "GWA"), ("Gwiwa", "GWI"), ("Yankwashi", "YAN"), ("Roni", "RON"), 
             ("Sule Tankarkar", "SUL"), ("Taura", "TAU"), ("Maigatari", "MAI"), ("Miga", "MIG"), 
             ("Malam Madori", "MAD"), ("Kafin Hausa", "KAF"), ("Kirikasamma", "KIR"), 
-            ("Auyo", "AUY"), ("Birniwa", "BIR"), ("Gagarawa", "GAG"), ("Gwaram Central", "GWC")
+            ("Auyo", "AUY"), ("Birniwa", "BIR"), ("Gagarawa", "GAG"), ("Garki", "GAR")
         ]
 
         from app.models import LGA
@@ -140,8 +164,10 @@ def seed_database(db: Session = None):
 
                         res_exist = db.query(VoteResult).filter(VoteResult.polling_unit_id == pu.id).first()
                         if not res_exist:
-                            total_valid = pdp + apc + nnpp + lp
+                            total_valid = pdp + apc + nnpp + lp + 5
                             total_cast = total_valid + rejected
+                            is_overvote = total_cast > pu.registered_voters
+                            flagged_status = "FLAGGED" if (is_overvote or status == "Critical") else ("PENDING_PHOTO" if status == "Attention" else "VERIFIED")
                             result = VoteResult(
                                 polling_unit_id=pu.id,
                                 agent_id=agent.id,
@@ -153,7 +179,8 @@ def seed_database(db: Session = None):
                                 rejected_votes=rejected,
                                 total_valid_votes=total_valid,
                                 total_votes_cast=total_cast,
-                                verification_status="VERIFIED" if status == "Normal" else ("FLAGGED" if status == "Critical" else "PENDING_PHOTO")
+                                verification_status=flagged_status,
+                                notes=f"[ALERT] Over-voting: {total_cast} vs {pu.registered_voters}" if is_overvote else None
                             )
                             db.add(result)
                             db.commit()

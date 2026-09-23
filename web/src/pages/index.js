@@ -71,21 +71,32 @@ async function loadDashboard() {
     ]);
 
     //---------------------------------------
+    // Defensive Data Normalization
+    //---------------------------------------
+
+    const resultsList = Array.isArray(results) ? results : (results?.results || []);
+    const incidentsList = Array.isArray(incidents) ? incidents : [];
+    const agentsList = Array.isArray(agents) ? agents : [];
+    const pollingUnitsList = Array.isArray(pollingUnits) ? pollingUnits : [];
+    const lgasList = Array.isArray(lgas) ? lgas : [];
+
+    //---------------------------------------
     // Dashboard Numbers
     //---------------------------------------
 
-    const totalPollingUnits = pollingUnits.length;
+    const totalPollingUnits = pollingUnitsList.length;
 
-    const activeAgents = agents.filter(
+    const activeAgents = agentsList.filter(
       (a) => a.is_active === true
     ).length;
 
-    const totalReports = results.length;
+    const totalReports = results?.summary?.collated_pus ?? resultsList.length;
 
-    const totalIncidents = incidents.length;
+    const totalIncidents = incidentsList.length;
 
-    const pendingReports =
-      pollingUnits.length - results.length;
+    const pendingReports = results?.summary
+      ? (totalPollingUnits - results.summary.collated_pus)
+      : (totalPollingUnits - resultsList.length);
 
     //---------------------------------------
     // Timeline
@@ -93,9 +104,8 @@ async function loadDashboard() {
 
     const hourly = {};
 
-    results.forEach((r) => {
-      const hour = new Date(r.created_at).getHours();
-
+    resultsList.forEach((r) => {
+      const hour = r.created_at ? new Date(r.created_at).getHours() : 10;
       hourly[hour] = (hourly[hour] || 0) + 1;
     });
 
@@ -114,9 +124,9 @@ async function loadDashboard() {
 
     const types = {};
 
-    incidents.forEach((i) => {
-      types[i.incident_type] =
-        (types[i.incident_type] || 0) + 1;
+    incidentsList.forEach((i) => {
+      const typeKey = i.incident_type || i.category || "General";
+      types[typeKey] = (types[typeKey] || 0) + 1;
     });
 
     const colors = [
@@ -140,20 +150,20 @@ async function loadDashboard() {
     // Recent Reports
     //---------------------------------------
 
-    const recent = results
+    const recent = resultsList
       .slice()
       .sort(
         (a, b) =>
-          new Date(b.created_at) -
-          new Date(a.created_at)
+          new Date(b.created_at || 0) -
+          new Date(a.created_at || 0)
       )
       .slice(0, 10)
       .map((r) => ({
         pu:
           r.polling_unit_name ??
-          `PU ${r.polling_unit_id}`,
+          (r.polling_unit_code ? `PU ${r.polling_unit_code}` : `PU ${r.polling_unit_id}`),
 
-        msg: `PDP ${r.pdp_votes} | APC ${r.apc_votes}`,
+        msg: `PDP ${r.pdp_votes ?? 0} | APC ${r.apc_votes ?? 0}`,
 
         status:
           r.verification_status === "VERIFIED"
@@ -164,21 +174,21 @@ async function loadDashboard() {
           r.agent_name ??
           `Agent ${r.agent_id}`,
 
-        time: new Date(
-          r.created_at
-        ).toLocaleTimeString(),
+        time: r.created_at
+          ? new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : "Recently",
       }));
 
     //---------------------------------------
     // Top LGAs
     //---------------------------------------
 
-    const coverage = lgas.map((lga) => {
-      const total = pollingUnits.filter(
+    const coverage = lgasList.map((lga) => {
+      const total = pollingUnitsList.filter(
         (p) => p.lga_id === lga.id
       ).length;
 
-      const reported = results.filter(
+      const reported = resultsList.filter(
         (r) => r.lga_id === lga.id
       ).length;
 

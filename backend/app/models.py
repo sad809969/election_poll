@@ -151,7 +151,7 @@ class VoteResult(Base):
     total_votes_cast = Column(Integer, default=0, nullable=False)
 
     ec8a_photo_url = Column(String(500), nullable=True)
-    verification_status = Column(String(30), default="VERIFIED", nullable=False)
+    verification_status = Column(String(30), default="PENDING_PHOTO", nullable=False)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -200,3 +200,26 @@ class AuditLog(Base):
     details = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+# =============================================================================
+# 5. COLLATION SIGNOFF & TRIBUNAL SUBSYSTEM (EC8B / EC8C / EC8D)
+# =============================================================================
+
+class CollationSignoff(Base):
+    __tablename__ = "collation_signoffs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    level = Column(String(20), nullable=False, index=True)  # 'WARD', 'LGA', 'STATE'
+    entity_id = Column(Integer, nullable=False, index=True) # ward_id, lga_id, or 0 for state
+    signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    pdp_total = Column(Integer, default=0, nullable=False)
+    apc_total = Column(Integer, default=0, nullable=False)
+    nnpp_total = Column(Integer, default=0, nullable=False)
+    lp_total = Column(Integer, default=0, nullable=False)
+    total_votes = Column(Integer, default=0, nullable=False)
+    status = Column(String(20), default="SIGNED", nullable=False) # 'PENDING', 'SIGNED', 'DISPUTED'
+    notes = Column(Text, nullable=True)
+    signed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    signer = relationship("User")
