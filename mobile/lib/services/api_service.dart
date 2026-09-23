@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Default to the host workstation's Wi-Fi / LAN IP (192.168.1.164:8000)
-  static String baseUrl = 'http://192.168.1.164:8000/api';
+  // Default to live Vercel cloud deployment for worldwide access
+  static String baseUrl = 'https://jigawa-pdp-pollwatch-backend.vercel.app/api';
 
   static String? token;
   static Map<String, dynamic>? currentUser;
@@ -13,9 +13,13 @@ class ApiService {
   static String normalizeUrl(String raw) {
     var trimmed = raw.trim();
     if (trimmed.isEmpty) return baseUrl;
-    // Prepend http:// if missing scheme
+    // Prepend https:// or http:// if missing scheme
     if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      trimmed = 'http://$trimmed';
+      if (trimmed.contains('vercel.app') || !trimmed.contains(':8000')) {
+        trimmed = 'https://$trimmed';
+      } else {
+        trimmed = 'http://$trimmed';
+      }
     }
     // Remove trailing slashes
     while (trimmed.endsWith('/')) {
@@ -39,7 +43,7 @@ class ApiService {
     final stopwatch = Stopwatch()..start();
     try {
       final uri = Uri.parse('$rootTarget/');
-      final res = await http.get(uri).timeout(const Duration(seconds: 3));
+      final res = await http.get(uri).timeout(const Duration(seconds: 4));
       stopwatch.stop();
       if (res.statusCode == 200) {
         return {
@@ -68,17 +72,19 @@ class ApiService {
   /// Concurrently probe candidate URLs and automatically lock on the fastest working one
   static Future<Map<String, dynamic>> autoDetectServer() async {
     final candidates = [
-      'http://127.0.0.1:8000',     // USB Reverse Tunnel via adb
-      'http://192.168.1.164:8000', // Wi-Fi LAN
-      'http://10.0.2.2:8000',      // Android Emulator
+      'https://jigawa-pdp-pollwatch-backend.vercel.app', // Vercel Cloud (Worldwide)
+      'http://127.0.0.1:8000',                            // USB Reverse Tunnel via adb
+      'http://192.168.1.164:8000',                        // Wi-Fi LAN
+      'http://10.0.2.2:8000',                             // Android Emulator
     ];
 
     for (final candidate in candidates) {
       final res = await testConnection(candidate);
       if (res['success'] == true) {
         setBaseUrl(candidate);
-        String mode = 'Wi-Fi';
+        String mode = 'Vercel Cloud';
         if (candidate.contains('127.0.0.1')) mode = 'USB Tunnel';
+        if (candidate.contains('192.168.')) mode = 'Wi-Fi LAN';
         if (candidate.contains('10.0.2.2')) mode = 'Emulator';
         return {
           'success': true,

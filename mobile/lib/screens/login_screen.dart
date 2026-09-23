@@ -112,6 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  _presetChip('☁️ Vercel Cloud', 'https://jigawa-pdp-pollwatch-backend.vercel.app', serverController),
                   _presetChip('USB Tunnel (127.0.0.1:8000)', 'http://127.0.0.1:8000', serverController),
                   _presetChip('Wi-Fi LAN (192.168.1.164:8000)', 'http://192.168.1.164:8000', serverController),
                   _presetChip('Emulator (10.0.2.2:8000)', 'http://10.0.2.2:8000', serverController),
@@ -498,6 +499,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             InkWell(
                               onTap: () {
+                                _usernameController.text = 'agent_dut_w1_p1';
+                                _passwordController.text = 'agent123';
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0B132B),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.5)),
+                                ),
+                                child: const Text('Agent (agent_dut_w1_p1)', style: TextStyle(fontSize: 10, color: Color(0xFF10B981))),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () {
                                 _usernameController.text = 'agent';
                                 _passwordController.text = 'agent123';
                               },
@@ -508,7 +524,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(color: const Color(0xFF334155)),
                                 ),
-                                child: const Text('Agent (agent/agent123)', style: TextStyle(fontSize: 10, color: Color(0xFF10B981))),
+                                child: const Text('Agent (agent)', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
                               ),
                             ),
                             InkWell(
