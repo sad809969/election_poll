@@ -144,7 +144,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.slate400,
+                            color: Color(0xFF94A3B8),
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.8,
                           ),

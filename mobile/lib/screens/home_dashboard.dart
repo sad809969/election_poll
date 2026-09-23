@@ -9,6 +9,7 @@ class HomeDashboard extends StatefulWidget {
   final String assignedPu;
   final String lgaName;
   final String puCode;
+  final int pollingUnitId;
 
   const HomeDashboard({
     super.key,
@@ -16,6 +17,7 @@ class HomeDashboard extends StatefulWidget {
     required this.assignedPu,
     required this.lgaName,
     required this.puCode,
+    this.pollingUnitId = 1,
   });
 
   @override
@@ -40,7 +42,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('JIGAWA PDP POLLWATCH', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF008751))),
-                Text(widget.lgaName, style: const TextStyle(fontSize: 10, color: Colors.slate400)),
+                Text(widget.lgaName, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
               ],
             ),
           ],
@@ -52,7 +54,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
             tooltip: _isOnline ? 'Online (Connected)' : 'Offline (Queue Mode)',
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.slate400),
+            icon: const Icon(Icons.logout, color: Color(0xFF94A3B8)),
             onPressed: () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
             },
@@ -113,7 +115,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
               const SizedBox(height: 20),
 
-              const Text('FIELD OPERATIVE ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.slate400, letterSpacing: 0.8)),
+              const Text('FIELD OPERATIVE ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.8)),
               const SizedBox(height: 12),
 
               // 4 Main Action Cards Grid
@@ -131,7 +133,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     subtitle: 'Accreditation & Voting',
                     icon: Icons.access_time_filled,
                     color: const Color(0xFF3B82F6),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TimelineTrackerScreen())),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TimelineTrackerScreen(
+                          pollingUnitId: widget.pollingUnitId,
+                          puName: widget.assignedPu,
+                          puCode: widget.puCode,
+                        ),
+                      ),
+                    ),
                   ),
                   _buildActionCard(
                     context,
@@ -139,7 +150,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     subtitle: 'Violence, BVAS, Queue',
                     icon: Icons.warning_amber_rounded,
                     color: const Color(0xFFEF4444),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncidentReportScreen())),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => IncidentReportScreen(
+                          pollingUnitId: widget.pollingUnitId,
+                          puName: widget.assignedPu,
+                          puCode: widget.puCode,
+                        ),
+                      ),
+                    ),
                   ),
                   _buildActionCard(
                     context,
@@ -147,7 +167,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     subtitle: 'Vote Counts & Photo',
                     icon: Icons.fact_check,
                     color: const Color(0xFF10B981),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResultSubmissionScreen())),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ResultSubmissionScreen(
+                          pollingUnitId: widget.pollingUnitId,
+                          puName: widget.assignedPu,
+                          puCode: widget.puCode,
+                        ),
+                      ),
+                    ),
                   ),
                   _buildActionCard(
                     context,
@@ -191,7 +220,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           ),
                           Text(
                             _isOnline ? 'All telemetry synced with Situation Room' : '$_offlineQueueCount items queued for automatic sync',
-                            style: const TextStyle(fontSize: 10, color: Colors.slate400),
+                            style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
                           ),
                         ],
                       ),
@@ -244,7 +273,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               children: [
                 Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 9, color: Colors.slate400, fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
               ],
             ),
           ],

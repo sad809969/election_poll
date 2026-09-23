@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class IncidentReportScreen extends StatefulWidget {
-  const IncidentReportScreen({super.key});
+  final int pollingUnitId;
+  final String puName;
+  final String puCode;
+
+  const IncidentReportScreen({
+    super.key,
+    this.pollingUnitId = 1,
+    this.puName = 'Assigned Polling Unit',
+    this.puCode = 'DUT-0101',
+  });
 
   @override
   State<IncidentReportScreen> createState() => _IncidentReportScreenState();
@@ -26,14 +36,36 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     }
 
     setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isSubmitting = false);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Field Incident Report Dispatched to Situation Room!')),
+    try {
+      await ApiService.reportIncident(
+        pollingUnitId: widget.pollingUnitId,
+        incidentType: _category,
+        severity: _severity,
+        description: _descController.text.trim(),
       );
-      Navigator.pop(context);
+
+      setState(() => _isSubmitting = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF008751),
+            content: Text('Incident reported for ${widget.puCode} and dispatched to Situation Room!'),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Failed to dispatch incident: $e'),
+          ),
+        );
+      }
     }
   }
 
@@ -51,7 +83,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('INCIDENT CATEGORY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const Text('INCIDENT CATEGORY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _category,
@@ -68,7 +100,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
               const SizedBox(height: 16),
 
-              const Text('SEVERITY TRIAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const Text('SEVERITY TRIAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
               const SizedBox(height: 6),
               Row(
                 children: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((sev) {
@@ -77,7 +109,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2.0),
                       child: ChoiceChip(
-                        label: Text(sev, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.slate400)),
+                        label: Text(sev, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : const Color(0xFF94A3B8))),
                         selected: isSelected,
                         selectedColor: sev == 'CRITICAL' ? Colors.red : sev == 'HIGH' ? Colors.amber : const Color(0xFF008751),
                         backgroundColor: const Color(0xFF141E38),
@@ -90,7 +122,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
               const SizedBox(height: 16),
 
-              const Text('INCIDENT DESCRIPTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate400)),
+              const Text('INCIDENT DESCRIPTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
               const SizedBox(height: 6),
               TextField(
                 controller: _descController,
@@ -98,7 +130,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Describe exact details of the incident occurring at your polling unit...',
-                  hintStyle: const TextStyle(color: Colors.slate500, fontSize: 12),
+                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                   filled: true,
                   fillColor: const Color(0xFF141E38),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF334155))),

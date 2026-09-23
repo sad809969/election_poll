@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 class TimelineTrackerScreen extends StatefulWidget {
-  const TimelineTrackerScreen({super.key});
+  final int pollingUnitId;
+  final String puName;
+  final String puCode;
+
+  const TimelineTrackerScreen({
+    super.key,
+    this.pollingUnitId = 1,
+    this.puName = 'Assigned Polling Unit',
+    this.puCode = 'DUT-0101',
+  });
 
   @override
   State<TimelineTrackerScreen> createState() => _TimelineTrackerScreenState();
@@ -9,7 +19,7 @@ class TimelineTrackerScreen extends StatefulWidget {
 
 class _TimelineTrackerScreenState extends State<TimelineTrackerScreen> {
   final List<Map<String, dynamic>> _milestones = [
-    {'title': 'Agent Check-in', 'time': '08:00 AM', 'done': true, 'notes': 'Checked in at PU 023'},
+    {'title': 'Agent Check-in', 'time': '08:00 AM', 'done': true, 'notes': 'Checked in at Polling Unit'},
     {'title': 'Accreditation Started', 'time': '08:30 AM', 'done': true, 'notes': 'BVAS operational'},
     {'title': 'Voting Started', 'time': '09:00 AM', 'done': true, 'notes': 'Voter queue orderly'},
     {'title': 'Voting Ended', 'time': '02:30 PM', 'done': false, 'notes': 'Pending completion'},
@@ -17,18 +27,40 @@ class _TimelineTrackerScreenState extends State<TimelineTrackerScreen> {
     {'title': 'Form EC8A Completed', 'time': '--:--', 'done': false, 'notes': 'Pending'},
   ];
 
-  void _toggleMilestone(int index) {
+  void _toggleMilestone(int index) async {
+    final m = _milestones[index];
+    final bool newDone = !m['done'];
     setState(() {
-      _milestones[index]['done'] = !_milestones[index]['done'];
-      if (_milestones[index]['done']) {
+      m['done'] = newDone;
+      if (newDone) {
         final now = DateTime.now();
-        _milestones[index]['time'] = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        m['time'] = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       }
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Milestone "${_milestones[index]['title']}" updated!')),
-    );
+    if (newDone) {
+      try {
+        await ApiService.recordActivity(
+          pollingUnitId: widget.pollingUnitId,
+          activityType: m['title'],
+          notes: '${m['title']} milestone recorded at ${m['time']}',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF008751),
+              content: Text('Milestone "${m['title']}" synced with Situation Room!'),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Saved locally: $e')),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -75,12 +107,12 @@ class _TimelineTrackerScreenState extends State<TimelineTrackerScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(m['title'], style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDone ? Colors.white : Colors.slate400)),
-                        Text(m['notes'], style: const TextStyle(fontSize: 11, color: Colors.slate500)),
+                        Text(m['title'], style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDone ? Colors.white : const Color(0xFF94A3B8))),
+                        Text(m['notes'], style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                       ],
                     ),
                   ),
-                  Text(m['time'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.mono, color: Color(0xFF10B981))),
+                  Text(m['time'], style: const TextStyle(fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
                 ],
               ),
             );
