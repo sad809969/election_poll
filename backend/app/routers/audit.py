@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AuditLog, User
-from app.schemas import AuditLogResponse, MessageResponse
+from app.schemas import AuditLogResponse
 from app.core.permissions import require_admin
 
 router = APIRouter(
@@ -59,36 +59,3 @@ def get_log(
 
     return log
 
-
-# ==========================================================
-# DELETE LOG
-# ==========================================================
-
-@router.delete(
-    "/{log_id}",
-    response_model=MessageResponse,
-)
-def delete_log(
-    log_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-
-    log = (
-        db.query(AuditLog)
-        .filter(AuditLog.id == log_id)
-        .first()
-    )
-
-    if not log:
-        raise HTTPException(
-            status_code=404,
-            detail="Log not found",
-        )
-
-    db.delete(log)
-    db.commit()
-
-    return {
-        "message": "Audit log deleted successfully"
-    }

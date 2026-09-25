@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     DEBUG: bool = True
 
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "jigawa-pdp-pollwatch-2027-secret-key-123456789")
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
 
     ALGORITHM: str = "HS256"
 
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     UPLOAD_DIR: str = "/tmp/uploads" if is_vercel else "uploads"
 
-    ALLOWED_ORIGINS: list[str] = ["*"]
+    ALLOWED_ORIGINS: list[str] = []
 
     model_config = SettingsConfigDict(
         env_file=".env",

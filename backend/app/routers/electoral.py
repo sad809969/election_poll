@@ -18,7 +18,7 @@ from app.schemas import (
 
     MessageResponse,
 )
-from app.core.permissions import require_admin
+from app.core.permissions import require_admin, require_agent
 
 router = APIRouter(
     prefix="/electoral",
@@ -36,6 +36,7 @@ router = APIRouter(
 )
 def get_lgas(
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     return (
         db.query(LGA)
@@ -51,6 +52,7 @@ def get_lgas(
 def get_lga(
     lga_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
 
     lga = (
@@ -180,6 +182,7 @@ def delete_lga(
 def get_wards(
     lga_id: int | None = None,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     query = db.query(Ward)
 
@@ -196,6 +199,7 @@ def get_wards(
 def get_ward(
     ward_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     ward = (
         db.query(Ward)
@@ -275,7 +279,7 @@ def update_ward(
 ):
 
     ward = (
-        db.query(Ward)
+        db.q.uery(Ward)
         .filter(Ward.id == ward_id)
         .first()
     )
@@ -337,6 +341,7 @@ def get_polling_units(
     ward_id: int | None = None,
     lga_id: int | None = None,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
 
     query = db.query(PollingUnit)
@@ -357,6 +362,7 @@ def get_polling_units(
 def get_polling_unit(
     polling_unit_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
 
     polling_unit = (
