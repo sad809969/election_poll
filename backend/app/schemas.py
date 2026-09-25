@@ -134,7 +134,7 @@ class AgentCreate(BaseModel):
     username: str
     password: str
     phone_number: Optional[str] = None
-    role: str = "AGENT"
+    role: str = "Polling Unit Agent"
     lga_id: int | None = None
     ward_id: int | None = None
     polling_unit_id: int | None = None

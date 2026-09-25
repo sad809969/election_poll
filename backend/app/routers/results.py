@@ -17,7 +17,10 @@ router = APIRouter(
 # ===========================================================
 
 @router.get("")
-def get_results_dashboard(db: Session = Depends(get_db)):
+def get_results_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_agent),
+):
 
     results = db.query(VoteResult).all()
 

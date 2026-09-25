@@ -30,6 +30,7 @@ def get_incidents(
     status: str | None = None,
     severity: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_agent),
 ):
 
     query = db.query(Incident)
@@ -65,7 +66,9 @@ def get_incidents(
 def get_incident(
     incident_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_agent),
 ):
+    
 
     incident = (
         db.query(Incident)

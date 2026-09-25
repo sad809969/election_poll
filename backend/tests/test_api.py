@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import app.models  # Register all models on Base.metadata
 from app.main import app as fastapi_app
 from app.database import Base, get_db
 
@@ -71,38 +70,232 @@ def test_auth_login_invalid():
 
 
 def test_electoral_lgas_endpoint():
-    """Test fetching LGAs list."""
-    response = client.get("/api/electoral/lgas")
+    """Test that an authenticated user can fetch the LGAs list."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    response = client.get(
+        "/api/electoral/lgas",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_dashboard_stats_endpoint():
-    """Test fetching Situation Room dashboard summary statistics."""
-    response = client.get("/api/dashboard")
+    """Test that an authenticated user can fetch Situation Room dashboard statistics."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    response = client.get(
+        "/api/dashboard",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
     assert response.status_code == 200
     data = response.json()
-    assert "kpi" in data and "votes" in data
+
+    assert "kpi" in data
+    assert "votes" in data
 
 
 def test_results_endpoint():
-    """Test fetching EC8A Form Results feed."""
-    response = client.get("/api/results")
+    """Test that an authenticated user can fetch the EC8A Form Results feed."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    response = client.get(
+        "/api/results",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, dict) or isinstance(data, list)
+
+    assert "summary" in data
+    assert "party_vote_share" in data
+    assert "lga_breakdown" in data
 
 
 
 def test_incidents_endpoint():
-    """Test fetching incidents feed."""
-    response = client.get("/api/incidents")
+    """Test that an authenticated user can fetch the incidents feed."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    response = client.get(
+        "/api/incidents",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
 def test_agents_endpoint():
-    """Test fetching registered agents list."""
-    response = client.get("/api/agents")
+    """Test fetching registered agents list as an authenticated admin."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    response = client.get(
+        "/api/agents",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+def test_change_agent_status():
+    """Test that an admin can change an agent's active status."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    agents_response = client.get(
+        "/api/agents",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert agents_response.status_code == 200
+
+    agents = agents_response.json()
+    assert len(agents) > 0
+
+    agent_id = agents[0]["id"]
+
+    response = client.patch(
+        f"/api/agents/{agent_id}/status",
+        params={"active": False},
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+
+
+def test_delete_agent():
+    """Test that an admin cannot physically delete an agent with existing results."""
+
+    login_response = client.post(
+        "/api/auth/login",
+        data={
+            "username": "admin",
+            "password": "admin1283",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
+
+    agents_response = client.get(
+        "/api/agents",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert agents_response.status_code == 200
+
+    agents = agents_response.json()
+    assert len(agents) > 0
+
+    agent_id = agents[0]["id"]
+
+    delete_response = client.delete(
+        f"/api/agents/{agent_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert delete_response.status_code == 200
+
+    assert delete_response.json()["message"] == (
+        "Agent has existing vote results and was deactivated instead of deleted."
+    )
+
+    # Confirm that the agent still exists but is inactive.
+    get_response = client.get(
+        f"/api/agents/{agent_id}",
+        headers={
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert get_response.status_code == 200
+    assert get_response.json()["is_active"] is False
