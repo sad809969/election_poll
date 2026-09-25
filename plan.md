@@ -1,69 +1,51 @@
-# Implementation Plan: Multi-Category Election Results (Governorship, Senatorial, House of Reps, Presidential) [COMPLETED]
+# Implementation Plan: Vercel Deployment for Backend & Web UI
 
-## Summary of Accomplishment
-In Nigerian general elections, polling units handle multiple concurrent contests on election day with separate ballot boxes and separate **Form EC8A** sheets:
-1. **Governorship** (Jigawa State Executive)
-2. **Senatorial** (3 Senatorial Districts: Jigawa North-East, Jigawa North-West, Jigawa South-West)
-3. **House of Representatives** (11 Federal Constituencies: Dutse/Kiyawa, Birnin Kudu/Buji, Hadejia/Auyo/Kafin Hausa, etc.)
-4. **Presidential** (Federal state-wide presidential tally)
-5. **State House of Assembly** (30 State Constituencies)
-
-We upgraded the architecture from a single-contest schema to full multi-contest election monitoring.
+## Objective
+Deploy the updated **FastAPI Backend** and **Next.js Web UI** to Vercel, resolve the `500 FUNCTION_INVOCATION_FAILED` on the live backend, align the frontend-to-backend API routing proxy, and push the verified merge commit to GitHub (`origin/main`).
 
 ---
 
-## 1. Database Model & Migration [COMPLETED]
-- [x] **Model Update (`backend/app/models.py`)**:
-  - Added `election_type = Column(String(30), default="GOVERNORSHIP", nullable=False, index=True)` to `VoteResult`.
-  - Replaced single-column unique constraint on `polling_unit_id` with composite unique constraint:
-    `UniqueConstraint('polling_unit_id', 'election_type', name='uq_pu_election_type')`
-  - Updated `PollingUnit` relationship to `vote_results = relationship("VoteResult", back_populates="polling_unit", cascade="all, delete-orphan")` with backwards-compatible `vote_result`.
-- [x] **Schema SQL (`schema.sql`)**:
-  - Updated table definition and added `CONSTRAINT uq_pu_election_type UNIQUE (polling_unit_id, election_type)`.
-- [x] **Database Migration (`backend/pollwatch.db`)**:
-  - Migrated SQLite database: added `election_type` column (default 'GOVERNORSHIP'), dropped old unique index, created composite unique index `uq_pu_election_type`.
-  - Preserved all 4,827 existing seeded Polling Unit results as 'GOVERNORSHIP'.
+## 1. Problem Analysis & Root Cause
+
+### Backend Status on Vercel:
+- **Current Live URL**: `https://jigawa-pdp-pollwatch-backend.vercel.app`
+- **Current State**: Returns `500 FUNCTION_INVOCATION_FAILED`.
+- **Root Cause**: When remote PR #4 was merged to GitHub `origin/main`, `SECRET_KEY: str = os.getenv("SECRET_KEY")` was introduced without a fallback. On Vercel, because `SECRET_KEY` was not configured in the environment variables, Pydantic crashed on cold start (`ValidationError: Input should be a valid string, got NoneType`).
+- **Fix Already in Local Merge Commit (`2572674`)**: We added `SECRET_KEY: str = os.getenv("SECRET_KEY", "jigawa-pdp-pollwatch-2027-secret-key-123456789")` and tested `VERCEL=1` local execution—it successfully initializes `/tmp/pollwatch.db` and loads the API with zero errors.
+
+### Frontend UI Status on Vercel:
+- **Current Route Rule**: `web/vercel.json` has `"src": "/api/v1/(.*)"`, but all active FastAPI endpoints live under `/api/` (e.g., `/api/results`, `/api/auth/login`).
+- **Need**: Update `web/vercel.json` and add `rewrites()` in `web/next.config.js` to proxy `/api/:path*` to `https://jigawa-pdp-pollwatch-backend.vercel.app/api/:path*`.
 
 ---
 
-## 2. Backend Schemas & API [COMPLETED]
-- [x] **Pydantic Schemas (`backend/app/schemas.py`)**:
-  - Added `election_type: str = "GOVERNORSHIP"` to `VoteResultCreate` and `VoteResultResponse`.
-- [x] **API Endpoints (`backend/app/routers/results.py`)**:
-  - `POST /api/results/submit`: Looks up existing result by `(polling_unit_id, election_type)` so submitting Senatorial does not overwrite Governorship.
-  - `GET /api/results`: Added `election_type: Optional[str] = "GOVERNORSHIP"` query param. Aggregates vote tallies, party vote shares, and LGA breakdowns dynamically per contest.
-  - Added `election_type` badge and summary tag in response payload.
-- [x] **Pytest Suite**:
-  - 14/14 tests passing in `backend/tests/test_api.py`.
-  - Automated test verified submitting Governorship, Senatorial, House of Reps, and Presidential for the same PU creates 4 independent records without collision.
+## 2. Proposed Changes
+
+### Task 1: Update Frontend Vercel Proxy Config (`web/vercel.json`)
+- Change the API route rewrite from `/api/v1/(.*)` to `/api/(.*)` pointing to `https://jigawa-pdp-pollwatch-backend.vercel.app/api/$1`.
+
+### Task 2: Configure Next.js Rewrites (`web/next.config.js`)
+- Add an `async rewrites()` function to proxy all `/api/:path*` calls to `https://jigawa-pdp-pollwatch-backend.vercel.app/api/:path*` (or `process.env.NEXT_PUBLIC_API_BASE_URL`).
+
+### Task 3: Local Build & Pytest Verification
+- Run `PYTHONPATH=. venv/bin/pytest tests/ -v` (confirm 15/15 pass).
+- Run `npm run build` in `web/` (confirm 18/18 static pages generate cleanly).
+
+### Task 4: Push to GitHub to Trigger Vercel Deployments
+- Stage and commit the Vercel configuration updates.
+- Push the branch to `origin main`:
+  ```bash
+  git push origin main
+  ```
+- This triggers Vercel's automated deployment pipelines for both projects:
+  1. `jigawa-pdp-pollwatch-backend`
+  2. `jigawa-pdp-pollwatch-web` (or root project)
+
+### Task 5: Live Production Verification
+- Query `https://jigawa-pdp-pollwatch-backend.vercel.app/` and `/api/results` via `curl` to verify `HTTP 200 OK`.
+- Query the frontend deployment URL and take a browser screenshot to confirm live rendering.
 
 ---
 
-## 3. Web UI: Results Dashboard & Manual EC8A Entry (`web/src/pages/results.js`) [COMPLETED]
-- [x] **Multi-Category Contest Switcher Bar**:
-  - Added interactive contest pill buttons:
-    `[ 🗳️ Governorship ] [ 🏛️ Senatorial (Senate) ] [ 🏛️ House of Reps ] [ 🇳🇬 Presidential ] [ 📜 State Assembly ] [ 🌐 All Contests ]`
-  - Syncs with URL queries (`?election_type=...`).
-- [x] **Form EC8A Manual Entry Modal**:
-  - Added `Election Contest / Category` select dropdown.
-  - Submits votes tagged with the chosen contest and refreshes results table.
-- [x] **Results Table**:
-  - Added dedicated `Contest` column with styled status badges (emerald for Governorship, purple for Senatorial, blue for House of Reps, amber for Presidential, cyan for State Assembly).
-- [x] **Inspector Modal**:
-  - Displays contest badge in evidence header alongside Polling Unit name and code.
-
----
-
-## 4. Field Mobile App (`mobile/`) [COMPLETED]
-- [x] **API Client (`mobile/lib/services/api_service.dart`)**:
-  - Updated `submitResult` to accept `String electionType = 'GOVERNORSHIP'` and transmit in payload.
-- [x] **Submission Screen (`mobile/lib/screens/result_submission_screen.dart`)**:
-  - Added `SELECT ELECTION CONTEST / BALLOT` dropdown for field agents.
-  - Tags photo proof with contest name (e.g. `ec8a_DUT0101_senatorial.jpg`).
-  - Passed `dart analyze` with 0 errors.
-
----
-
-## 5. Visual Verification [COMPLETED]
-- [x] Captured high-resolution screenshot of the new Results Dashboard with the Ballot Contest switcher bar and Contest column.
-- [x] Captured screenshot of the Form EC8A Manual Vote Entry modal with the Election Contest dropdown.
+## 3. User Approval Request
+Please approve this plan so I can proceed with updating the Vercel configs and pushing to GitHub.
