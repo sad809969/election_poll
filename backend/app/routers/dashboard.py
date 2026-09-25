@@ -8,8 +8,8 @@ from app.models import (
     Incident,
     User,
     PollingUnit,
-    LGA,
 )
+from app.core.permissions import require_agent
 
 router = APIRouter(
     prefix="/dashboard",
@@ -18,7 +18,10 @@ router = APIRouter(
 
 
 @router.get("")
-def dashboard(db: Session = Depends(get_db)):
+def dashboard(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
+):
 
     total_polling_units = db.query(PollingUnit).count()
 

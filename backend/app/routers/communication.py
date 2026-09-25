@@ -28,6 +28,7 @@ router = APIRouter(
 )
 def get_announcements(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return (
         db.query(Announcement)
@@ -107,6 +108,7 @@ def delete_announcement(
 )
 def get_messages(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return (
         db.query(Message)

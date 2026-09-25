@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import app.models  # Register all models on Base.metadata
 from app.main import app as fastapi_app
 from app.database import Base, get_db
 from app.seed import seed_database
@@ -55,6 +54,15 @@ def get_admin_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
+def get_admin_token():
+    res = client.post(
+        "/api/auth/login",
+        data={"username": "admin", "password": "admin1283"}
+    )
+    assert res.status_code == 200
+    return res.json()["access_token"]
+
+
 # --- API TESTS ---
 
 def test_read_root():
@@ -94,28 +102,35 @@ def test_auth_login_valid_and_me():
 
 def test_electoral_hierarchy_endpoints():
     """Test fetching LGAs, Wards, and Polling Units."""
+    headers = get_admin_headers()
     # LGAs
-    res_lgas = client.get("/api/electoral/lgas")
+    res_lgas = client.get("/api/electoral/lgas", headers=headers)
     assert res_lgas.status_code == 200
     lgas = res_lgas.json()
     assert len(lgas) == 27
 
     # Wards
-    res_wards = client.get("/api/electoral/wards")
+    res_wards = client.get("/api/electoral/wards", headers=headers)
     assert res_wards.status_code == 200
     wards = res_wards.json()
     assert len(wards) > 0
 
     # Polling Units
-    res_pus = client.get("/api/electoral/polling-units")
+    res_pus = client.get("/api/electoral/polling-units", headers=headers)
     assert res_pus.status_code == 200
     pus = res_pus.json()
     assert len(pus) > 0
 
 
 def test_dashboard_stats_endpoint():
-    """Test fetching Situation Room dashboard summary statistics."""
-    response = client.get("/api/dashboard")
+    """Test that an authenticated user can fetch Situation Room dashboard statistics."""
+    headers = get_admin_headers()
+
+    response = client.get(
+        "/api/dashboard",
+        headers=headers,
+    )
+
     assert response.status_code == 200
     data = response.json()
     assert "kpi" in data and "votes" in data
@@ -137,7 +152,7 @@ def test_results_get_and_post():
 
     # 2. POST /api/results (Form EC8A entry from frontend)
     headers = get_admin_headers()
-    pus_resp = client.get("/api/electoral/polling-units")
+    pus_resp = client.get("/api/electoral/polling-units", headers=headers)
     first_pu_id = pus_resp.json()[0]["id"]
 
     post_resp = client.post(
@@ -159,8 +174,9 @@ def test_results_get_and_post():
 
 def test_incidents_get_and_post():
     """Test fetching enriched incidents and posting a new incident."""
+    headers = get_admin_headers()
     # 1. GET /api/incidents
-    get_resp = client.get("/api/incidents")
+    get_resp = client.get("/api/incidents", headers=headers)
     assert get_resp.status_code == 200
     incidents = get_resp.json()
     assert isinstance(incidents, list)
@@ -171,8 +187,7 @@ def test_incidents_get_and_post():
         assert "polling_unit_name" in inc
 
     # 2. POST /api/incidents
-    headers = get_admin_headers()
-    pus_resp = client.get("/api/electoral/polling-units")
+    pus_resp = client.get("/api/electoral/polling-units", headers=headers)
     first_pu_id = pus_resp.json()[0]["id"]
 
     post_resp = client.post(
@@ -267,7 +282,7 @@ def test_agent_lifecycle_and_bugfixes():
     assert status_res.json()["is_active"] is False
 
     # Verify status in GET /api/agents/{id}
-    get_res = client.get(f"/api/agents/{agent_id}")
+    get_res = client.get(f"/api/agents/{agent_id}", headers=headers)
     assert get_res.status_code == 200
     assert get_res.json()["is_active"] is False
 
@@ -277,13 +292,14 @@ def test_agent_lifecycle_and_bugfixes():
     assert "deleted successfully" in del_res.json()["message"]
 
     # Verify agent is genuinely deleted from database
-    get_after_del = client.get(f"/api/agents/{agent_id}")
+    get_after_del = client.get(f"/api/agents/{agent_id}", headers=headers)
     assert get_after_del.status_code == 404
 
 
 def test_websocket_live_feed():
     """Test connecting to the live-feed WebSocket."""
-    with client.websocket_connect("/ws/live-feed") as websocket:
+    token = get_admin_token()
+    with client.websocket_connect(f"/ws/live-feed?token={token}") as websocket:
         websocket.send_text("ping")
         data = websocket.receive_json()
         assert data["status"] == "acknowledged"
@@ -295,7 +311,7 @@ def test_overvoting_auto_flag_and_protection():
     headers = get_admin_headers()
 
     # 1. Fetch a PU to test with
-    res_pu = client.get("/api/electoral/polling-units")
+    res_pu = client.get("/api/electoral/polling-units", headers=headers)
     assert res_pu.status_code == 200
     pus = res_pu.json()
     test_pu = pus[0]
@@ -336,7 +352,7 @@ def test_overvoting_auto_flag_and_protection():
 def test_election_activities():
     """Test recording and retrieving agent election activities."""
     headers = get_admin_headers()
-    res_pu = client.get("/api/electoral/polling-units")
+    res_pu = client.get("/api/electoral/polling-units", headers=headers)
     pu_id = res_pu.json()[0]["id"]
 
     # 1. Record an activity
@@ -353,7 +369,7 @@ def test_election_activities():
     assert post_res.json()["activity_type"] == "Agent Check-in"
 
     # 2. Get activities
-    get_res = client.get(f"/api/activities?polling_unit_id={pu_id}")
+    get_res = client.get(f"/api/activities?polling_unit_id={pu_id}", headers=headers)
     assert get_res.status_code == 200
     activities = get_res.json()
     assert len(activities) > 0
@@ -363,12 +379,12 @@ def test_election_activities():
 def test_collation_drilldown_and_signoff():
     """Test LGA collation drill-down and EC8C sign-off endpoint."""
     headers = get_admin_headers()
-    res_lgas = client.get("/api/electoral/lgas")
+    res_lgas = client.get("/api/electoral/lgas", headers=headers)
     assert res_lgas.status_code == 200
     lga_id = res_lgas.json()[0]["id"]
 
     # 1. Get LGA hierarchical drill-down
-    res_drill = client.get(f"/api/collation/lga/{lga_id}")
+    res_drill = client.get(f"/api/collation/lga/{lga_id}", headers=headers)
     assert res_drill.status_code == 200
     data = res_drill.json()
     assert "lga" in data
@@ -392,6 +408,34 @@ def test_collation_drilldown_and_signoff():
     assert sign_data["level"] == "LGA"
 
     # 3. Get all sign-offs
-    res_list = client.get("/api/collation/signoffs")
+    res_list = client.get("/api/collation/signoffs", headers=headers)
     assert res_list.status_code == 200
     assert len(res_list.json()) > 0
+
+
+def test_delete_agent_with_results_deactivates():
+    """Test that an admin cannot physically delete an agent with existing results."""
+    headers = get_admin_headers()
+
+    results_resp = client.get("/api/results")
+    assert results_resp.status_code == 200
+    results_data = results_resp.json()
+    assert len(results_data["results"]) > 0
+    agent_id = results_data["results"][0]["agent_id"]
+
+    delete_response = client.delete(
+        f"/api/agents/{agent_id}",
+        headers=headers,
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["message"] == (
+        "Agent has existing vote results and was deactivated instead of deleted."
+    )
+
+    # Confirm that the agent still exists but is inactive.
+    get_response = client.get(
+        f"/api/agents/{agent_id}",
+        headers=headers,
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["is_active"] is False

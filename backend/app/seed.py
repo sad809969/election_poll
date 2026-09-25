@@ -27,7 +27,7 @@ def seed_database(db: Session = None):
         if admin:
             admin.full_name = "System Administrator"
             admin.hashed_password = get_password_hash("admin1283")
-            admin.role = "SUPER_ADMIN"
+            admin.role = "Super Admin"
             admin.is_active = True
 
             db.commit()
@@ -40,7 +40,7 @@ def seed_database(db: Session = None):
                 full_name="System Administrator",
                 username="admin",
                 hashed_password=get_password_hash("admin1283"),
-                role="SUPER_ADMIN",
+                role="Super Admin",
                 is_active=True,
                 phone_number=None,
                 lga_id=None,

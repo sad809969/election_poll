@@ -196,7 +196,7 @@ export default function BroadcastMessagesPage() {
             <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
               <h3 className={`text-xs font-bold border-b pb-2 ${isDark ? 'text-slate-200 border-slate-800' : 'text-slate-900 border-slate-100'}`}>Recent Broadcast History</h3>
               <div className="space-y-3">
-                {broadcastHistory.map((item) => (
+                {announcements.map((item) => (
                   <div key={item.id} className={`p-3 rounded-xl border space-y-1 ${
                     isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
