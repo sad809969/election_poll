@@ -21,13 +21,14 @@ router = APIRouter(
 @router.get("")
 def get_results_dashboard(
     lga_id: Optional[int] = None,
+    election_type: Optional[str] = "GOVERNORSHIP",
     status: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 100,
     skip: int = 0,
     db: Session = Depends(get_db)
 ):
-    agg = db.query(
+    agg_query = db.query(
         func.sum(VoteResult.pdp_votes),
         func.sum(VoteResult.apc_votes),
         func.sum(VoteResult.nnpp_votes),
@@ -37,7 +38,12 @@ def get_results_dashboard(
         func.sum(VoteResult.total_valid_votes),
         func.sum(VoteResult.total_votes_cast),
         func.count(VoteResult.id),
-    ).first()
+    )
+    if election_type and election_type.upper() != "ALL":
+        agg_query = agg_query.filter(VoteResult.election_type == election_type.upper())
+    if lga_id:
+        agg_query = agg_query.join(PollingUnit, PollingUnit.id == VoteResult.polling_unit_id).filter(PollingUnit.lga_id == lga_id)
+    agg = agg_query.first()
 
     pdp = agg[0] or 0
     apc = agg[1] or 0
@@ -95,7 +101,7 @@ def get_results_dashboard(
     ]
 
     # Optimized LGA Breakdown
-    lga_stats = (
+    lga_stats_q = (
         db.query(
             PollingUnit.lga_id,
             func.count(VoteResult.id).label("collated"),
@@ -105,9 +111,10 @@ def get_results_dashboard(
             func.sum(VoteResult.lp_votes).label("lp"),
         )
         .join(VoteResult, VoteResult.polling_unit_id == PollingUnit.id)
-        .group_by(PollingUnit.lga_id)
-        .all()
     )
+    if election_type and election_type.upper() != "ALL":
+        lga_stats_q = lga_stats_q.filter(VoteResult.election_type == election_type.upper())
+    lga_stats = lga_stats_q.group_by(PollingUnit.lga_id).all()
     lga_stat_map = {row.lga_id: row for row in lga_stats}
 
     total_pus_per_lga = dict(
@@ -150,6 +157,8 @@ def get_results_dashboard(
         .outerjoin(User, User.id == VoteResult.agent_id)
     )
 
+    if election_type and election_type.upper() != "ALL":
+        query = query.filter(VoteResult.election_type == election_type.upper())
     if lga_id:
         query = query.filter(PollingUnit.lga_id == lga_id)
     if status and status.upper() != "ALL":
@@ -170,6 +179,7 @@ def get_results_dashboard(
             "polling_unit_id": r.polling_unit_id,
             "polling_unit_code": pu.code,
             "polling_unit_name": pu.name,
+            "election_type": r.election_type,
             "registered_voters": reg_voters,
             "is_overvote": r.total_votes_cast > reg_voters if reg_voters else False,
             "lga_id": pu.lga_id,
@@ -191,6 +201,7 @@ def get_results_dashboard(
 
     return {
         "summary": {
+            "election_type": election_type.upper() if election_type else "ALL",
             "total_votes": total_votes,
             "collated_pus": collated_pus,
             "pdp_votes": pdp,
@@ -243,6 +254,7 @@ def submit_result(
     lp = payload.lp_votes
     others = payload.others_votes
     rejected = payload.rejected_votes
+    election_type = (payload.election_type or "GOVERNORSHIP").upper()
 
     if min(pdp, apc, nnpp, lp, others, rejected) < 0:
         raise HTTPException(
@@ -260,12 +272,16 @@ def submit_result(
 
     existing = (
         db.query(VoteResult)
-        .filter(VoteResult.polling_unit_id == payload.polling_unit_id)
+        .filter(
+            VoteResult.polling_unit_id == payload.polling_unit_id,
+            VoteResult.election_type == election_type,
+        )
         .first()
     )
 
     if existing:
         existing.agent_id = current_user.id
+        existing.election_type = election_type
         existing.pdp_votes = pdp
         existing.apc_votes = apc
         existing.nnpp_votes = nnpp
@@ -286,15 +302,16 @@ def submit_result(
             db=db,
             user=current_user,
             action="SUBMIT_RESULT",
-            details=f"Polling Unit {payload.polling_unit_id} (Status: {auto_status}, Over-voting: {is_overvoting})",
+            details=f"Polling Unit {payload.polling_unit_id} [{election_type}] (Status: {auto_status}, Over-voting: {is_overvoting})",
         )
 
         db.commit()
         db.refresh(existing)
 
         return {
-            "message": "Result updated successfully",
+            "message": f"{election_type} Result updated successfully",
             "id": existing.id,
+            "election_type": existing.election_type,
             "verification_status": existing.verification_status,
             "is_overvoting": is_overvoting,
         }
@@ -302,6 +319,7 @@ def submit_result(
     result = VoteResult(
         polling_unit_id=payload.polling_unit_id,
         agent_id=current_user.id,
+        election_type=election_type,
         pdp_votes=pdp,
         apc_votes=apc,
         nnpp_votes=nnpp,
@@ -320,14 +338,15 @@ def submit_result(
         db=db,
         user=current_user,
         action="SUBMIT_RESULT",
-        details=f"Polling Unit {payload.polling_unit_id} (Status: {auto_status}, Over-voting: {is_overvoting})",
+        details=f"Polling Unit {payload.polling_unit_id} [{election_type}] (Status: {auto_status}, Over-voting: {is_overvoting})",
     )
     db.commit()
     db.refresh(result)
 
     return {
-        "message": "Result submitted successfully",
+        "message": f"{election_type} Result submitted successfully",
         "id": result.id,
+        "election_type": result.election_type,
         "verification_status": result.verification_status,
         "is_overvoting": is_overvoting,
     }

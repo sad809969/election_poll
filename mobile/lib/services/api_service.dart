@@ -156,9 +156,10 @@ class ApiService {
     }
   }
 
-  /// Submit Form EC8A Result
+  /// Submit Form EC8A Result (Multi-Category: Governorship, Senatorial, House of Reps, Presidential)
   static Future<Map<String, dynamic>> submitResult({
     required int pollingUnitId,
+    String electionType = 'GOVERNORSHIP',
     required int pdp,
     required int apc,
     required int nnpp,
@@ -171,6 +172,7 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/results/submit');
     final body = json.encode({
       'polling_unit_id': pollingUnitId,
+      'election_type': electionType,
       'pdp_votes': pdp,
       'apc_votes': apc,
       'nnpp_votes': nnpp,

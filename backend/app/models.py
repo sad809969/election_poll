@@ -61,7 +61,8 @@ class PollingUnit(Base):
     users = relationship("User", back_populates="polling_unit")
     activities = relationship("ElectionActivity", back_populates="polling_unit", cascade="all, delete-orphan")
     incidents = relationship("Incident", back_populates="polling_unit", cascade="all, delete-orphan")
-    vote_result = relationship("VoteResult", back_populates="polling_unit", uselist=False, cascade="all, delete-orphan")
+    vote_results = relationship("VoteResult", back_populates="polling_unit", cascade="all, delete-orphan")
+    vote_result = relationship("VoteResult", back_populates="polling_unit", uselist=False, viewonly=True)
 
 
 # =============================================================================
@@ -135,10 +136,14 @@ class Incident(Base):
 
 class VoteResult(Base):
     __tablename__ = "vote_results"
+    __table_args__ = (
+        UniqueConstraint('polling_unit_id', 'election_type', name='uq_pu_election_type'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    polling_unit_id = Column(Integer, ForeignKey("polling_units.id", ondelete="CASCADE"), nullable=False, index=True)
     agent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    election_type = Column(String(30), default="GOVERNORSHIP", nullable=False, index=True)
 
     pdp_votes = Column(Integer, default=0, nullable=False)
     apc_votes = Column(Integer, default=0, nullable=False)
@@ -157,7 +162,7 @@ class VoteResult(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     synced_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    polling_unit = relationship("PollingUnit", back_populates="vote_result")
+    polling_unit = relationship("PollingUnit", back_populates="vote_results")
     agent = relationship("User", back_populates="vote_results")
 
 

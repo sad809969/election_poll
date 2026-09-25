@@ -222,8 +222,12 @@ def test_agents_and_audit():
     """Test agents list and audit logs endpoint."""
     headers = get_admin_headers()
 
-    # Agents
-    res_agents = client.get("/api/agents")
+    # Unauthenticated access to /api/agents must be rejected
+    res_unauth = client.get("/api/agents")
+    assert res_unauth.status_code in [401, 403]
+
+    # Authenticated supervisor/admin access
+    res_agents = client.get("/api/agents", headers=headers)
     assert res_agents.status_code == 200
     assert isinstance(res_agents.json(), list)
 
@@ -231,6 +235,50 @@ def test_agents_and_audit():
     res_audit = client.get("/api/audit", headers=headers)
     assert res_audit.status_code == 200
     assert isinstance(res_audit.json(), list)
+
+
+def test_agent_lifecycle_and_bugfixes():
+    """Test agent creation, status toggle (PATCH), and actual deletion (DELETE)."""
+    headers = get_admin_headers()
+
+    # 1. Create a temporary test agent
+    create_res = client.post(
+        "/api/agents",
+        headers=headers,
+        json={
+            "full_name": "Test Lifecycle Agent",
+            "username": "test_agent_lifecycle_99",
+            "password": "agentpassword123",
+            "phone_number": "08012349999",
+            "role": "Polling Unit Agent",
+        }
+    )
+    assert create_res.status_code == 201
+    agent_data = create_res.json()
+    agent_id = agent_data["id"]
+    assert agent_data["is_active"] is True
+
+    # 2. Toggle status to False (PATCH /api/agents/{id}/status?active=false)
+    status_res = client.patch(
+        f"/api/agents/{agent_id}/status?active=false",
+        headers=headers,
+    )
+    assert status_res.status_code == 200
+    assert status_res.json()["is_active"] is False
+
+    # Verify status in GET /api/agents/{id}
+    get_res = client.get(f"/api/agents/{agent_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["is_active"] is False
+
+    # 3. Delete agent (DELETE /api/agents/{id})
+    del_res = client.delete(f"/api/agents/{agent_id}", headers=headers)
+    assert del_res.status_code == 200
+    assert "deleted successfully" in del_res.json()["message"]
+
+    # Verify agent is genuinely deleted from database
+    get_after_del = client.get(f"/api/agents/{agent_id}")
+    assert get_after_del.status_code == 404
 
 
 def test_websocket_live_feed():

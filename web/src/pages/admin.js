@@ -36,6 +36,53 @@ export default function AdminPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [liveUsers, setLiveUsers] = useState([])
 
+  // Cascading Location Dropdowns State
+  const [lgasList, setLgasList] = useState([])
+  const [wardsList, setWardsList] = useState([])
+  const [pusList, setPusList] = useState([])
+  const [selectedLgaId, setSelectedLgaId] = useState('')
+  const [selectedWardId, setSelectedWardId] = useState('')
+  const [selectedPuId, setSelectedPuId] = useState('')
+  const [selectedRole, setSelectedRole] = useState('Polling Unit Agent')
+
+  useEffect(() => {
+    if (showAddModal) {
+      apiFetch('/electoral/lgas').then(data => {
+        if (Array.isArray(data)) setLgasList(data)
+      }).catch(console.error)
+    }
+  }, [showAddModal])
+
+  const handleLgaChange = async (lgaId) => {
+    setSelectedLgaId(lgaId)
+    setSelectedWardId('')
+    setSelectedPuId('')
+    setWardsList([])
+    setPusList([])
+    if (lgaId) {
+      try {
+        const wards = await apiFetch(`/electoral/wards?lga_id=${lgaId}`)
+        if (Array.isArray(wards)) setWardsList(wards)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }
+
+  const handleWardChange = async (wardId) => {
+    setSelectedWardId(wardId)
+    setSelectedPuId('')
+    setPusList([])
+    if (wardId) {
+      try {
+        const pus = await apiFetch(`/electoral/polling-units?ward_id=${wardId}`)
+        if (Array.isArray(pus)) setPusList(pus)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }
+
   useEffect(() => {
     async function loadUsers() {
       try {
@@ -321,55 +368,120 @@ export default function AdminPage() {
                     full_name: form.full_name.value,
                     username: form.username.value,
                     password: form.password.value,
-                    role: form.role.value,
-                    phone_number: form.phone_number.value
+                    role: selectedRole,
+                    phone_number: form.phone_number.value,
+                    lga_id: selectedLgaId ? parseInt(selectedLgaId) : null,
+                    ward_id: selectedWardId ? parseInt(selectedWardId) : null,
+                    polling_unit_id: selectedPuId ? parseInt(selectedPuId) : null,
                   })
                 });
-                alert('User created successfully!');
+                alert('Agent / User created successfully!');
                 setShowAddModal(false);
                 window.location.reload();
               } catch (err) {
                 alert('Error creating user: ' + err.message);
               }
-            }} className="space-y-3 text-xs">
+            }} className="space-y-3 text-xs max-h-[80vh] overflow-y-auto pr-1">
               <div>
-                <label className="block font-bold mb-1 text-slate-400">Full Name</label>
-                <input required name="full_name" type="text" placeholder="e.g. Murtala Abubakar" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                <label className="block font-bold mb-1 text-slate-400">Full Name *</label>
+                <input required name="full_name" type="text" placeholder="e.g. Ibrahim Suleiman" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp" />
               </div>
 
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Username</label>
-                <input required name="username" type="text" placeholder="e.g. murtala_guri" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-400">Username *</label>
+                  <input required name="username" type="text" placeholder="e.g. agent_dut_01" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp" />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-400">Password *</label>
+                  <input required name="password" type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp" />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Password</label>
-                <input required name="password" type="password" placeholder="••••••••" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-400">Authorization Role</label>
+                  <select 
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none"
+                  >
+                    <option value="Polling Unit Agent">Polling Unit Agent</option>
+                    <option value="Ward Coordinator">Ward Coordinator</option>
+                    <option value="LGA Coordinator">LGA Coordinator</option>
+                    <option value="Situation Room Officer">Situation Room Officer</option>
+                    <option value="Director General">Director General</option>
+                    <option value="Super Admin">Super Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-400">Phone Number</label>
+                  <input name="phone_number" type="text" placeholder="0801 234 5678" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Authorization Role (9 Tiers)</label>
-                <select name="role" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
-                  <option value="Super Admin">Super Admin</option>
-                  <option value="State Chairman">State Chairman</option>
-                  <option value="Governorship Candidate">Governorship Candidate</option>
-                  <option value="Deputy Governorship Candidate">Deputy Governorship Candidate</option>
-                  <option value="Director General">Director General</option>
-                  <option value="Situation Room Officer">Situation Room Officer</option>
-                  <option value="LGA Coordinator">LGA Coordinator</option>
-                  <option value="Ward Coordinator">Ward Coordinator</option>
-                  <option value="Polling Unit Agent">Polling Unit Agent</option>
-                </select>
+              {/* Dynamic Cascading Location Assignment */}
+              <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2.5 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-emerald-400 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Assigned Polling Location
+                  </span>
+                  <span className="text-[10px] text-slate-400">Mandatory for PU Agents</span>
+                </div>
+
+                {/* 1. LGA Dropdown */}
+                <div>
+                  <label className="block text-[10px] font-bold mb-1 text-slate-400">1. Local Government Area (LGA) *</label>
+                  <select
+                    value={selectedLgaId}
+                    onChange={(e) => handleLgaChange(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-pdp"
+                  >
+                    <option value="">-- Select LGA (27 LGAs) --</option>
+                    {lgasList.map(l => (
+                      <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Ward Dropdown */}
+                {selectedLgaId && (
+                  <div className="animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold mb-1 text-slate-400">2. Electoral Ward *</label>
+                    <select
+                      value={selectedWardId}
+                      onChange={(e) => handleWardChange(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-pdp"
+                    >
+                      <option value="">-- Select Ward --</option>
+                      {wardsList.map(w => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* 3. Polling Unit Dropdown */}
+                {selectedWardId && (
+                  <div className="animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold mb-1 text-slate-400">3. Designated Polling Unit (PU) *</label>
+                    <select
+                      value={selectedPuId}
+                      onChange={(e) => setSelectedPuId(e.target.value)}
+                      className="w-full bg-slate-900 border border-emerald-500/50 rounded-lg p-2 text-slate-200 outline-none focus:border-emerald-500"
+                    >
+                      <option value="">-- Select Polling Unit --</option>
+                      {pusList.map(pu => (
+                        <option key={pu.id} value={pu.id}>[{pu.code}] {pu.name} ({pu.registered_voters || 0} voters)</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Phone Number</label>
-                <input name="phone_number" type="text" placeholder="0812 345 6789" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark">Create User</button>
+                <button type="submit" className="px-5 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark shadow-md shadow-pdp/20">Authorize & Save Agent</button>
               </div>
             </form>
           </div>

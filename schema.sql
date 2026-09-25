@@ -113,11 +113,12 @@ CREATE TABLE incidents (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Form EC8A Submissions
+-- Form EC8A Submissions (Multi-Category: Governorship, Senatorial, House of Reps, Presidential)
 CREATE TABLE vote_results (
     id SERIAL PRIMARY KEY,
-    polling_unit_id INT NOT NULL UNIQUE REFERENCES polling_units(id) ON DELETE CASCADE,
+    polling_unit_id INT NOT NULL REFERENCES polling_units(id) ON DELETE CASCADE,
     agent_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    election_type VARCHAR(30) NOT NULL DEFAULT 'GOVERNORSHIP',
     pdp_votes INT NOT NULL DEFAULT 0 CHECK (pdp_votes >= 0),
     apc_votes INT NOT NULL DEFAULT 0 CHECK (apc_votes >= 0),
     nnpp_votes INT NOT NULL DEFAULT 0 CHECK (nnpp_votes >= 0),
@@ -130,7 +131,8 @@ CREATE TABLE vote_results (
     verification_status VARCHAR(30) NOT NULL DEFAULT 'VERIFIED' CHECK (verification_status IN ('VERIFIED', 'PENDING_PHOTO', 'FLAGGED')),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    synced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_pu_election_type UNIQUE (polling_unit_id, election_type)
 );
 
 -- =============================================================================

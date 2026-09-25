@@ -28,6 +28,8 @@ ADMIN_ROLES: Set[str] = {
     "deputy governorship candidate",
     "director general",
     "situation room officer",
+    "state coordinator",
+    "analyst",
     "state admin",
 }
 

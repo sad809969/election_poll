@@ -53,9 +53,12 @@ app = FastAPI(
 )
 
 # Enable CORS for Next.js Frontend & Mobile App
+origins = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else [settings.ALLOWED_ORIGINS]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows local frontend on any port
+    allow_origins=origins,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

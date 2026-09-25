@@ -79,6 +79,69 @@ def seed_database(db: Session = None):
             agent.is_active = True
             db.commit()
 
+        # Seed Situation Room & Field Coordinator Accounts
+        coordinator_accounts = [
+            {
+                "full_name": "Engr. Kabir Dangalan (State Coordinator)",
+                "username": "state_coord",
+                "password": "coord123",
+                "role": "State Coordinator",
+                "phone_number": "08031112233",
+            },
+            {
+                "full_name": "Hon. Mustapha Kiyawa (LGA Coordinator - Dutse)",
+                "username": "lga_dutse",
+                "password": "coord123",
+                "role": "LGA Coordinator",
+                "phone_number": "08032223344",
+                "lga_id": 1,
+            },
+            {
+                "full_name": "Malam Bello Danladi (Ward Coordinator - Dutse Central)",
+                "username": "ward_dutse_1",
+                "password": "coord123",
+                "role": "Ward Coordinator",
+                "phone_number": "08033334455",
+                "lga_id": 1,
+                "ward_id": 1,
+            },
+            {
+                "full_name": "Dr. Aisha Garba (Data Analyst)",
+                "username": "analyst",
+                "password": "analyst123",
+                "role": "Situation Room Officer",
+                "phone_number": "08034445566",
+            },
+            {
+                "full_name": "Alhaji Suleiman Observer (VIP Observer)",
+                "username": "observer",
+                "password": "observer123",
+                "role": "Observer",
+                "phone_number": "08035556677",
+            },
+        ]
+
+        for acc in coordinator_accounts:
+            u = db.query(User).filter(User.username == acc["username"]).first()
+            if not u:
+                u = User(
+                    full_name=acc["full_name"],
+                    username=acc["username"],
+                    phone_number=acc.get("phone_number"),
+                    hashed_password=get_password_hash(acc["password"]),
+                    role=acc["role"],
+                    is_active=True,
+                    lga_id=acc.get("lga_id"),
+                    ward_id=acc.get("ward_id"),
+                )
+                db.add(u)
+            else:
+                u.hashed_password = get_password_hash(acc["password"])
+                u.role = acc["role"]
+                u.is_active = True
+        db.commit()
+        logger.info("Situation Room coordinator and analyst accounts seeded.")
+
         # Seed all 27 Jigawa LGAs
         jigawa_lgas = [
             ("Dutse", "DUT"), ("Hadejia", "HAD"), ("Gumel", "GUM"), ("Kazaure", "KAZ"), 

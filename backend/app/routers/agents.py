@@ -10,7 +10,7 @@ from app.schemas import (
     AgentResponse,
     MessageResponse,
 )
-from app.core.permissions import require_admin
+from app.core.permissions import require_admin, require_supervisor
 from app.core.security import get_password_hash
 
 router = APIRouter(
@@ -25,6 +25,7 @@ router = APIRouter(
 )
 def get_agents(
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_supervisor),
 ):
 
     return (
@@ -78,7 +79,6 @@ def create_agent(
             )
 
     if payload.polling_unit_id:
-
         pu = (
             db.query(PollingUnit)
             .filter(PollingUnit.id == payload.polling_unit_id)
@@ -90,6 +90,10 @@ def create_agent(
                 status_code=404,
                 detail="Polling Unit not found",
             )
+        if not payload.ward_id and pu.ward_id:
+            payload.ward_id = pu.ward_id
+        if not payload.lga_id and pu.lga_id:
+            payload.lga_id = pu.lga_id
 
     agent = User(
 
@@ -212,12 +216,18 @@ def delete_agent(
             detail="Agent not found",
         )
 
+    agent_username = agent.username
+
     write_audit_log(
-    db=db,
-    user=current_user,
-    action="CREATE_AGENT",
-    details=f"Created agent '{agent.username}'",
-)
+        db=db,
+        user=current_user,
+        action="DELETE_AGENT",
+        details=f"Deleted agent '{agent_username}'",
+    )
+
+    db.delete(agent)
+    db.commit()
+
     return {
         "message": "Agent deleted successfully"
     }
@@ -246,11 +256,15 @@ def change_agent_status(
             detail="Agent not found",
         )
 
+    agent.is_active = active
+    db.commit()
+    db.refresh(agent)
+
     write_audit_log(
-    db=db,
-    user=current_user,
-    action="CHANGE_AGENT_STATUS",
-    details=f"{agent.username} active={agent.is_active}",
-)
+        db=db,
+        user=current_user,
+        action="CHANGE_AGENT_STATUS",
+        details=f"Changed {agent.username} active={active}",
+    )
 
     return agent

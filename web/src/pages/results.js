@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/router'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
@@ -21,7 +22,8 @@ import {
   Loader2,
   ShieldCheck,
   Layers,
-  TableProperties
+  TableProperties,
+  Vote
 } from 'lucide-react'
 import { 
   ResponsiveContainer, 
@@ -31,6 +33,7 @@ import {
 } from 'recharts'
 
 export default function ResultsDashboardPage() {
+  const router = useRouter()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
@@ -38,11 +41,23 @@ export default function ResultsDashboardPage() {
   const [activeTab, setActiveTab] = useState('units')
 
   // Filters & Search
+  const [electionType, setElectionType] = useState('GOVERNORSHIP')
   const [selectedLgaId, setSelectedLgaId] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(0)
   const pageSize = 50
+
+  useEffect(() => {
+    if (router.isReady) {
+      if (router.query.election_type) {
+        setElectionType(router.query.election_type.toString().toUpperCase())
+      }
+      if (router.query.modal === 'entry') {
+        setShowManualEntryModal(true)
+      }
+    }
+  }, [router.isReady, router.query])
 
   // Backend Data
   const [loading, setLoading] = useState(true)
@@ -92,6 +107,7 @@ export default function ResultsDashboardPage() {
       params.append('limit', pageSize.toString())
       params.append('skip', (page * pageSize).toString())
       if (selectedLgaId) params.append('lga_id', selectedLgaId)
+      if (electionType && electionType !== 'ALL') params.append('election_type', electionType)
       if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter)
       if (searchQuery.trim()) params.append('search', searchQuery.trim())
 
@@ -125,7 +141,7 @@ export default function ResultsDashboardPage() {
 
   useEffect(() => {
     loadResults()
-  }, [selectedLgaId, statusFilter, searchQuery, page])
+  }, [selectedLgaId, statusFilter, searchQuery, page, electionType])
 
   // Count flagged in currently displayed list
   const flaggedInViewCount = useMemo(() => {
@@ -370,6 +386,43 @@ export default function ResultsDashboardPage() {
             </div>
           )}
 
+          {/* Multi-Category Election Contest Switcher Bar */}
+          <div className={`${cardClass} rounded-2xl p-3.5 border shadow-sm flex flex-wrap items-center justify-between gap-3`}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-500 flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <Vote className="w-3.5 h-3.5" /> Ballot Contest:
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {[
+                { id: 'GOVERNORSHIP', label: 'Governorship', icon: '🗳️' },
+                { id: 'SENATORIAL', label: 'Senatorial (Senate)', icon: '🏛️' },
+                { id: 'HOUSE_OF_REPS', label: 'House of Reps', icon: '🏛️' },
+                { id: 'PRESIDENTIAL', label: 'Presidential', icon: '🇳🇬' },
+                { id: 'STATE_ASSEMBLY', label: 'State Assembly', icon: '📜' },
+                { id: 'ALL', label: 'All Contests', icon: '🌐' },
+              ].map((contest) => (
+                <button
+                  key={contest.id}
+                  onClick={() => {
+                    setElectionType(contest.id)
+                    setPage(0)
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    electionType === contest.id
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
+                      : isDark
+                        ? 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-300'
+                  }`}
+                >
+                  <span>{contest.icon}</span>
+                  <span>{contest.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Main Controls & Tab Bar */}
           <div className={`${cardClass} rounded-xl p-4 flex flex-wrap justify-between items-center gap-4`}>
             {/* View Switcher Tabs */}
@@ -507,6 +560,7 @@ export default function ResultsDashboardPage() {
                       <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
                         <th className="py-3 px-3">PU Code</th>
                         <th className="py-3 px-3">Polling Unit Name</th>
+                        <th className="py-3 px-3">Contest</th>
                         <th className="py-3 px-3">Voters</th>
                         <th className="py-3 px-3 text-emerald-500 font-bold">PDP</th>
                         <th className="py-3 px-3 text-blue-500 font-bold">APC</th>
@@ -541,6 +595,17 @@ export default function ResultsDashboardPage() {
                               </span>
                               <span className="text-[10px] text-slate-500">
                                 Submitting Agent: {r.agent_name || 'Assigned Agent'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
+                                r.election_type === 'SENATORIAL' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                                r.election_type === 'HOUSE_OF_REPS' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+                                r.election_type === 'PRESIDENTIAL' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                                r.election_type === 'STATE_ASSEMBLY' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
+                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              }`}>
+                                {r.election_type || 'GOVERNORSHIP'}
                               </span>
                             </td>
                             <td className="py-3 px-3 text-slate-400 font-mono">
@@ -675,10 +740,19 @@ export default function ResultsDashboardPage() {
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white flex flex-wrap items-center gap-2">
                     <span>{inspectResult.polling_unit_name}</span>
                     <span className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
                       {inspectResult.polling_unit_code}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
+                      inspectResult.election_type === 'SENATORIAL' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                      inspectResult.election_type === 'HOUSE_OF_REPS' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+                      inspectResult.election_type === 'PRESIDENTIAL' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                      inspectResult.election_type === 'STATE_ASSEMBLY' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
+                      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    }`}>
+                      {inspectResult.election_type || 'GOVERNORSHIP'}
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -943,6 +1017,7 @@ export default function ResultsDashboardPage() {
                   method: 'POST',
                   body: JSON.stringify({
                     polling_unit_id: Number(f.polling_unit_id.value),
+                    election_type: f.election_type.value,
                     pdp_votes: Number(f.pdp_votes.value),
                     apc_votes: Number(f.apc_votes.value),
                     nnpp_votes: Number(f.nnpp_votes.value),
@@ -951,7 +1026,7 @@ export default function ResultsDashboardPage() {
                     notes: f.notes.value || 'Manual entry from Situation Room'
                   })
                 });
-                alert('Form EC8A vote tally recorded successfully!');
+                alert(`Form EC8A ${f.election_type.value} vote tally recorded successfully!`);
                 setShowManualEntryModal(false);
                 loadResults();
               } catch (err) {
@@ -961,6 +1036,21 @@ export default function ResultsDashboardPage() {
               <div>
                 <label className="block font-bold mb-1 text-slate-400">Target Polling Unit ID</label>
                 <input required name="polling_unit_id" type="number" defaultValue="1" placeholder="Enter PU ID (1 to 4827)" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Election Contest / Category</label>
+                <select 
+                  name="election_type" 
+                  defaultValue={electionType !== 'ALL' ? electionType : 'GOVERNORSHIP'}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none font-bold"
+                >
+                  <option value="GOVERNORSHIP">🗳️ Governorship Election</option>
+                  <option value="SENATORIAL">🏛️ Senatorial Election (Senate)</option>
+                  <option value="HOUSE_OF_REPS">🏛️ House of Representatives</option>
+                  <option value="PRESIDENTIAL">🇳🇬 Presidential Election</option>
+                  <option value="STATE_ASSEMBLY">📜 State House of Assembly</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

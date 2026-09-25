@@ -10,9 +10,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController(text: 'agent');
-  final _passwordController = TextEditingController(text: 'agent123');
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   void _showServerConfigDialog() {
     final serverController = TextEditingController(
@@ -305,6 +306,16 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Top Action Bar with Subtle Settings Trigger
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.settings_outlined, color: Colors.white38, size: 20),
+                    tooltip: 'Server Settings',
+                    onPressed: _showServerConfigDialog,
+                  ),
+                ),
+
                 // PDP Logo Header Card
                 Center(
                   child: Container(
@@ -372,57 +383,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
-
-                // Server Connection Status & Config Banner
-                InkWell(
-                  onTap: _showServerConfigDialog,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF141E38),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.wifi, size: 16, color: Color(0xFF10B981)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Server: ${ApiService.baseUrl.replaceAll('/api', '')}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFFCBD5E1),
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'monospace',
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF008751).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFF008751).withOpacity(0.4)),
-                          ),
-                          child: const Text(
-                            'CHANGE',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF10B981),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
                 // Login Form Card
                 Container(
@@ -463,12 +424,22 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         style: const TextStyle(color: Colors.white, fontSize: 14),
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.lock_outline, size: 18, color: Color(0xFF008751)),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              size: 18,
+                              color: const Color(0xFF64748B),
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
                           filled: true,
                           fillColor: const Color(0xFF0B132B),
+                          hintText: 'Enter secret password',
+                          hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 12),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF334155))),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF334155))),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -489,62 +460,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Text('AUTHENTICATE & CHECK-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8)),
                       ),
-                      const SizedBox(height: 14),
-                      // Quick Test Credentials
-                      Center(
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            InkWell(
-                              onTap: () {
-                                _usernameController.text = 'agent_dut_w1_p1';
-                                _passwordController.text = 'agent123';
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0B132B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.5)),
-                                ),
-                                child: const Text('Agent (agent_dut_w1_p1)', style: TextStyle(fontSize: 10, color: Color(0xFF10B981))),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () {
-                                _usernameController.text = 'agent';
-                                _passwordController.text = 'agent123';
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0B132B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: const Text('Agent (agent)', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () {
-                                _usernameController.text = 'admin';
-                                _passwordController.text = 'admin1283';
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0B132B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: const Text('Admin (admin/admin1283)', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),

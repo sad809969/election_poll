@@ -18,6 +18,8 @@ import {
   PlusCircle,
   Download,
   Radio,
+  FileSpreadsheet,
+  Lock,
   X
 } from 'lucide-react'
 import { useTheme } from '../pages/_app'
@@ -116,6 +118,10 @@ export default function Sidebar() {
             <PieChart className="w-4 h-4" />
             <span>Collation Center</span>
           </Link>
+          <Link href="/election-results" onClick={closeMobile} className={navItemClass('/election-results')}>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Results by Office & Export</span>
+          </Link>
 
           <div className={sectionLabelClass}>COMMUNICATION</div>
           <Link href="/communication" onClick={closeMobile} className={navItemClass('/communication')}>
@@ -183,12 +189,19 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Footer System Version */}
+        {/* Footer System Version & Discreet Master Admin Link */}
         <div className={`p-3 border-t text-[10px] text-center flex justify-between items-center ${
           isDark ? 'border-slate-800/40 text-slate-500' : 'border-slate-200 text-slate-400'
         }`}>
           <span>© 2027 Jigawa PDP</span>
-          <span className={`px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>v1.0.0</span>
+          <Link
+            href="/system-admin"
+            title="Side A Master Control Panel (Operator / Admin)"
+            className="flex items-center gap-1 font-mono text-slate-500 hover:text-emerald-400 transition"
+          >
+            <Lock className="w-3 h-3" />
+            <span>Side A</span>
+          </Link>
         </div>
       </aside>
     </>

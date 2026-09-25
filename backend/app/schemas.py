@@ -36,6 +36,7 @@ class UserOut(BaseModel):
 
 class VoteResultCreate(BaseModel):
     polling_unit_id: int
+    election_type: str = "GOVERNORSHIP"
     pdp_votes: int = 0
     apc_votes: int = 0
     nnpp_votes: int = 0
