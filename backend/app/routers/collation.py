@@ -175,6 +175,7 @@ def signoff_collation(
 def get_signoffs(
     level: Optional[str] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     query = db.query(CollationSignoff)
     if level:
@@ -224,6 +225,7 @@ def get_signoffs(
 def get_lga_drilldown(
     lga_id: int,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     lga = db.query(LGA).filter(LGA.id == lga_id).first()
     if not lga:

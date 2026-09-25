@@ -9,7 +9,7 @@ Jigawa PDP PollWatch is a secure, real-time Election Situation Room and Monitori
 
 ### 1. FastAPI Backend (`/backend`)
 - **High-Performance REST APIs**: FastAPI (Python 3.11+), SQLAlchemy ORM, WebSockets, and Pydantic v2.
-- **Pre-Seeded Electoral Data**: Populated with all **27 Jigawa State LGAs** (Dutse, Hadejia, Gumel, Kazaure, Ringim, Birnin Kudu, Babura, Jahun, Guri, Kaugama, Kiyawa, etc.), Wards, Polling Units, and 9 Authorization Roles.
+- **Demo Electoral Data (development)**: Seeds all **27 Jigawa State LGAs** (Dutse, Hadejia, Gumel, Kazaure, Ringim, Birnin Kudu, Babura, Jahun, Guri, Kaugama, Kiyawa, etc.), Wards, Polling Units, and 9 Authorization Roles.
 - **Real-Time Vote Aggregation Engine**: Instant calculation of party vote tallies (PDP, APC, NNPP, LP, Others) and LGA completion rates.
 
 ### 2. Next.js Command Center Dashboard (`/web`)
@@ -20,22 +20,53 @@ Jigawa PDP PollWatch is a secure, real-time Election Situation Room and Monitori
 
 ### 3. Flutter Polling Unit Agent Mobile App (`/mobile`)
 - **Agent Exclusive Auth**: Locked login credentials tied to pre-assigned Polling Unit.
-- **Offline Storage & Auto-Sync Queue**: Persistent Hive/SQLite offline queue for areas with poor internet connection.
 - **Election Timeline Tracker**: Log Accreditation, Voting, and Counting milestones with system timestamps.
 - **Incident Reporting**: Categorize incidents (Violence, BVAS Issues, Intimidation, etc.), select severity, attach photos, and tag GPS coordinates.
-- **Result Submission**: Input party vote counts, validate voter totals, and upload official EC8A result sheet photo.
+- **Result Submission**: Input party vote counts, validate voter totals, and photograph and upload the official Form EC8A result sheet.
+
+---
+
+## Result Integrity & Verification Workflow
+
+Every polling unit result moves through a fixed, audited workflow:
+
+| Status | Meaning |
+|---|---|
+| `PENDING_PHOTO` | Figures submitted, no Form EC8A photo uploaded yet |
+| `PENDING_REVIEW` | EC8A photo uploaded, awaiting Situation Room review |
+| `VERIFIED` | Approved by a Situation Room officer against the EC8A photo |
+| `FLAGGED` | Over-voting detected (Electoral Act 2022, Section 51) or flagged by the Situation Room |
+
+- **Jurisdiction**: polling unit agents can submit only for their assigned polling unit; ward and LGA coordinators only within their ward or LGA.
+- **Evidence required**: a result cannot be verified without an uploaded EC8A photo. Uploads are validated by file signature (JPEG/PNG/WEBP) and stored under random names.
+- **No silent overwrites**: a verified result is locked. It must be flagged by the Situation Room before a corrected figure can be submitted.
+- **Audit trail**: every submission, photo upload, approval and flag is written to the audit log with the acting user.
+- **Authenticated access**: all result, collation, announcement and activity data requires a signed-in user.
+
+---
+
+## Production Configuration
+
+Set `ENVIRONMENT=production` for any real deployment. In production the backend:
+
+- refuses to start unless `SECRET_KEY` is a random value of at least 32 characters;
+- never creates demo accounts or generated demo results;
+- creates the initial `admin` account only if `ADMIN_INITIAL_PASSWORD` is set (at least 12 characters) and no admin exists yet. Existing passwords are never overwritten.
+
+See `backend/.env.example` for all settings. Use a PostgreSQL `DATABASE_URL` and persistent storage for `UPLOAD_DIR`: serverless `/tmp` storage is wiped between invocations.
+
+In development (the default) the demo dataset and demo accounts (e.g. `admin` / `admin1283`, `agent` / `agent123`) are seeded for evaluation. Do not use development mode with real election data.
 
 ---
 
 ## Database Operational Modes
 
 ### Mode 1: Automatic SQLite (Default / Pre-seeded)
-- Backend automatically seeds all 27 Jigawa State LGAs and default accounts on startup (`/tmp/pollwatch.db` on Vercel).
+- In development, the backend seeds a demo dataset for all 27 Jigawa State LGAs and demo accounts on startup (`/tmp/pollwatch.db` on Vercel).
 
 ### Mode 2: Production PostgreSQL (Neon / Supabase / Vercel Postgres)
 Set environment variables in Vercel / server config:
-- `DATABASE_URL` = `postgresql+asyncpg://user:pass@host:5432/pollwatch`
-- `SYNC_DATABASE_URL` = `postgresql://user:pass@host:5432/pollwatch`
+- `DATABASE_URL` = `postgresql://user:pass@host:5432/pollwatch`
 
 ---
 
@@ -51,6 +82,8 @@ python -m app.seed
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 *API Swagger Documentation: `http://localhost:8000/docs`*
+
+Run the test suite with `PYTHONPATH=. pytest tests -q`.
 
 ### Web Dashboard Setup
 ```bash

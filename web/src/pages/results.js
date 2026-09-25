@@ -3,7 +3,7 @@ import { useRouter } from 'next/router'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { apiFetch, loginUser } from '../lib/api'
+import { apiFetch, uploadEc8aPhoto } from '../lib/api'
 import { 
   BarChart3, 
   CheckCircle2, 
@@ -153,11 +153,6 @@ export default function ResultsDashboardPage() {
     setActionLoading(true)
     setActionMessage(null)
     try {
-      let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      if (!token) {
-        await loginUser('admin', 'password')
-      }
-
       await apiFetch(`/results/approve/${resultId}`, { method: 'POST' })
       setActionMessage({ type: 'success', text: `Result #${resultId} approved and verified officially!` })
       
@@ -210,11 +205,6 @@ export default function ResultsDashboardPage() {
     setActionLoading(true)
     setActionMessage(null)
     try {
-      let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      if (!token) {
-        await loginUser('admin', 'password')
-      }
-
       const notesParam = encodeURIComponent(flagNotes.trim() || 'Discrepancy flagged by Situation Room audit')
       await apiFetch(`/results/flag/${inspectResult.id}?notes=${notesParam}`, { method: 'POST' })
       setActionMessage({ type: 'warning', text: `Result #${inspectResult.id} quarantined as FLAGGED!` })
@@ -484,6 +474,7 @@ export default function ResultsDashboardPage() {
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="VERIFIED">Verified</option>
+                  <option value="PENDING_REVIEW">Pending Review</option>
                   <option value="FLAGGED">Flagged / Over-voting</option>
                   <option value="PENDING_PHOTO">Pending Photo</option>
                 </select>
@@ -632,6 +623,10 @@ export default function ResultsDashboardPage() {
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                   VERIFIED
                                 </span>
+                              ) : r.verification_status === 'PENDING_REVIEW' ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                  PENDING REVIEW
+                                </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                   PENDING PHOTO
@@ -776,21 +771,26 @@ export default function ResultsDashboardPage() {
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                     Form EC8A Primary Photo Evidence
                   </span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    Tamper-Resistant
-                  </span>
                 </div>
 
                 <div className="bg-slate-950 rounded-xl border border-slate-800 p-2 flex items-center justify-center min-h-[350px] overflow-hidden">
-                  <img 
-                    src={inspectResult.ec8a_photo_url || "https://placehold.co/800x1100/141e38/10b981?text=FORM+EC8A+PRIMARY+PROOF%0APolling+Unit+Result+Sheet"} 
-                    alt="Form EC8A Proof"
-                    className="max-h-[360px] object-contain rounded-lg shadow-lg"
-                    onError={(e) => {
-                      e.target.onerror = null
-                      e.target.src = "https://placehold.co/800x1100/141e38/10b981?text=FORM+EC8A+PRIMARY+PROOF%0APolling+Unit+Result+Sheet"
-                    }}
-                  />
+                  {inspectResult.ec8a_photo_url ? (
+                    <a href={inspectResult.ec8a_photo_url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={inspectResult.ec8a_photo_url}
+                        alt="Form EC8A result sheet"
+                        className="max-h-[360px] object-contain rounded-lg shadow-lg"
+                      />
+                    </a>
+                  ) : (
+                    <div className="text-center space-y-2 px-6">
+                      <FileText className="w-10 h-10 text-slate-600 mx-auto" />
+                      <p className="text-sm font-bold text-amber-400">No Form EC8A photo uploaded</p>
+                      <p className="text-[11px] text-slate-500">
+                        This result cannot be verified until the polling unit agent uploads a photo of the signed result sheet.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <p className="text-[11px] text-slate-500 italic text-center">
                   Photographed and signed by PDP Party Agent & INEC Presiding Officer
@@ -890,7 +890,7 @@ export default function ResultsDashboardPage() {
                 <div className="pt-2 space-y-2">
                   <div className="flex gap-2">
                     <button
-                      disabled={actionLoading || inspectResult.is_overvote || inspectResult.verification_status === 'VERIFIED'}
+                      disabled={actionLoading || inspectResult.is_overvote || !inspectResult.ec8a_photo_url || inspectResult.verification_status === 'VERIFIED'}
                       onClick={() => handleApproveResult(inspectResult.id)}
                       className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
@@ -900,7 +900,11 @@ export default function ResultsDashboardPage() {
                         <ShieldCheck className="w-4 h-4" />
                       )}
                       <span>
-                        {inspectResult.verification_status === 'VERIFIED' ? 'Already Verified' : 'Verify & Approve Result'}
+                        {inspectResult.verification_status === 'VERIFIED'
+                          ? 'Already Verified'
+                          : !inspectResult.ec8a_photo_url
+                            ? 'EC8A Photo Required'
+                            : 'Verify & Approve Result'}
                       </span>
                     </button>
 
@@ -1010,10 +1014,7 @@ export default function ResultsDashboardPage() {
               e.preventDefault();
               const f = e.target;
               try {
-                let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-                if (!token) await loginUser('admin', 'password');
-
-                await apiFetch('/results/submit', {
+                const submitted = await apiFetch('/results/submit', {
                   method: 'POST',
                   body: JSON.stringify({
                     polling_unit_id: Number(f.polling_unit_id.value),
@@ -1026,7 +1027,14 @@ export default function ResultsDashboardPage() {
                     notes: f.notes.value || 'Manual entry from Situation Room'
                   })
                 });
-                alert(`Form EC8A ${f.election_type.value} vote tally recorded successfully!`);
+                const photo = f.ec8a_photo.files[0];
+                if (photo) {
+                  await uploadEc8aPhoto(submitted.id, photo);
+                }
+                alert(
+                  `Form EC8A ${f.election_type.value} result recorded` +
+                  (photo ? ' with photo; it is now awaiting review.' : '. Upload the EC8A photo before it can be verified.')
+                );
                 setShowManualEntryModal(false);
                 loadResults();
               } catch (err) {
@@ -1035,7 +1043,7 @@ export default function ResultsDashboardPage() {
             }} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold mb-1 text-slate-400">Target Polling Unit ID</label>
-                <input required name="polling_unit_id" type="number" defaultValue="1" placeholder="Enter PU ID (1 to 4827)" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                <input required name="polling_unit_id" type="number" min="1" placeholder="Enter PU ID" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
               </div>
 
               <div>
@@ -1056,28 +1064,33 @@ export default function ResultsDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold mb-1 text-emerald-500">PDP Votes</label>
-                  <input required name="pdp_votes" type="number" defaultValue="250" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                  <input required name="pdp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
                 </div>
                 <div>
                   <label className="block font-bold mb-1 text-blue-500">APC Votes</label>
-                  <input required name="apc_votes" type="number" defaultValue="180" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                  <input required name="apc_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold mb-1 text-purple-500">NNPP Votes</label>
-                  <input required name="nnpp_votes" type="number" defaultValue="35" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                  <input required name="nnpp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
                 </div>
                 <div>
                   <label className="block font-bold mb-1 text-amber-500">LP Votes</label>
-                  <input required name="lp_votes" type="number" defaultValue="12" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                  <input required name="lp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
                 </div>
               </div>
 
               <div>
                 <label className="block font-bold mb-1 text-slate-400">Rejected Votes</label>
-                <input name="rejected_votes" type="number" defaultValue="5" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+                <input name="rejected_votes" type="number" min="0" placeholder="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-400">Form EC8A Photo (required for verification)</label>
+                <input name="ec8a_photo" type="file" accept="image/jpeg,image/png,image/webp" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-300 outline-none file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200" />
               </div>
 
               <div>

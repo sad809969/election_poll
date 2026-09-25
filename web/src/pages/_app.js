@@ -1,6 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import '../styles/globals.css'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
+import { getToken } from '../lib/api'
+
+const PUBLIC_PATHS = ['/login']
 
 export const ThemeContext = createContext({
   theme: 'dark',
@@ -16,6 +20,19 @@ export const useTheme = () => useContext(ThemeContext)
 export default function App({ Component, pageProps }) {
   const [theme, setThemeState] = useState('dark')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  const router = useRouter()
+  const isPublicPage = PUBLIC_PATHS.includes(router.pathname)
+
+  // Every page except sign-in requires an authenticated session.
+  useEffect(() => {
+    if (isPublicPage || getToken()) {
+      setAuthChecked(true)
+    } else {
+      setAuthChecked(false)
+      router.replace('/login')
+    }
+  }, [router.pathname])
 
   useEffect(() => {
     const saved = localStorage.getItem('jigawa_pollwatch_theme')
@@ -47,7 +64,7 @@ export default function App({ Component, pageProps }) {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <div className={theme === 'dark' ? 'dark-body' : 'light-body'}>
-        <Component {...pageProps} />
+        {(isPublicPage || authChecked) && <Component {...pageProps} />}
       </div>
     </ThemeContext.Provider>
   )

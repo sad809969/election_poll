@@ -68,6 +68,8 @@ app.add_middleware(
 upload_dir = getattr(settings, "UPLOAD_DIR", "uploads")
 os.makedirs(upload_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+# Same files under the API prefix, so the web dashboard's /api proxy can serve them.
+app.mount(f"{settings.API_V1_STR}/uploads", StaticFiles(directory=upload_dir), name="api-uploads")
 
 # Core Routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)

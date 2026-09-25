@@ -13,6 +13,7 @@ dependencies:
   http: any
   geolocator: any
   provider: any
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

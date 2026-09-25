@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 
 class ResultSubmissionScreen extends StatefulWidget {
@@ -21,13 +22,22 @@ class ResultSubmissionScreen extends StatefulWidget {
 
 class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
   String _selectedElectionType = 'GOVERNORSHIP';
-  final _pdpController = TextEditingController(text: '245');
-  final _apcController = TextEditingController(text: '198');
-  final _nnppController = TextEditingController(text: '42');
-  final _lpController = TextEditingController(text: '12');
-  final _rejectedController = TextEditingController(text: '5');
+  final _pdpController = TextEditingController();
+  final _apcController = TextEditingController();
+  final _nnppController = TextEditingController();
+  final _lpController = TextEditingController();
+  final _rejectedController = TextEditingController();
   bool _isSubmitting = false;
-  bool _photoAttached = false;
+  XFile? _ec8aPhoto;
+
+  Future<void> _capturePhoto() async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 2400,
+      imageQuality: 85,
+    );
+    if (photo != null) setState(() => _ec8aPhoto = photo);
+  }
 
   void _submitResult() async {
     final int pdp = int.tryParse(_pdpController.text) ?? 0;
@@ -48,14 +58,21 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
         nnpp: nnpp,
         lp: lp,
         rejected: rejected,
-        photoUrl: _photoAttached ? 'uploads/ec8a_${widget.puCode}_${_selectedElectionType.toLowerCase()}.jpg' : null,
       );
+
+      String status = res['verification_status'] ?? 'SUBMITTED';
+      if (_ec8aPhoto != null) {
+        final upload = await ApiService.uploadEc8aPhoto(
+          resultId: res['id'],
+          filePath: _ec8aPhoto!.path,
+        );
+        status = upload['verification_status'] ?? status;
+      }
 
       setState(() => _isSubmitting = false);
 
       if (mounted) {
         final bool isOvervoting = res['is_overvoting'] == true;
-        final String status = res['verification_status'] ?? 'SUBMITTED';
 
         if (isOvervoting) {
           showDialog(
@@ -198,24 +215,16 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
 
               // Upload Photo Button
               OutlinedButton.icon(
-                onPressed: () {
-                  setState(() => _photoAttached = !_photoAttached);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: const Color(0xFF008751),
-                      content: Text(_photoAttached ? 'EC8A Photo Sheet Attached!' : 'EC8A Photo Removed'),
-                    ),
-                  );
-                },
-                icon: Icon(_photoAttached ? Icons.check_circle : Icons.camera_alt, color: const Color(0xFF10B981)),
+                onPressed: _isSubmitting ? null : _capturePhoto,
+                icon: Icon(_ec8aPhoto != null ? Icons.check_circle : Icons.camera_alt, color: const Color(0xFF10B981)),
                 label: Text(
-                  _photoAttached ? 'Form EC8A Photo Proof Attached' : 'Attach Form EC8A Photo Proof',
+                  _ec8aPhoto != null ? 'EC8A Photo Captured (tap to retake)' : 'Photograph Form EC8A Result Sheet',
                   style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(46),
-                  side: BorderSide(color: _photoAttached ? const Color(0xFF10B981) : const Color(0xFF475569)),
-                  backgroundColor: _photoAttached ? const Color(0xFF10B981).withOpacity(0.1) : null,
+                  side: BorderSide(color: _ec8aPhoto != null ? const Color(0xFF10B981) : const Color(0xFF475569)),
+                  backgroundColor: _ec8aPhoto != null ? const Color(0xFF10B981).withOpacity(0.1) : null,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),

@@ -1,74 +1,75 @@
-import os
 import uuid
 from pathlib import Path
-from fastapi import UploadFile, HTTPException, status
+
+from fastapi import HTTPException, UploadFile, status
+
 from app.core.config import settings
 
-# Allowed file formats for result sheets and incident evidence
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf", ".webp"}
-ALLOWED_MIME_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/pdf",
+# Accepted evidence formats, keyed by extension, with the file signature
+# ("magic bytes") the content must start with. Checking the signature stops
+# arbitrary files being stored under an image extension.
+SIGNATURES = {
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".webp": (b"RIFF",),
+}
+
+CONTENT_TYPE_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
 }
 
 
 class UploadService:
-    def __init__(self, upload_dir: str = getattr(settings, "UPLOAD_DIR", "uploads")):
+    def __init__(self, upload_dir: str = settings.UPLOAD_DIR):
         self.upload_dir = Path(upload_dir)
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-        # Default 5MB max file size
-        self.max_file_size = getattr(settings, "MAX_FILE_SIZE_MB", 5) * 1024 * 1024
+        self.max_file_size = settings.MAX_UPLOAD_MB * 1024 * 1024
 
-    async def save_uploaded_file(self, file: UploadFile, subfolder: str = "results") -> str:
+    def save_image(self, file: UploadFile, subfolder: str) -> str:
         """
-        Validates and saves an uploaded file safely.
-        Returns the relative file path for storing in the database.
+        Validate and store an uploaded image under a random name.
+
+        Returns the path relative to the upload directory,
+        e.g. "results/3f2a....jpg".
         """
-        # 1. Validate File Extension
-        file_ext = Path(file.filename or "").suffix.lower()
-        if file_ext not in ALLOWED_EXTENSIONS:
+        ext = Path(file.filename or "").suffix.lower()
+        if ext not in SIGNATURES:
+            ext = CONTENT_TYPE_EXTENSIONS.get(file.content_type or "", "")
+        if ext not in SIGNATURES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type '{file_ext}'. Allowed formats: {', '.join(ALLOWED_EXTENSIONS)}"
+                detail="Only JPEG, PNG or WEBP images are accepted.",
             )
 
-        # 2. Validate MIME Type
-        if file.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid MIME type '{file.content_type}'."
-            )
-
-        # 3. Read & Validate File Size
-        contents = await file.read()
+        contents = file.file.read(self.max_file_size + 1)
         if len(contents) > self.max_file_size:
-            max_mb = self.max_file_size / (1024 * 1024)
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File size exceeds maximum limit of {max_mb:.1f}MB."
+                detail=f"Image exceeds the {settings.MAX_UPLOAD_MB}MB limit.",
+            )
+        if not contents.startswith(SIGNATURES[ext]) or (
+            ext == ".webp" and contents[8:12] != b"WEBP"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File content is not a valid image.",
             )
 
-        # 4. Generate Unique Filename to prevent overwrite collisions
-        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
         target_dir = self.upload_dir / subfolder
         target_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_path = target_dir / unique_filename
+        filename = f"{uuid.uuid4().hex}{ext}"
 
-        # 5. Save File to Disk
         try:
-            with open(file_path, "wb") as f:
-                f.write(contents)
-        except Exception as e:
+            (target_dir / filename).write_bytes(contents)
+        except OSError as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to write file to storage."
+                detail="Failed to store the uploaded image.",
             ) from e
 
-        # Return relative path (e.g., 'uploads/results/a1b2c3d4.jpg')
-        return str(Path(subfolder) / unique_filename)
+        return f"{subfolder}/{filename}"
 
 
 upload_service = UploadService()

@@ -140,8 +140,11 @@ def test_dashboard_stats_endpoint():
 
 def test_results_get_and_post():
     """Test results summary, breakdown, results list, and submit."""
-    # 1. GET /api/results
-    response = client.get("/api/results")
+    headers = get_admin_headers()
+
+    # 1. GET /api/results requires authentication
+    assert client.get("/api/results").status_code == 401
+    response = client.get("/api/results", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "summary" in data
@@ -151,7 +154,6 @@ def test_results_get_and_post():
     assert isinstance(data["results"], list)
 
     # 2. POST /api/results (Form EC8A entry from frontend)
-    headers = get_admin_headers()
     pus_resp = client.get("/api/electoral/polling-units", headers=headers)
     first_pu_id = pus_resp.json()[0]["id"]
 
@@ -160,6 +162,7 @@ def test_results_get_and_post():
         headers=headers,
         json={
             "polling_unit_id": first_pu_id,
+            "election_type": "SENATORIAL",
             "pdp_votes": 350,
             "apc_votes": 210,
             "nnpp_votes": 45,
@@ -226,7 +229,7 @@ def test_announcements_get_and_post():
     assert post_resp.json()["title"] == "Mandatory Agent Briefing"
 
     # 2. GET /api/announcements
-    get_resp = client.get("/api/announcements")
+    get_resp = client.get("/api/announcements", headers=headers)
     assert get_resp.status_code == 200
     announcements = get_resp.json()
     assert len(announcements) > 0
@@ -324,6 +327,7 @@ def test_overvoting_auto_flag_and_protection():
         headers=headers,
         json={
             "polling_unit_id": pu_id,
+            "election_type": "HOUSE_OF_REPS",
             "pdp_votes": registered + 200,
             "apc_votes": 200,
             "nnpp_votes": 50,
@@ -417,7 +421,7 @@ def test_delete_agent_with_results_deactivates():
     """Test that an admin cannot physically delete an agent with existing results."""
     headers = get_admin_headers()
 
-    results_resp = client.get("/api/results")
+    results_resp = client.get("/api/results", headers=headers)
     assert results_resp.status_code == 200
     results_data = results_resp.json()
     assert len(results_data["results"]) > 0

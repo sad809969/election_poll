@@ -27,12 +27,41 @@ export async function apiFetch(endpoint, options = {}) {
     headers,
   });
 
+  return handleResponse(response);
+}
+
+async function handleResponse(response) {
+  if (response.status === 401 && typeof window !== 'undefined') {
+    // Session missing or expired: send the user back to sign in.
+    logoutUser();
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  }
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Request failed with status ${response.status}`);
   }
 
   return response.json();
+}
+
+/**
+ * Upload the photographed Form EC8A sheet for a submitted result.
+ */
+export async function uploadEc8aPhoto(resultId, file) {
+  const token = getToken();
+  const body = new FormData();
+  body.append('file', file);
+
+  const response = await fetch(`${API_BASE}/results/${resultId}/ec8a-photo`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+
+  return handleResponse(response);
 }
 
 /**

@@ -62,6 +62,7 @@ def record_activity(
 def get_activities(
     polling_unit_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     query = db.query(ElectionActivity)
     if polling_unit_id:

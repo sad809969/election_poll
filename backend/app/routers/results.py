@@ -1,13 +1,19 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
 from app.models import VoteResult, PollingUnit, LGA, User
 from app.schemas import VoteResultCreate
-from app.core.permissions import require_admin, require_agent
 from app.core.audit import write_audit_log
+from app.core.config import settings
+from app.core.permissions import (
+    ensure_polling_unit_jurisdiction,
+    require_admin,
+    require_agent,
+)
+from app.services.upload_service import upload_service
 
 router = APIRouter(
     prefix="/results",
@@ -26,7 +32,8 @@ def get_results_dashboard(
     search: Optional[str] = None,
     limit: int = 100,
     skip: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: User = Depends(require_agent),
 ):
     agg_query = db.query(
         func.sum(VoteResult.pdp_votes),
@@ -228,6 +235,18 @@ def get_results_dashboard(
 # Submit Result
 # ===========================================================
 
+def _review_status(result: VoteResult, is_overvoting: bool) -> str:
+    """
+    Status of a result that has not yet been approved by the Situation Room.
+
+    VERIFIED is never set here: only an admin approval (with the EC8A photo
+    on file) can verify a result.
+    """
+    if is_overvoting:
+        return "FLAGGED"
+    return "PENDING_REVIEW" if result.ec8a_photo_url else "PENDING_PHOTO"
+
+
 @router.post("")
 @router.post("/submit")
 def submit_result(
@@ -247,6 +266,8 @@ def submit_result(
             status_code=404,
             detail="Polling Unit not found.",
         )
+
+    ensure_polling_unit_jurisdiction(current_user, polling_unit)
 
     pdp = payload.pdp_votes
     apc = payload.apc_votes
@@ -268,9 +289,9 @@ def submit_result(
     # Discrepancy & Over-voting check: Electoral Act 2022 Section 51
     registered = polling_unit.registered_voters or 0
     is_overvoting = total_cast > registered
-    auto_status = "FLAGGED" if is_overvoting else ("VERIFIED" if payload.ec8a_photo_url else "PENDING_PHOTO")
+    overvote_note = f"[ALERT] Over-voting detected: {total_cast} votes cast vs {registered} registered."
 
-    existing = (
+    result = (
         db.query(VoteResult)
         .filter(
             VoteResult.polling_unit_id == payload.polling_unit_id,
@@ -279,76 +300,110 @@ def submit_result(
         .first()
     )
 
-    if existing:
-        existing.agent_id = current_user.id
-        existing.election_type = election_type
-        existing.pdp_votes = pdp
-        existing.apc_votes = apc
-        existing.nnpp_votes = nnpp
-        existing.lp_votes = lp
-        existing.others_votes = others
-        existing.rejected_votes = rejected
-        existing.total_valid_votes = total_valid
-        existing.total_votes_cast = total_cast
-        existing.verification_status = auto_status
-        if payload.ec8a_photo_url:
-            existing.ec8a_photo_url = payload.ec8a_photo_url
-        if is_overvoting:
-            existing.notes = (existing.notes or "") + f" | [ALERT] Over-voting detected: {total_cast} votes cast vs {registered} registered."
-        elif payload.notes:
-            existing.notes = payload.notes
-
-        write_audit_log(
-            db=db,
-            user=current_user,
-            action="SUBMIT_RESULT",
-            details=f"Polling Unit {payload.polling_unit_id} [{election_type}] (Status: {auto_status}, Over-voting: {is_overvoting})",
+    if result and result.verification_status == "VERIFIED":
+        raise HTTPException(
+            status_code=409,
+            detail="This result has already been verified. The Situation Room must flag it before it can be resubmitted.",
         )
 
-        db.commit()
-        db.refresh(existing)
+    is_update = result is not None
+    if not is_update:
+        result = VoteResult(
+            polling_unit_id=payload.polling_unit_id,
+            election_type=election_type,
+        )
+        db.add(result)
 
-        return {
-            "message": f"{election_type} Result updated successfully",
-            "id": existing.id,
-            "election_type": existing.election_type,
-            "verification_status": existing.verification_status,
-            "is_overvoting": is_overvoting,
-        }
+    result.agent_id = current_user.id
+    result.pdp_votes = pdp
+    result.apc_votes = apc
+    result.nnpp_votes = nnpp
+    result.lp_votes = lp
+    result.others_votes = others
+    result.rejected_votes = rejected
+    result.total_valid_votes = total_valid
+    result.total_votes_cast = total_cast
 
-    result = VoteResult(
-        polling_unit_id=payload.polling_unit_id,
-        agent_id=current_user.id,
-        election_type=election_type,
-        pdp_votes=pdp,
-        apc_votes=apc,
-        nnpp_votes=nnpp,
-        lp_votes=lp,
-        others_votes=others,
-        rejected_votes=rejected,
-        total_valid_votes=total_valid,
-        total_votes_cast=total_cast,
-        ec8a_photo_url=payload.ec8a_photo_url,
-        notes=(payload.notes or "") + (f" | [ALERT] Over-voting: {total_cast} vs {registered}" if is_overvoting else ""),
-        verification_status=auto_status,
-    )
+    notes = [n for n in (result.notes if is_update else None, payload.notes) if n]
+    if is_overvoting:
+        notes.append(overvote_note)
+    result.notes = " | ".join(notes) or None
 
-    db.add(result)
+    result.verification_status = _review_status(result, is_overvoting)
+
     write_audit_log(
         db=db,
         user=current_user,
         action="SUBMIT_RESULT",
-        details=f"Polling Unit {payload.polling_unit_id} [{election_type}] (Status: {auto_status}, Over-voting: {is_overvoting})",
+        details=(
+            f"Polling Unit {payload.polling_unit_id} [{election_type}] "
+            f"{'updated' if is_update else 'submitted'}: PDP {pdp}, APC {apc}, NNPP {nnpp}, "
+            f"LP {lp}, Others {others}, Rejected {rejected} "
+            f"(Status: {result.verification_status}, Over-voting: {is_overvoting})"
+        ),
+    )
+
+    db.commit()
+    db.refresh(result)
+
+    return {
+        "message": f"{election_type} Result {'updated' if is_update else 'submitted'} successfully",
+        "id": result.id,
+        "election_type": result.election_type,
+        "verification_status": result.verification_status,
+        "is_overvoting": is_overvoting,
+    }
+
+
+# ===========================================================
+# Upload Form EC8A Photo
+# ===========================================================
+
+@router.post("/{result_id}/ec8a-photo")
+def upload_ec8a_photo(
+    result_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_agent),
+):
+    result = db.query(VoteResult).filter(VoteResult.id == result_id).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Result not found.")
+
+    polling_unit = (
+        db.query(PollingUnit)
+        .filter(PollingUnit.id == result.polling_unit_id)
+        .first()
+    )
+    ensure_polling_unit_jurisdiction(current_user, polling_unit)
+
+    if result.verification_status == "VERIFIED":
+        raise HTTPException(
+            status_code=409,
+            detail="This result has already been verified; its EC8A photo cannot be replaced.",
+        )
+
+    stored_path = upload_service.save_image(file, subfolder="results")
+    result.ec8a_photo_url = f"{settings.API_V1_STR}/uploads/{stored_path}"
+
+    is_overvoting = result.total_votes_cast > (polling_unit.registered_voters or 0)
+    if result.verification_status != "FLAGGED":
+        result.verification_status = _review_status(result, is_overvoting)
+
+    write_audit_log(
+        db=db,
+        user=current_user,
+        action="UPLOAD_EC8A_PHOTO",
+        details=f"Result {result_id} (Polling Unit {result.polling_unit_id}) EC8A photo uploaded: {stored_path}",
     )
     db.commit()
     db.refresh(result)
 
     return {
-        "message": f"{election_type} Result submitted successfully",
+        "message": "Form EC8A photo uploaded successfully.",
         "id": result.id,
-        "election_type": result.election_type,
+        "ec8a_photo_url": result.ec8a_photo_url,
         "verification_status": result.verification_status,
-        "is_overvoting": is_overvoting,
     }
 
 
@@ -385,6 +440,12 @@ def approve_result(
         raise HTTPException(
             status_code=400,
             detail=f"Cannot approve result: Over-voting detected ({result.total_votes_cast} votes cast exceeds {polling_unit.registered_voters} registered voters). Must remain FLAGGED.",
+        )
+
+    if not result.ec8a_photo_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot approve result: no Form EC8A photo has been uploaded.",
         )
 
     result.verification_status = "VERIFIED"
