@@ -61,6 +61,7 @@ CREATE TABLE users (
     lga_id INT REFERENCES lgas(id) ON DELETE SET NULL,
     ward_id INT REFERENCES wards(id) ON DELETE SET NULL,
     polling_unit_id INT REFERENCES polling_units(id) ON DELETE SET NULL,
+    allowed_pages TEXT,
     last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
