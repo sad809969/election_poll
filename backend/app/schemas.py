@@ -11,6 +11,8 @@ class Token(BaseModel):
     token_type: str
     role: str
     username: str
+    full_name: Optional[str] = None
+    allowed_pages: Optional[str] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -26,6 +28,7 @@ class UserOut(BaseModel):
     lga_id: Optional[int] = None
     ward_id: Optional[int] = None
     polling_unit_id: Optional[int] = None
+    allowed_pages: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,6 +147,7 @@ class AgentCreate(BaseModel):
     lga_id: int | None = None
     ward_id: int | None = None
     polling_unit_id: int | None = None
+    allowed_pages: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -156,6 +160,7 @@ class AgentUpdate(BaseModel):
     lga_id: int | None = None
     ward_id: int | None = None
     polling_unit_id: int | None = None
+    allowed_pages: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -168,6 +173,7 @@ class AgentResponse(BaseModel):
     lga_id: int | None = None
     ward_id: int | None = None
     polling_unit_id: int | None = None
+    allowed_pages: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

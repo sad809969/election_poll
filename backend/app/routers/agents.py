@@ -101,6 +101,7 @@ def create_agent(
         lga_id=payload.lga_id,
         ward_id=payload.ward_id,
         polling_unit_id=payload.polling_unit_id,
+        allowed_pages=payload.allowed_pages,
     )
 
     db.add(agent)
@@ -137,6 +138,62 @@ def get_agent(
             status_code=404,
             detail="Agent not found",
         )
+
+    return agent
+
+
+@router.patch(
+    "/{agent_id}",
+    response_model=AgentResponse,
+)
+def update_agent(
+    agent_id: int,
+    payload: AgentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    agent = (
+        db.query(User)
+        .filter(User.id == agent_id)
+        .first()
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent not found",
+        )
+
+    if payload.full_name is not None:
+        agent.full_name = payload.full_name
+    if payload.username is not None:
+        agent.username = payload.username
+    if payload.password:
+        agent.hashed_password = get_password_hash(payload.password)
+    if payload.phone_number is not None:
+        agent.phone_number = payload.phone_number
+    if payload.role is not None:
+        agent.role = payload.role
+    if payload.is_active is not None:
+        agent.is_active = payload.is_active
+    if payload.lga_id is not None:
+        agent.lga_id = payload.lga_id
+    if payload.ward_id is not None:
+        agent.ward_id = payload.ward_id
+    if payload.polling_unit_id is not None:
+        agent.polling_unit_id = payload.polling_unit_id
+    if payload.allowed_pages is not None:
+        agent.allowed_pages = payload.allowed_pages
+
+    db.commit()
+    db.refresh(agent)
+
+    write_audit_log(
+        db=db,
+        user=current_user,
+        action="UPDATE_AGENT",
+        details=f"Updated agent '{agent.username}' permissions/profile",
+    )
 
     return agent
 

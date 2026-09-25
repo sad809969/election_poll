@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { 
@@ -23,11 +24,64 @@ import {
   X
 } from 'lucide-react'
 import { useTheme } from '../pages/_app'
+import { getCurrentUser } from '../lib/api'
 
 export default function Sidebar() {
   const router = useRouter()
   const { theme, mobileOpen, closeMobile } = useTheme()
   const isDark = theme === 'dark'
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    if (router.query?.demo_pages) {
+      setCurrentUser({
+        username: 'custom_agent',
+        role: router.query.demo_role || 'Custom Agent',
+        allowed_pages: router.query.demo_pages.split(',')
+      })
+      return
+    }
+    const u = getCurrentUser()
+    setCurrentUser(u)
+  }, [router.query])
+
+  const role = (currentUser?.role || '').toLowerCase()
+  const isSuperAdmin = role.includes('super admin') || role.includes('master') || role === 'admin'
+
+  // Access Permission Checker
+  const canAccess = (path) => {
+    // 1. Super Admin has unrestricted access to everything
+    if (isSuperAdmin) return true
+
+    // 2. If user has explicit custom allowed_pages list, honor it strictly
+    if (currentUser?.allowed_pages && Array.isArray(currentUser.allowed_pages) && currentUser.allowed_pages.length > 0) {
+      return currentUser.allowed_pages.includes(path)
+    }
+
+    // 3. Fallback to standard role defaults for accounts without explicit overrides
+    if (role.includes('agent')) {
+      return ['/results', '/incidents', '/notifications'].includes(path)
+    }
+    if (role.includes('ward')) {
+      return ['/polling-units', '/results', '/incidents', '/communication', '/notifications'].includes(path)
+    }
+    if (role.includes('lga')) {
+      return ['/collation', '/polling-units', '/results', '/incidents', '/communication', '/broadcast', '/notifications'].includes(path)
+    }
+    if (role.includes('officer') || role.includes('analyst') || role.includes('chairman') || role.includes('director')) {
+      return ['/', '/map', '/incidents', '/agents', '/polling-units', '/results', '/collation', '/election-results', '/communication', '/broadcast', '/notifications'].includes(path)
+    }
+
+    // Default open access if unauthenticated or general view
+    return true
+  }
+
+  // Can access Side A Master Control Panel
+  const canAccessSideA = isSuperAdmin || (
+    currentUser?.allowed_pages && 
+    Array.isArray(currentUser.allowed_pages) && 
+    currentUser.allowed_pages.some(p => p.startsWith('side-a') || p === '/system-admin')
+  )
 
   const isActive = (path) => router.pathname === path
 
@@ -44,6 +98,33 @@ export default function Sidebar() {
   const sectionLabelClass = isDark 
     ? 'px-3.5 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase mt-5 mb-2' 
     : 'px-3.5 text-[10px] font-extrabold tracking-wider text-slate-400 uppercase mt-5 mb-2'
+
+  // Navigation Items Grouping
+  const mainItems = [
+    { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { label: 'Interactive Map', path: '/map', icon: Map },
+    { label: 'Incident Tracker', path: '/incidents', icon: AlertTriangle },
+    { label: 'Agents', path: '/agents', icon: Users },
+    { label: 'Polling Units', path: '/polling-units', icon: Building2 },
+  ].filter(item => canAccess(item.path))
+
+  const resultsItems = [
+    { label: 'Results Dashboard', path: '/results', icon: BarChart3 },
+    { label: 'Collation Center', path: '/collation', icon: PieChart },
+    { label: 'Results by Office & Export', path: '/election-results', icon: FileSpreadsheet, iconClass: 'text-emerald-400' },
+  ].filter(item => canAccess(item.path))
+
+  const commsItems = [
+    { label: 'Communication Center', path: '/communication', icon: MessageSquare },
+    { label: 'Broadcast Messages', path: '/broadcast', icon: Radio },
+    { label: 'Notifications', path: '/notifications', icon: Bell },
+  ].filter(item => canAccess(item.path))
+
+  const adminItems = [
+    { label: 'User Management', path: '/admin', icon: UserCheck },
+    { label: 'System Settings', path: '/settings', icon: Settings },
+    { label: 'Audit Logs', path: '/audit-logs', icon: FileText },
+  ].filter(item => canAccess(item.path))
 
   return (
     <>
@@ -87,106 +168,114 @@ export default function Sidebar() {
 
         {/* Nav Menu */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-          <div className={sectionLabelClass}>MAIN</div>
-          <Link href="/" onClick={closeMobile} className={navItemClass('/')}>
-            <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard</span>
-          </Link>
-          <Link href="/map" onClick={closeMobile} className={navItemClass('/map')}>
-            <Map className="w-4 h-4" />
-            <span>Interactive Map</span>
-          </Link>
-          <Link href="/incidents" onClick={closeMobile} className={navItemClass('/incidents')}>
-            <AlertTriangle className="w-4 h-4" />
-            <span>Incident Tracker</span>
-          </Link>
-          <Link href="/agents" onClick={closeMobile} className={navItemClass('/agents')}>
-            <Users className="w-4 h-4" />
-            <span>Agents</span>
-          </Link>
-          <Link href="/polling-units" onClick={closeMobile} className={navItemClass('/polling-units')}>
-            <Building2 className="w-4 h-4" />
-            <span>Polling Units</span>
-          </Link>
+          {/* MAIN SECTION */}
+          {mainItems.length > 0 && (
+            <>
+              <div className={sectionLabelClass}>MAIN</div>
+              {mainItems.map(item => {
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </>
+          )}
 
-          <div className={sectionLabelClass}>RESULTS</div>
-          <Link href="/results" onClick={closeMobile} className={navItemClass('/results')}>
-            <BarChart3 className="w-4 h-4" />
-            <span>Results Dashboard</span>
-          </Link>
-          <Link href="/collation" onClick={closeMobile} className={navItemClass('/collation')}>
-            <PieChart className="w-4 h-4" />
-            <span>Collation Center</span>
-          </Link>
-          <Link href="/election-results" onClick={closeMobile} className={navItemClass('/election-results')}>
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>Results by Office & Export</span>
-          </Link>
+          {/* RESULTS SECTION */}
+          {resultsItems.length > 0 && (
+            <>
+              <div className={sectionLabelClass}>RESULTS</div>
+              {resultsItems.map(item => {
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
+                    <Icon className={`w-4 h-4 ${item.iconClass || ''}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </>
+          )}
 
-          <div className={sectionLabelClass}>COMMUNICATION</div>
-          <Link href="/communication" onClick={closeMobile} className={navItemClass('/communication')}>
-            <MessageSquare className="w-4 h-4" />
-            <span>Communication Center</span>
-          </Link>
-          <Link href="/broadcast" onClick={closeMobile} className={navItemClass('/broadcast')}>
-            <Radio className="w-4 h-4" />
-            <span>Broadcast Messages</span>
-          </Link>
-          <Link href="/notifications" onClick={closeMobile} className={navItemClass('/notifications')}>
-            <Bell className="w-4 h-4" />
-            <span>Notifications</span>
-          </Link>
+          {/* COMMUNICATION SECTION */}
+          {commsItems.length > 0 && (
+            <>
+              <div className={sectionLabelClass}>COMMUNICATION</div>
+              {commsItems.map(item => {
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </>
+          )}
 
-          <div className={sectionLabelClass}>ADMIN & MANAGEMENT</div>
-          <Link href="/admin" onClick={closeMobile} className={navItemClass('/admin')}>
-            <UserCheck className="w-4 h-4" />
-            <span>User Management</span>
-          </Link>
-          <Link href="/settings" onClick={closeMobile} className={navItemClass('/settings')}>
-            <Settings className="w-4 h-4" />
-            <span>System Settings</span>
-          </Link>
-          <Link href="/audit-logs" onClick={closeMobile} className={navItemClass('/audit-logs')}>
-            <FileText className="w-4 h-4" />
-            <span>Audit Logs</span>
-          </Link>
+          {/* ADMIN & MANAGEMENT SECTION */}
+          {adminItems.length > 0 && (
+            <>
+              <div className={sectionLabelClass}>ADMIN & MANAGEMENT</div>
+              {adminItems.map(item => {
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </>
+          )}
 
           {/* Quick Actions Panel */}
-          <div className={`mt-6 pt-4 border-t ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
-            <div className={`rounded-xl p-3 space-y-2 border ${
-              isDark ? 'bg-pdp/10 border-pdp/20' : 'bg-emerald-50/60 border-emerald-200'
-            }`}>
-              <div className="flex items-center gap-2 text-xs font-bold text-pdp">
-                <Activity className="w-4 h-4" />
-                <span>Quick Actions</span>
+          {(isSuperAdmin || canAccess('/broadcast') || canAccess('/communication') || canAccess('/results')) && (
+            <div className={`mt-6 pt-4 border-t ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
+              <div className={`rounded-xl p-3 space-y-2 border ${
+                isDark ? 'bg-pdp/10 border-pdp/20' : 'bg-emerald-50/60 border-emerald-200'
+              }`}>
+                <div className="flex items-center gap-2 text-xs font-bold text-pdp">
+                  <Activity className="w-4 h-4" />
+                  <span>Quick Actions</span>
+                </div>
+                {canAccess('/broadcast') && (
+                  <button 
+                    onClick={() => { closeMobile(); router.push('/broadcast'); }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-pdp hover:bg-pdp-dark text-white text-[11px] font-semibold transition shadow-sm"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Broadcast</span>
+                  </button>
+                )}
+                {canAccess('/communication') && (
+                  <button 
+                    onClick={() => { closeMobile(); router.push('/communication'); }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
+                      isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Add Announcement</span>
+                  </button>
+                )}
+                {canAccess('/results') && (
+                  <button 
+                    onClick={() => { closeMobile(); router.push('/results'); }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
+                      isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Reports</span>
+                  </button>
+                )}
               </div>
-              <button 
-                onClick={() => { closeMobile(); router.push('/broadcast'); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-pdp hover:bg-pdp-dark text-white text-[11px] font-semibold transition shadow-sm"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Broadcast</span>
-              </button>
-              <button 
-                onClick={() => { closeMobile(); router.push('/communication'); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                }`}
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Add Announcement</span>
-              </button>
-              <button 
-                onClick={() => { closeMobile(); router.push('/results'); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                }`}
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Reports</span>
-              </button>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer System Version & Discreet Master Admin Link */}
@@ -194,14 +283,16 @@ export default function Sidebar() {
           isDark ? 'border-slate-800/40 text-slate-500' : 'border-slate-200 text-slate-400'
         }`}>
           <span>© 2027 Jigawa PDP</span>
-          <Link
-            href="/system-admin"
-            title="Side A Master Control Panel (Operator / Admin)"
-            className="flex items-center gap-1 font-mono text-slate-500 hover:text-emerald-400 transition"
-          >
-            <Lock className="w-3 h-3" />
-            <span>Side A</span>
-          </Link>
+          {canAccessSideA && (
+            <Link
+              href="/system-admin"
+              title="Side A Master Control Panel (Operator / Admin)"
+              className="flex items-center gap-1 font-mono text-emerald-400 hover:text-emerald-300 transition"
+            >
+              <Lock className="w-3 h-3" />
+              <span>Side A</span>
+            </Link>
+          )}
         </div>
       </aside>
     </>

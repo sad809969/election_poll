@@ -82,6 +82,8 @@ def login_for_access_token(
         "token_type": "bearer",
         "role": user.role,
         "username": user.username,
+        "full_name": user.full_name,
+        "allowed_pages": user.allowed_pages,
     }
 
 

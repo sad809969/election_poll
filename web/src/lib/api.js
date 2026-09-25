@@ -60,12 +60,23 @@ export async function loginUser(username, password) {
 
   // Save JWT token and user info to localStorage
   if (typeof window !== 'undefined' && data.access_token) {
+    let parsedPages = null;
+    if (data.allowed_pages) {
+      try {
+        parsedPages = typeof data.allowed_pages === 'string' ? JSON.parse(data.allowed_pages) : data.allowed_pages;
+      } catch (e) {
+        parsedPages = data.allowed_pages.split(',').map(s => s.trim());
+      }
+    }
+
     localStorage.setItem('token', data.access_token);
     localStorage.setItem(
       'user',
       JSON.stringify({
         username: data.username,
         role: data.role,
+        full_name: data.full_name || data.username,
+        allowed_pages: parsedPages,
       })
     );
   }
