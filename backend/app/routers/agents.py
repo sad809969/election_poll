@@ -24,14 +24,14 @@ router = APIRouter(
     response_model=list[AgentResponse],
 )
 def get_agents(
+    limit: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor),
 ):
-    return (
-        db.query(User)
-        .order_by(User.full_name)
-        .all()
-    )
+    query = db.query(User).order_by(User.id.desc())
+    if limit is not None and limit > 0:
+        query = query.limit(limit)
+    return query.all()
 
 
 @router.post(
