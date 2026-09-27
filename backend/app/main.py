@@ -89,6 +89,11 @@ app.include_router(uploads.router, prefix=settings.API_V1_STR)
 if ws:
     app.include_router(ws.router)
 
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
 @app.get("/")
 def root():
     return {

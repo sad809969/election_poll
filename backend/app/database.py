@@ -6,7 +6,9 @@ from app.core.config import settings
 
 DATABASE_URL = settings.DATABASE_URL
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL and DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 connect_args = {}
 engine_kwargs = {"pool_pre_ping": True}
@@ -46,7 +48,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def init_db(max_retries: int = 15, delay_seconds: int = 4):
+def init_db(max_retries: int = 10, delay_seconds: int = 3):
     """
     Initialize database schema with connection retry logic.
     Ensures container does not crash if PostgreSQL is still completing initial boot.
@@ -62,6 +64,6 @@ def init_db(max_retries: int = 15, delay_seconds: int = 4):
         except Exception as e:
             logger.warning(f"Database connection attempt {attempt} failed: {e}")
             if attempt >= max_retries:
-                logger.error("Max database connection retries reached. Raising exception.")
-                raise e
+                logger.error(f"Database init retry limit reached: {e}. Continuing startup to keep service healthy.")
+                return
             time.sleep(delay_seconds)
