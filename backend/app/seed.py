@@ -166,62 +166,22 @@ def seed_database(db: Session = None):
         from app.models import Ward, PollingUnit, Incident, VoteResult
 
         all_lgas = db.query(LGA).all()
-        statuses = ["Normal", "Normal", "Normal", "Attention", "Normal", "Critical", "Normal"]
-        categories = ["BVAS Issues", "Late Officials", "Minor Crowd", "Intimidation", "Vote Buying", "Ballot Shortage"]
+        from app.seed_full import KNOWN_WARDS
 
-        for index, lga in enumerate(all_lgas):
-            for w_idx in [1, 2]:
-                ward_name = f"{lga.name} Ward {w_idx}"
-                ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.name == ward_name).first()
-                if not ward:
-                    ward = Ward(lga_id=lga.id, name=ward_name, code=f"{lga.code}-W{w_idx}")
-                    db.add(ward)
-                    db.commit()
-                    db.refresh(ward)
+        # Verify that all 27 LGAs have authentic INEC wards populated
+        for lga in all_lgas:
+            real_wards = KNOWN_WARDS.get(lga.name, [])
+            for w_idx, ward_name in enumerate(real_wards, start=1):
+                ward_code = f"{lga.code}-W{w_idx:02d}"
+                existing_ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.code == ward_code).first()
+                if not existing_ward:
+                    existing_ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.name == ward_name).first()
+                if not existing_ward:
+                    new_ward = Ward(lga_id=lga.id, name=ward_name, code=ward_code)
+                    db.add(new_ward)
+        db.commit()
 
-                for p_idx in [1, 2]:
-                    pu_code = f"{lga.code}-{w_idx:02d}{p_idx:02d}"
-                    pu_name = f"{pu_code} - {ward_name} Unit {p_idx}"
-                    status = statuses[(index + w_idx + p_idx) % len(statuses)]
-                    registered = 500 + ((index * 37 + w_idx * 13 + p_idx * 7) % 450)
-
-                    pu = db.query(PollingUnit).filter(PollingUnit.code == pu_code).first()
-                    if not pu:
-                        pu = PollingUnit(
-                            lga_id=lga.id,
-                            ward_id=ward.id,
-                            code=pu_code,
-                            name=pu_name,
-                            status=status,
-                            registered_voters=registered,
-                            latitude=11.7 + (index * 0.03),
-                            longitude=9.3 + (w_idx * 0.02)
-                        )
-                        db.add(pu)
-                        db.commit()
-                        db.refresh(pu)
-
-                        # Agent User
-                        agent_uname = f"agent_{lga.code.lower()}_w{w_idx}_p{p_idx}"
-                        agent = db.query(User).filter(User.username == agent_uname).first()
-                        if not agent:
-                            agent = User(
-                                full_name=f"Agent {lga.name} W{w_idx}P{p_idx}",
-                                username=agent_uname,
-                                hashed_password=get_password_hash("agent123"),
-                                role="Polling Unit Agent",
-                                polling_unit_id=pu.id,
-                                lga_id=lga.id,
-                                ward_id=ward.id
-                            )
-                            db.add(agent)
-                            db.commit()
-                            db.refresh(agent)
-
-                        # Dummy VoteResult and Incident generation removed for real live operations.
-                        pass
-
-        print("Successfully seeded all 27 Jigawa State LGAs, Wards, and Polling Units (0 dummy results, 0 dummy incidents)!")
+        print("Successfully seeded all 27 Jigawa State LGAs and authentic INEC Wards (0 dummy results, 0 dummy incidents)!")
 
     except Exception as e:
         db.rollback()

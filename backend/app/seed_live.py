@@ -97,7 +97,11 @@ def clean_and_seed_live_database():
             db.add(admin)
             logger.info("Created primary Super Admin user (admin / PDP-ADMIN-2027)")
 
-        # 5. Seed official political parties
+        # 5. Ensure all wards are authentic INEC wards and no duplicates exist
+        from app.migrate_real_wards import migrate_wards
+        migrate_wards(db=db)
+
+        # 6. Seed official political parties
         logger.info("Seeding official INEC registered political parties...")
         for p_data in OFFICIAL_PARTIES:
             existing = db.query(Party).filter(
