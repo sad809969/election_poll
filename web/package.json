@@ -1,13 +1,14 @@
+
 {
   "name": "jigawa-pdp-pollwatch-web",
   "version": "1.0.0",
   "private": true,
- "scripts": {
-  "dev": "next dev -p 3000",
-  "build": "next build",
-  "start": "next start -p 3000",
-  "lint": "next lint"
-},
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
   "dependencies": {
     "clsx": "^2.1.0",
     "express": "^5.2.1",
