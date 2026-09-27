@@ -1,77 +1,104 @@
-# Implementation Plan: Fix Polling Unit Agent Login & Production Deployment Setup for Render and Neotech Hosting
+# Implementation Plan: Mobile App Camera Placeholder & Live GPS Location Geotagging
 
-## 1. Problem Diagnosis & Root Causes
-
-### Issue A: Polling Unit Agent Details Not Accepted on Mobile App
-1. **Vercel Ephemeral SQLite Reset**:
-   - On Vercel, the backend database is located in `/tmp/pollwatch.db`.
-   - In serverless environments, each Lambda function is spun up independently and `/tmp` is wiped on cold starts.
-   - When a polling unit agent is created in Side A on the web, it exists only in that specific transient container. When the mobile app attempts to authenticate against `https://jigawa-pdp-pollwatch-backend.vercel.app/api/auth/login`, it hits a cold-started container where the newly created agent does not exist in the database, triggering `401 Unauthorized: Incorrect username or password`.
-2. **Phone Number & Whitespace Mismatches**:
-   - Polling unit agents frequently enter phone numbers with spaces (e.g., `0803 123 4567`) or international prefixes (`+234...`), while the login screen might send `08031234567`. The backend previously did an exact string match without stripping spaces or formatting.
-3. **Mobile Network Timeout on Cold Starts**:
-   - `mobile/lib/services/api_service.dart` had a tight 6-second timeout. Serverless cold starts or slow mobile cellular connections in the field exceed 6 seconds, causing connection drops.
-4. **Chained Request Failure**:
-   - After `/auth/login`, the mobile app attempted a second call to `/auth/me` and a third to `/electoral/polling-units/$puId`. If the agent was created without a polling unit assigned, or if the PU call timed out, login failed.
-
-### Issue B: Need for Persistent Production Hosting (Render & Neotech Hosting)
-- The application requires persistent databases (PostgreSQL or persistent disk) so that all agents, polling units, and results created anywhere are permanently saved and accessible across all web and mobile clients worldwide.
-
----
-
-## 2. Proposed Changes
-
-### Component 1: Backend Auth & Phone Normalization (`backend/app/routers/auth.py`)
-- Clean and normalize phone numbers (strip spaces, hyphens, and standard Nigeria `+234`/`0` prefixes) so logging in with `0803 123 4567`, `08031234567`, or `+2348031234567` succeeds seamlessly.
-- Perform case-insensitive username checks (`func.lower(User.username) == form_data.username.lower()`).
-- Return full agent profile data directly in the `/auth/login` response (`id`, `full_name`, `username`, `role`, `polling_unit_id`, `lga_id`, `ward_id`, `allowed_pages`) so mobile clients have instant access without chaining additional requests.
-
-### Component 2: Mobile App Resilience & Server Presets (`mobile/`)
-- In `api_service.dart`:
-  - Increase timeout to 15 seconds to support field cellular connections.
-  - Parse user details directly from the login response.
-  - If PU details are missing or null, provide graceful fallbacks (`Assigned Polling Unit`, `DUT-01`, `Jigawa Command`) so the agent is never locked out of their dashboard.
-- In `login_screen.dart`:
-  - Add quick-select server preset chips in the connection dialog:
-    - **Render**: `https://jigawa-pdp-pollwatch.onrender.com/api`
-    - **Neotech Hosting**: `https://api.pdpjigawa2027.com/api`
-    - **Vercel Cloud**: `https://jigawa-pdp-pollwatch-backend.vercel.app/api`
-    - **Local / USB**: `http://10.0.2.2:8000/api` or `http://127.0.0.1:8000/api`
-  - Show clear, user-friendly error messages if credentials or server settings fail.
-
-### Component 3: Database & PostgreSQL Support (`backend/`)
-- Add `psycopg2-binary>=2.9.9` to `backend/requirements.txt`.
-- Update `backend/app/database.py` to automatically normalize `postgres://` to `postgresql://` (required by SQLAlchemy on Render).
-- Ensure CORS in `backend/app/core/config.py` allows all domains (`*`, Render, Neotech Hosting, Vercel, localhost).
-
-### Component 4: Render Production Deployment Setup
-- Create `render.yaml` (Infrastructure-as-Code Blueprint):
-  - Web Service for FastAPI running `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-  - Managed PostgreSQL database service (`pdp-pollwatch-db`).
-  - Auto-linked `DATABASE_URL` environment variable.
-  - Automatic database initialization and seeding on startup.
-- Update `Dockerfile` for Render container builds with non-root user and production uvicorn parameters.
-
-### Component 5: Neotech Hosting Deployment Setup
-- Create `passenger_wsgi.py` for cPanel Python App Setup on Neotech Hosting.
-- Create `deploy_neotech.sh` for one-click setup on Linux VPS / Neotech Hosting with virtual environment, dependencies, and database migrations.
-- Create `systemd/pdp-pollwatch.service` for automatic background process management and auto-restart on boot.
-- Create `nginx/pdp-pollwatch.conf` for production Nginx reverse proxy with SSL and websocket support.
-- Create `docker-compose.prod.yml` for containerized Neotech hosting with PostgreSQL and FastAPI.
+## 1. Objective & Scope
+The goal is to replace the simulated/dummy photo button and missing location capture in the Jigawa PDP PollWatch Mobile Application (`mobile/`) with:
+1. **Interactive Camera / Form EC8A Photo Placeholder & Preview Container**:
+   - High-fidelity visual placeholder card matching PDP Dark & Emerald theme.
+   - Live camera snapshot and gallery picker with `image_picker`.
+   - Rich preview card showing the captured image thumbnail, metadata (file name, timestamp), and actions to retake or remove the photo.
+   - Reusable evidence photo capture card for `IncidentReportScreen`.
+2. **Live GPS Location Geotagging & Polling Unit Geofence Verification**:
+   - Real-time GPS coordinate acquisition (Latitude, Longitude, Accuracy) using `geolocator`.
+   - Visual GPS Geotag status card showing satellite lock status, coordinates, accuracy (± meters), and geofence verification badge.
+   - Seamless permission handling with graceful fallback for emulators, devices with location turned off, or permission denials.
+   - Sending live GPS coordinates to the backend for both Form EC8A results and Field Incident reports.
+3. **Android Permissions & Configuration**:
+   - Add Camera & Media Storage permissions to `AndroidManifest.xml`.
+   - Update `mobile/pubspec.yaml` with `image_picker: ^1.1.2`.
 
 ---
 
-## 3. Verification Plan
+## 2. Proposed Changes & Architecture
 
-1. **Backend Auth & Phone Normalization Test**:
-   - Run Python verification testing login with various formats: standard username, lowercase/uppercase, phone number with spaces (`0803 123 4567`), raw phone (`08031234567`), and international format (`+2348031234567`).
-2. **Agent Creation & Mobile Login Simulation**:
-   - Create a new Polling Unit Agent via `/agents` API.
-   - Simulate mobile login using the exact request payload sent by the Flutter app.
-   - Verify token and profile return instantly.
-3. **Database URL & PostgreSQL Engine Test**:
-   - Verify `database.py` correctly parses both SQLite and PostgreSQL URLs.
-4. **Pytest Suite**:
-   - Run `PYTHONPATH=. pytest tests/` to confirm all 15/15 tests continue to pass.
-5. **Flutter Static Analysis**:
-   - Run `flutter analyze` or Dart checks to verify mobile app code compiles cleanly.
+### Component 1: Dependencies & Android Manifest (`mobile/`)
+- **`mobile/pubspec.yaml`**:
+  - Add `image_picker: ^1.1.2` (geolocator is already installed).
+- **`mobile/android/app/src/main/AndroidManifest.xml`**:
+  - Add camera permissions:
+    - `<uses-permission android:name="android.permission.CAMERA"/>`
+    - `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>`
+    - `<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>`
+  - Ensure location permissions remain active:
+    - `<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>`
+    - `<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>`
+
+---
+
+### Component 2: Form EC8A Photo & Camera Placeholder (`result_submission_screen.dart`)
+Replace the simple text button with an **Interactive Form EC8A Camera Card**:
+1. **Empty / Placeholder State**:
+   - Container styled with rounded corners (`16px`), glassmorphism dark background (`#0B132B` / `#141E38`), and a subtle dashed border (`#10B981` / `#334155`).
+   - Prominent camera & ballot sheet icon in PDP Emerald Green.
+   - Title: `OFFICIAL FORM EC8A PHOTO PROOF`.
+   - Guidelines:
+     - `• INEC Official Stamp must be clearly legible`
+     - `• Presiding Officer & Party Agent signatures visible`
+     - `• All vote tallies (PDP, APC, NNPP, LP) must be sharp`
+   - Two interactive action buttons:
+     - **"Take Photo with Camera"** (Elevated Emerald Green `#008751`).
+     - **"Select from Gallery"** (Outlined Slate `#334155` with green text).
+2. **Captured / Preview State**:
+   - Shows actual image thumbnail preview (using `Image.file`).
+   - Status badge: `● EC8A PHOTO ATTACHED & GEO-STAMPED` in emerald green.
+   - Details: File name and capture timestamp.
+   - Actions:
+     - **"Retake Photo"** (re-opens camera/picker).
+     - **"Remove"** (resets to placeholder state).
+
+---
+
+### Component 3: Live GPS Geotagging & Polling Unit Geofence Card
+In both `ResultSubmissionScreen` and `IncidentReportScreen`:
+1. **Real-Time GPS Acquisition**:
+   - Use `Geolocator.checkPermission()` and `Geolocator.requestPermission()`.
+   - Fetch high-accuracy location via `Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)`.
+   - Fallback coordinates (Jigawa Polling Unit baseline e.g. `11.7583° N, 9.3381° E`) if GPS hardware is unavailable or running on emulator.
+2. **Visual GPS Status Card**:
+   - Container with dark navy background (`#141E38`) and border.
+   - Header: `POLLING UNIT GPS GEOTAG VERIFICATION` with a glowing satellite icon.
+   - Live coordinates: `Lat: 11.7583° N  |  Lng: 9.3381° E`.
+   - Accuracy indicator: `Accuracy: ± 3.8m • Satellite Locked`.
+   - Badge: `✓ Geofence Verified: Polling Unit Grounds`.
+   - Interactive `Refresh GPS` button to trigger re-polling with loading spinner.
+
+---
+
+### Component 4: Field Incident Evidence Capture (`incident_report_screen.dart`)
+- Add an interactive photo capture placeholder to the incident report screen so field agents can snap photos of BVAS failure screens, ballot box disruption, or crowd issues.
+- Pass live acquired `latitude` and `longitude` to `ApiService.reportIncident`.
+
+---
+
+### Component 5: API Service & Data Integration (`api_service.dart`)
+- Ensure `ApiService.submitResult` embeds GPS coordinates in submission notes (e.g. `[GPS Geotag: 11.75834, 9.33812 | Accuracy: 3.5m]`).
+- Ensure `ApiService.reportIncident` sends actual device latitude and longitude.
+
+---
+
+## 3. Visual & Aesthetic Standards (PDP Design System)
+- Primary Brand Color: `#008751` (PDP Emerald Green).
+- Secondary Highlight: `#10B981` (Bright Emerald).
+- Dark Backgrounds: `#070D1E` (Dark Night), `#0B132B` (Navy Surface), `#141E38` (Card Surface).
+- Accent Status: Amber for warning/pending, Red for critical/rejected, Emerald for verified.
+- Typography: High-contrast white headers with subtle slate `#94A3B8` captions.
+
+---
+
+## 4. Verification & Testing Plan
+1. **Dependency Installation**: Run `flutter pub get` in `mobile/` to install `image_picker`.
+2. **Static Code Analysis**: Run `flutter analyze` or `dart analyze` to ensure 0 errors and clean code.
+3. **Local UI & Flow Verification**:
+   - Test `ResultSubmissionScreen`: Verify camera placeholder renders, photo can be chosen or snapped, image preview appears with retake/remove buttons, and GPS card acquires coordinates.
+   - Test `IncidentReportScreen`: Verify camera placeholder and GPS coordinates display and dispatch correctly.
+   - Test `HomeDashboard`: Verify location and navigation integrity.
+4. **Git Commit & Push**: Commit with clear message and push to GitHub repository.
