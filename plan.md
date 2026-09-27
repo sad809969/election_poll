@@ -1,75 +1,73 @@
-# Implementation Plan: Authentic INEC Electoral Wards for All 27 LGAs
+# Implementation Plan: Mobile Endpoints & Real-Time Data Sync Verification
 
-## 1. Executive Summary & Problem Analysis
-In the voice note, the user identified that electoral wards across Jigawa State in the database and UI are named generically (e.g. `Babura Ward 1`, `Jahun Ward 1`, `Guri Ward 1`), instead of their official, authentic names (e.g. in Gwaram: `Basirka`, `Farin Dutse`, `Sara`, `Kila`, `Gwaram`, `Maruta`, etc.).
+## 1. Executive Summary & User Objectives
+The user requested:
+> *"ok now next is to make sure the mobile is send the data and recieving anything make sure all endpoints are working normal"*
 
-### Findings from Database Audit:
-1. **Placeholder Names**: 20 out of 27 LGAs currently have placeholder names (`<LGA> Ward 1`, `<LGA> Ward 2`, ...).
-2. **Duplicate Zero-PU Records**: 14 duplicate placeholder wards (IDs 286 to 299, e.g. `Dutse Ward 1`, `Dutse Ward 2`, `Hadejia Ward 1`, `Gwaram Ward 1`) have 0 polling units and were leftover from old seed scripts, falsely inflating the ward count to 299 instead of the official INEC total of **287 wards**.
-3. **Foreign Key Integrity**: All 4,827 official Polling Units are tied to existing ward IDs. Updating the ward names in-place preserves all relationships, foreign keys, and polling unit associations with zero data corruption.
-
----
-
-## 2. Complete Canonical INEC Ward Roster (287 Official Wards Across 27 LGAs)
-
-Below is the verified, official INEC Registration Area roster for all 27 LGAs:
-
-1. **Auyo (10 wards)**: Auyo, Auyakayi, Ayama, Ayan, Gamafoi, Gamsarka, Gatafa, Kafur, Tsidir, Unik
-2. **Babura (11 wards)**: Babura, Batali, Dorawa, Garu, Gasakoli, Insharuwa, Jigawa, Kanya, Kuzunzumi, Kyambo, Takwasa
-3. **Birniwa (11 wards)**: Batu, Birniwa, Dangwaleri, Diginsa, Fagi, Kachallari, Karanka, Kazura, Machinamari, Matamu, Nguwa
-4. **Birnin Kudu (11 wards)**: Birnin Kudu, Kangire, Kantoga, Kiyako, Kwangwara, Lafiya, Sundimina, Surko, Unguwar'ya, Wurno, Yalwan Damai
-5. **Buji (10 wards)**: Ahoto, Buji, Churbun, Falageri, Gantsa, K/Lelen Kudu, Kawaya, Kukuma, Madabe, Y/Tukur
-6. **Dutse (11 wards)**: Abaya, Chamo, Dundubus, Duru, Jigawar Tsada, Kachi, Karnaya, Kudai, Limawa, Madobi, Sakwaya
-7. **Gagarawa (10 wards)**: Gagarawa Gari, Gagarawa Tasha, Garin Chiroma, Kore Balatu, Madaka, Maiaduwa, Maikilili, Medu, Yalawa, Zarada
-8. **Garki (11 wards)**: Buduru, Doko, Garki, Gwarzon Garki, Jirima, Kanya, Kargo, Kore, Muku, Rafin Marke, Siyori
-9. **Gumel (11 wards)**: Baikarya, Danama, Dantanoma, Galagamma, Garin Gambo, Garin Alhaji Barka, Gusau, Hammado, Kofar Arewa, Kofar Yamma, Zango
-10. **Guri (10 wards)**: Abunabo, Adiyani, Dawa, Garbagal, Guri, Kadira, Lafiya, Margadu, Matara Baba, Musari
-11. **Gwaram (11 wards)**: Basirka, Dingaya, Fagam, Farin Dutse, Gwaram, Kila, Kwandiko, Maruta, Sara, Tsangarwa, Zandam Nagogo
-12. **Gwiwa (11 wards)**: Buntusu, Dabi, Darina, F/Yamma, Guntai, Gwiwa, Korayel, Rorau, Shafe, Yola, Zaumar Sainawa
-13. **Hadejia (11 wards)**: Atafi, Dubantu, Gagulmari, Kasuwar Kuda, Kasuwar Kofa, Majema, Matsaro, Rumfa, Sabon Garu, Yankoli, Yayari
-14. **Jahun (11 wards)**: Aujara, Gangawa, Gauza Tazara, Gunka, Harbo Sabuwa, Harbo Tsohuwa, Idanduna, Jabarna, Jahun, Kale, Kanwa
-15. **Kafin Hausa (11 wards)**: Balangu, Dumadumin Toka, Gafaya, Jabo, Kafin Hausa, Kazalewa, Majawa, Mezan, Ruba, Sarawa, Zago
-16. **Kaugama (11 wards)**: Arbus, Askandu, Dabuwaran, Dakaiyawa, Hadin, Ja’e, Jarkasa, Kaugama, Marke, Unguwar Jibrin, Yalo
-17. **Kazaure (11 wards)**: Ba'auzini, Daba, Dabaza, Dandi, Gada, Kanti, Maradawa, Sabaru, Unguwar Arewa, Unguwar Gabas, Unguwar Yamma
-18. **Kirikasamma (10 wards)**: Baturiya, Bulunchai, Doleri, Fandum, Gayin, Kirika Samma, Madachi, Marma, Tsheguwa, Tarabu
-19. **Kiyawa (11 wards)**: Abalago, Andaza, Faki, Garko, Guruduba, Katanga, Katuka, Kiyawa, Kwanda, Maje, Tsurma
-20. **Maigatari (11 wards)**: Balarabe, Dankumbo, Fulata, Galadi, Jajeri, Kukayasku, Madana, Maigatari Arewa, Maigatari Kudu, Matoya, Turbus
-21. **Malam Madori (11 wards)**: Arki, Dunari, Fateka Akurya, Garin Gabas, Maira Kumi-Bara Musa, Maka Ddari, Malam Madori, Shaiya, Tagwaro, Tashena, Tonikutara
-22. **Miga (10 wards)**: Dangyatin, Garbo, Hantsu, Koya, Miga, Sabon Gari Takanebu, Sansani, Tsakuwawa, Yanduna, Zareku
-23. **Ringim (10 wards)**: Chai-Chai, Dabi, Kafin Babushe, Karshi, Kyarama, Ringim, Sankara, Sintilmawa, Tofa, Yandutse
-24. **Roni (11 wards)**: Amaryawa, Baragumi, Dansure, Fara, Gora, Kwaita, Roni, Sankau, Tunas, Yanzaki, Zugai
-25. **Sule Tankarkar (10 wards)**: Albasu, Amanga, Dangwanki, Danladi, Danzomo, Jeke, Shabaru, Sule-Tankarkar, Takatsaba, Yandamo
-26. **Taura (10 wards)**: Ajaura, Chakwaikwaiwa, Chukuto, Gujungu, Kiri, Kwalam, Maje, Majiya, S/Garin Yaya, Taura
-27. **Yankwashi (10 wards)**: Achilafiya, Belas, Dawan-Gawo, Gurjiya, Gwarta, Karkarna, Kuda, Ringim, Yankwashi, Zungumba
+The objective of this phase is to ensure that the Flutter mobile application (`mobile/`) seamlessly communicates with the FastAPI backend (`backend/app/`):
+1. **Sending Data**: Result submissions (Form EC8A), incident reports with GPS geotagging and photo attachments, election timeline milestones/check-ins, and media uploads.
+2. **Receiving Data**: Agent authentication token, assigned Polling Unit details with authentic LGA & Ward hierarchy (eliminating fallback strings), timeline milestones, and incident statuses.
+3. **Validating All Endpoints**: Ensure every endpoint called by the mobile client is healthy, returns proper HTTP status codes, properly parses JSON payloads, and handles edge cases (e.g. over-voting detection, duplicate result updates).
 
 ---
 
-## 3. Step-by-Step Execution Plan
+## 2. Technical Architecture & Endpoints Audit
 
-### Step 1: In-Place Database Migration Script (`backend/app/migrate_real_wards.py`)
-- Query each LGA's existing wards.
-- Update each ward's `name` and official `code` to the authentic INEC names above in exact sequential order.
-- Remove the 14 duplicate phantom records (IDs 286-299) which have 0 polling units.
-- Update any polling unit name strings that had generic "Ward X" prefixes to use the real ward name.
-- Commit all changes to `backend/pollwatch.db`.
+### 2.1 Backend Endpoints Review & Enhancements
 
-### Step 2: Harmonize Seeder Dictionaries
-- Update `backend/app/seed_live.py`, `backend/app/seed_full.py`, and `backend/app/seed.py` with the complete canonical 287 INEC ward roster.
-- Ensure that any future database seeding or reset guarantees 100% authentic names.
-
-### Step 3: Frontend & Telemetry Verification
-- Check `/api/admin/dashboard-stats` to verify total wards = 287 (and 4,827 PUs remain intact).
-- In `/system-admin` under the **Infrastructure & Setup** -> **Wards** tab:
-  - Verify every ward shows its real name (e.g. selecting Gwaram displays `Basirka`, `Dingaya`, `Fagam`, `Farin Dutse`, `Gwaram`, `Kila`, `Kwandiko`, `Maruta`, `Sara`, `Tsangarwa`, `Zandam Nagogo`).
-  - Verify selecting Babura, Jahun, Guri, etc., displays their authentic names.
-- Run `npm run build` in `web/` to confirm zero compilation errors.
+| Endpoint | Method | Mobile Screen / Service | Status & Required Enhancement |
+| :--- | :--- | :--- | :--- |
+| `/api/auth/login` | `POST` | `login_screen.dart` | **Verified Functional.** Accepts OAuth2 form-data or JSON, issues JWT, returns user ID, role, PU ID, LGA ID, Ward ID. |
+| `/api/auth/me` | `GET` | `ApiService.login()` | **Verified Functional.** Returns full agent profile and permission matrix. |
+| `/api/electoral/polling-units/{id}` | `GET` | `login_screen.dart` | **Needs Schema Enrichment.** `PollingUnitResponse` in `backend/app/schemas.py` currently omits `lga` and `ward` relationship objects, causing mobile to fall back to `"Jigawa Command"`. Enrich with `lga`, `ward`, `lga_name`, and `ward_name`. |
+| `/api/upload` | `POST` | `ResultSubmissionScreen`, `IncidentReportScreen` | **New Route Required.** Expose a dedicated multipart file upload endpoint wrapping `UploadService` in `backend/app/services/upload_service.py` to allow mobile to upload EC8A photos and incident media to `/uploads/`. |
+| `/api/results/submit` | `POST` | `result_submission_screen.dart` | **Verified Functional.** Supports multi-candidate tallies, checks over-voting (Electoral Act 2022 Section 51), saves GPS geotags in notes, and stores `ec8a_photo_url`. |
+| `/api/incidents` | `POST` | `incident_report_screen.dart` | **Needs Enrichment.** Currently returns raw model where `polling_unit_code`, `lga_name`, `reporter_name` are null on creation. Return fully enriched `IncidentResponse`. |
+| `/api/incidents` | `GET` | Mobile / Web Dashboard | **Verified Functional.** Returns filtered incidents with PU, LGA, and reporter metadata. |
+| `/api/activities` | `POST` | `timeline_tracker_screen.dart` | **Verified Functional.** Logs timeline milestones (e.g., "Agent Check-in", "Accreditation Started", "Counting Started") with audit trail. |
+| `/api/activities` | `GET` | `timeline_tracker_screen.dart` | **Verified Functional.** Retrieves timeline milestone history for the polling unit. |
 
 ---
 
-## 4. Verification Checklist
-- [ ] No `Ward 1`, `Ward 2`, `Ward 3` placeholders remain anywhere in the database.
-- [ ] All 4,827 Polling Units remain mapped to valid wards (0 orphans).
-- [ ] Total official wards count is exactly 287.
-- [ ] Side A Dashboard and Infrastructure UI reflect the real names and counts.
-- [ ] Commit and push cleanly to GitHub `main`.
+## 3. Implementation Steps
+
+### Phase 1: Backend Schema & Router Enhancements
+1. **Enrich `PollingUnitResponse` (`backend/app/schemas.py`)**:
+   - Add `lga: Optional[LGAResponse] = None`, `ward: Optional[WardResponse] = None`, `lga_name: Optional[str] = None`, `ward_name: Optional[str] = None`.
+   - Add `@property` helpers on `PollingUnit` model in `backend/app/models.py` for `lga_name` and `ward_name` to ensure seamless Pydantic serialization.
+2. **Enrich Incident Creation Response (`backend/app/routers/incidents.py`)**:
+   - Populate `polling_unit_code`, `polling_unit_name`, `lga_name`, `reporter_name`, and `reporter_phone` on the newly created incident before returning `IncidentResponse`.
+3. **Expose Media Upload Endpoint (`backend/app/routers/uploads.py`)**:
+   - Create `POST /api/upload` route that accepts `file: UploadFile` and `category: str = Form("results")`.
+   - Integrate with `upload_service.save_uploaded_file(file, subfolder=category)`.
+   - Register `uploads.router` in `backend/app/main.py`.
+
+### Phase 2: Mobile Client Enhancements (`mobile/`)
+1. **Multipart Upload Support (`mobile/lib/services/api_service.dart`)**:
+   - Implement `ApiService.uploadFile(File file, {String subfolder = 'results'})` using `http.MultipartRequest`.
+2. **Result Submission Screen (`mobile/lib/screens/result_submission_screen.dart`)**:
+   - Upload captured EC8A photo via `ApiService.uploadFile` and pass the returned server URL to `submitResult`.
+   - Pass exact `registeredVoters` from `currentPu['registered_voters']` to ensure accurate over-voting detection.
+3. **Incident Report Screen (`mobile/lib/screens/incident_report_screen.dart`)**:
+   - Upload captured evidence photo via `ApiService.uploadFile` and pass URL to `reportIncident`.
+4. **Login & Home Navigation (`mobile/lib/screens/login_screen.dart`, `mobile/lib/screens/home_dashboard.dart`)**:
+   - Bind authentic `lgaName` from `currentPu['lga']['name']` or `currentPu['lga_name']` (e.g. "Dutse") and pass `registeredVoters` to `ResultSubmissionScreen`.
+
+---
+
+## 4. Verification & Testing Plan
+1. **Automated Integration Test (`scripts/test_mobile_endpoints.py`)**:
+   - Authenticate live agent credentials (`agent` / `agent123`).
+   - Fetch assigned PU details and verify LGA name is `"Dutse"` and registered voters is `623`.
+   - Upload a test EC8A photo via `POST /api/upload` and verify 200 OK + valid file URL.
+   - Submit Form EC8A result via `POST /api/results/submit` with the uploaded photo URL and verify verification status.
+   - Report an incident via `POST /api/incidents` with GPS coordinates and verify enriched PU & LGA response.
+   - Log an activity milestone via `POST /api/activities` and verify retrieval via `GET /api/activities`.
+2. **Flutter Codebase Health**:
+   - Run `flutter analyze` in `mobile/` to confirm zero compilation errors.
+3. **Web Dashboard Confirmation**:
+   - Verify submitted result and incident appear live in the Next.js web dashboard (`/election-results`, `/incidents`).
+4. **Git Commit & Push**:
+   - Stage, commit, and push changes to `main`.
+
 

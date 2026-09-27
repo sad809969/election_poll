@@ -10,6 +10,7 @@ class HomeDashboard extends StatefulWidget {
   final String lgaName;
   final String puCode;
   final int pollingUnitId;
+  final int registeredVoters;
 
   const HomeDashboard({
     super.key,
@@ -18,6 +19,7 @@ class HomeDashboard extends StatefulWidget {
     required this.lgaName,
     required this.puCode,
     this.pollingUnitId = 1,
+    this.registeredVoters = 650,
   });
 
   @override
@@ -210,6 +212,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           pollingUnitId: widget.pollingUnitId,
                           puName: widget.assignedPu,
                           puCode: widget.puCode,
+                          registeredVoters: widget.registeredVoters,
                         ),
                       ),
                     ),

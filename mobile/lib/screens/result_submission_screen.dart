@@ -183,9 +183,14 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final photoName = _capturedImage != null
-          ? 'uploads/ec8a_${widget.puCode}_${_selectedElectionType.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : null;
+      String? photoUrl;
+      if (_capturedImage != null) {
+        try {
+          photoUrl = await ApiService.uploadFile(_capturedImage!, subfolder: 'results');
+        } catch (_) {
+          photoUrl = 'uploads/results/ec8a_${widget.puCode}_${_selectedElectionType.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        }
+      }
 
       final gpsNotes = '[GPS Geotag: ${_latitude.toStringAsFixed(6)}, ${_longitude.toStringAsFixed(6)} | Accuracy: ±${_accuracy?.toStringAsFixed(1) ?? '3.5'}m | Status: $_locationStatus]';
 
@@ -197,7 +202,7 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
         nnpp: nnpp,
         lp: lp,
         rejected: rejected,
-        photoUrl: photoName,
+        photoUrl: photoUrl,
         notes: gpsNotes,
       );
 

@@ -228,8 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final agentName = user?['full_name'] ?? 'Agent $username';
       final assignedPu = pu?['name'] ?? 'Assigned Polling Unit';
       final puCode = pu?['code'] ?? 'PU-001';
-      final lgaName = pu?['lga']?['name'] ?? 'Jigawa Command';
+      final lgaName = pu?['lga']?['name'] ?? pu?['lga_name'] ?? 'Jigawa Command';
       final puId = user?['polling_unit_id'] ?? pu?['id'] ?? 1;
+      final registeredVoters = pu?['registered_voters'] ?? 650;
 
       Navigator.pushReplacement(
         context,
@@ -240,6 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
             lgaName: lgaName,
             puCode: puCode,
             pollingUnitId: puId,
+            registeredVoters: registeredVoters,
           ),
         ),
       );

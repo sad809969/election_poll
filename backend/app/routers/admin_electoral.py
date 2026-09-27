@@ -132,6 +132,63 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
 
 # =============================================================================
+# 1B. ELECTORAL HIERARCHY TREE (LGA -> WARDS -> POLLING UNITS)
+# =============================================================================
+
+@router.get("/electoral-hierarchy")
+def get_electoral_hierarchy(db: Session = Depends(get_db)):
+    """
+    Returns the complete hierarchy of 27 LGAs with their authentic wards,
+    PU counts, and registered voters for instantaneous drill-down navigation.
+    """
+    lgas = db.query(LGA).order_by(LGA.name.asc()).all()
+    wards = db.query(Ward).order_by(Ward.name.asc()).all()
+    
+    # Pre-aggregate polling units count and registered voters per ward
+    pu_stats = db.query(
+        PollingUnit.ward_id,
+        func.count(PollingUnit.id).label("pu_count"),
+        func.coalesce(func.sum(PollingUnit.registered_voters), 0).label("voters")
+    ).group_by(PollingUnit.ward_id).all()
+    
+    pu_map = {row.ward_id: {"pu_count": row.pu_count, "voters": int(row.voters)} for row in pu_stats}
+    
+    # Map wards to LGAs
+    wards_by_lga = {}
+    for w in wards:
+        stats = pu_map.get(w.id, {"pu_count": 0, "voters": 0})
+        wards_by_lga.setdefault(w.lga_id, []).append({
+            "id": w.id,
+            "name": w.name,
+            "code": w.code,
+            "polling_units_count": stats["pu_count"],
+            "registered_voters": stats["voters"]
+        })
+        
+    result = []
+    for lga in lgas:
+        lga_wards = wards_by_lga.get(lga.id, [])
+        total_pus = sum(w["polling_units_count"] for w in lga_wards)
+        total_voters = sum(w["registered_voters"] for w in lga_wards) or lga.registered_voters or 0
+        result.append({
+            "id": lga.id,
+            "name": lga.name,
+            "code": lga.code,
+            "wards_count": len(lga_wards),
+            "polling_units_count": total_pus,
+            "registered_voters": total_voters,
+            "wards": lga_wards
+        })
+        
+    return {
+        "total_lgas": len(result),
+        "total_wards": sum(item["wards_count"] for item in result),
+        "total_polling_units": sum(item["polling_units_count"] for item in result),
+        "lgas": result
+    }
+
+
+# =============================================================================
 # 2. POLITICAL PARTIES CRUD
 # =============================================================================
 

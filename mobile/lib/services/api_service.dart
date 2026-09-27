@@ -230,12 +230,43 @@ class ApiService {
     }
   }
 
+  /// Upload a media file (Form EC8A result sheet or incident photo) to the backend
+  static Future<String> uploadFile(dynamic fileInput, {String subfolder = 'results'}) async {
+    final uri = Uri.parse('$baseUrl/upload');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+
+    request.fields['subfolder'] = subfolder;
+
+    final String filePath = fileInput is String ? fileInput : fileInput.path;
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = json.decode(response.body);
+      return data['url'] ?? data['relative_path'] ?? '';
+    } else {
+      String err = 'Upload failed (${response.statusCode})';
+      try {
+        final errJson = json.decode(response.body);
+        if (errJson['detail'] != null) err = errJson['detail'];
+      } catch (_) {}
+      throw Exception(err);
+    }
+  }
+
   /// Submit Field Incident Report
   static Future<Map<String, dynamic>> reportIncident({
     required int pollingUnitId,
     required String incidentType,
     required String severity,
     required String description,
+    String? mediaUrl,
     double? latitude,
     double? longitude,
   }) async {
@@ -245,6 +276,7 @@ class ApiService {
       'incident_type': incidentType,
       'severity': severity,
       'description': description,
+      'media_url': mediaUrl,
       'latitude': latitude,
       'longitude': longitude,
     });

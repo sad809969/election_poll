@@ -179,15 +179,25 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final descWithEvidence = _evidenceImage != null
-          ? '${_descController.text.trim()}\n[Evidence Photo: ${_evidenceImage!.name}]'
-          : _descController.text.trim();
+      String? mediaUrl;
+      if (_evidenceImage != null) {
+        try {
+          mediaUrl = await ApiService.uploadFile(_evidenceImage!, subfolder: 'incidents');
+        } catch (_) {}
+      }
+
+      final descWithEvidence = mediaUrl != null
+          ? '${_descController.text.trim()}\n[Evidence Photo: $mediaUrl]'
+          : (_evidenceImage != null
+              ? '${_descController.text.trim()}\n[Evidence Photo: ${_evidenceImage!.name}]'
+              : _descController.text.trim());
 
       await ApiService.reportIncident(
         pollingUnitId: widget.pollingUnitId,
         incidentType: _category,
         severity: _severity,
         description: descWithEvidence,
+        mediaUrl: mediaUrl,
         latitude: _latitude,
         longitude: _longitude,
       );

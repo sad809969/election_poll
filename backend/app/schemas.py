@@ -136,6 +136,10 @@ class PollingUnitResponse(BaseModel):
     name: str
     registered_voters: int
     status: str
+    lga: Optional[LGAResponse] = None
+    ward: Optional[WardResponse] = None
+    lga_name: Optional[str] = None
+    ward_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
