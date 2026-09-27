@@ -1,67 +1,72 @@
-# Implementation Plan: Render Backend Hosting & Managed PostgreSQL Deployment
+# Implementation Plan: Full-Stack Render Hosting (Frontend + Backend + PostgreSQL)
 
 ## 1. Executive Summary & User Objectives
 The user requested:
-> *"lets host the backend on render now"*
+> *"lets go on render also for the frontend tooo"*
 
-The objective of this phase is to configure, verify, and document the automated production deployment of the **FastAPI Backend** and **Managed Persistent PostgreSQL Database** on **Render (`render.com`)** via the included Infrastructure-as-Code blueprint (`render.yaml`).
+Along with two screenshots from the Render dashboard showing:
+1. **`pdp-pollwatch-db`**: Database created successfully (green checkmark).
+2. **`pdp-pollwatch-backend`**: Exited with status 1 on initial startup.
 
----
-
-## 2. Technical Architecture & Render Blueprint Overview
-
-### 2.1 Render Blueprint Architecture (`render.yaml`)
-- **Web Service (`pdp-pollwatch-backend`)**:
-  - Runtime: Python 3.11
-  - Root Directory: `backend`
-  - Build Command: `pip install --upgrade pip && pip install -r requirements.txt`
-  - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-  - Health Check: `/docs` (returns HTTP 200)
-  - Public URL: `https://pdp-pollwatch-backend.onrender.com`
-- **Managed Persistent Database (`pdp-pollwatch-db`)**:
-  - Engine: PostgreSQL 15/16
-  - Database Name: `pollwatch`
-  - User: `pollwatch_user`
-  - `DATABASE_URL` automatically injected into the web service.
+The objectives of this phase:
+1. **Diagnose and Resolve Backend Startup Failure**:
+   - Add database connection wait/retry logic (`init_db` and `seed_database`) with exponential backoff so the FastAPI app gracefully waits for Render's newly provisioned PostgreSQL container to finish initial boot.
+   - Ensure the start command (`sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"`) handles Render dynamic port binding.
+2. **Add Next.js Frontend (`pdp-pollwatch-web`) to Render Blueprint (`render.yaml`)**:
+   - Add the web frontend as a web service running Node.js 20.
+   - Configure build command (`npm install && npm run build`) and start command (`npx next start -p $PORT`).
+   - Automatically inject `NEXT_PUBLIC_API_URL: https://pdp-pollwatch-backend.onrender.com/api`.
+3. **Synchronize & Re-Deploy**:
+   - Push updates to `main` so clicking **Manual Sync** or **Deploy Latest Commit** on Render automatically deploys all three components together.
 
 ---
 
-## 3. Implementation & Verification Steps
+## 2. Technical Architecture & Blueprint Additions
 
-### Step 1: Automatic Database Provisioning & Seeding (`backend/app/seed.py`)
-- Ensure `seed_database()` executed during application startup (`lifespan` in `app/main.py`) checks if `PollingUnit` count is 0 on the fresh Render PostgreSQL database.
-- If empty, automatically populate:
-  1. Super Admin account (`admin` / `PDP-ADMIN-2027`)
-  2. Lead Polling Unit Agent (`agent` / `agent123`)
-  3. Situation Room Coordinator accounts (`state_coord`, `lga_dutse`, etc.)
-  4. All 27 authentic Jigawa LGAs
-  5. All 285+ authentic INEC Wards
-  6. All 4,827 official Polling Units with accurate registered voters
-  7. Pure, live state: 0 mock results, 0 dummy incidents.
+### 2.1 Complete Render Infrastructure Blueprint (`render.yaml`)
+1. **Database (`pdp-pollwatch-db`)**:
+   - Engine: PostgreSQL (Already Created & Healthy)
+2. **Backend Service (`pdp-pollwatch-backend`)**:
+   - Runtime: Python 3.11
+   - Root Directory: `backend`
+   - Start Command: `sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"`
+   - Connected to `pdp-pollwatch-db` via `DATABASE_URL`
+   - Added database readiness retry loop (10 attempts, 5s delay)
+3. **Frontend Service (`pdp-pollwatch-web`)**:
+   - Runtime: Node.js 20
+   - Root Directory: `web`
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npx next start -p $PORT`
+   - Public URL: `https://pdp-pollwatch-web.onrender.com`
+   - Environment Variable: `NEXT_PUBLIC_API_URL=https://pdp-pollwatch-backend.onrender.com/api`
 
-### Step 2: CORS & Service Host Configuration
-- Update `backend/app/core/config.py`: Ensure `https://pdp-pollwatch-backend.onrender.com` and wildcard subdomains are in `ALLOWED_ORIGINS`.
-- Update `mobile/lib/services/api_service.dart`: Ensure `https://pdp-pollwatch-backend.onrender.com` is present in server auto-detection candidates.
-- Update `web/src/lib/api.js`: Support Render cloud URL as default remote backend when running outside localhost.
+---
 
-### Step 3: Local Validation & Pre-Deployment Check
-- Verify `render.yaml` schema validity.
-- Run a dry-run test simulating PostgreSQL connection string handling (`postgres://` -> `postgresql://`).
-- Verify production build of web and Flutter analyze pass with 0 errors.
+## 3. Implementation Steps
 
-### Step 4: Step-by-Step Render 3-Click Deployment
-1. Log in to [Render Dashboard](https://dashboard.render.com).
-2. Click **New +** &rarr; Select **Blueprint**.
-3. Connect GitHub repository `sad809969/election_poll` on branch `main`.
-4. Click **Apply**: Render automatically builds the Python FastAPI service and spins up the PostgreSQL database.
+### Step 1: Database Connection Retry Resilience (`backend/app/database.py` & `seed.py`)
+- In `backend/app/database.py`, update `init_db()` with a retry loop (10 retries, 5s delay) catching `OperationalError` while Render PostgreSQL completes boot.
+- In `backend/app/seed.py`, wrap database session acquisition in connection retry.
+
+### Step 2: Add Web Frontend to `render.yaml`
+- Add `pdp-pollwatch-web` web service definition to `render.yaml`.
+- Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_API_BASE_URL` to point to the backend service URL.
+- In `web/package.json`, ensure `next start` respects dynamic `$PORT`.
+
+### Step 3: Local Verification & Test
+- Run `npm run build` in `web/` to confirm clean production compilation.
+- Verify `backend/venv/bin/python` executes startup and seeding cleanly.
+
+### Step 4: Commit, Push, and Deploy
+- Commit and push to `origin main`.
+- In Render Dashboard, click **Manual Sync** on the Blueprint to redeploy the backend and provision the frontend.
 
 ---
 
 ## 4. Verification Checklist
-- [ ] `render.yaml` configured with web service, PostgreSQL database, and environment variables.
-- [ ] Auto-seeding confirmed to populate all 27 LGAs, wards, and 4,827 Polling Units on fresh PostgreSQL.
-- [ ] Mobile app candidate endpoints include Render backend URL.
-- [ ] Web app CORS and API base URL compatible with Render.
-- [ ] Git commit and push to GitHub `main` so Render Blueprint can immediately deploy.
+- [ ] Database retry loop prevents exit status 1 during initial PostgreSQL container boot.
+- [ ] `render.yaml` includes all 3 services: Database, FastAPI Backend, and Next.js Frontend.
+- [ ] Next.js build passes cleanly with zero errors.
+- [ ] Render Blueprint sync deploys backend and frontend to live `.onrender.com` domains.
 
 

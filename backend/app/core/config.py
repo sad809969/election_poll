@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         "https://jigawa-pdp-pollwatch.vercel.app",
         "https://jigawa-pdp-pollwatch-backend.vercel.app",
         "https://pdp-pollwatch-backend.onrender.com",
+        "https://pdp-pollwatch-web.onrender.com",
         "https://jigawa-pdp-pollwatch.onrender.com",
         "https://pdp-pollwatch.onrender.com",
     ]
