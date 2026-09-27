@@ -1,68 +1,77 @@
-# Implementation Plan: Fix User Synchronization Between Side A and Side B
+# Implementation Plan: Fix Polling Unit Agent Login & Production Deployment Setup for Render and Neotech Hosting
 
-## Problem Diagnosis
-The user reported: *"I added user in side A but unfortunately didn't reflect in side B"*.
-Our investigation uncovered 4 interconnected root causes:
+## 1. Problem Diagnosis & Root Causes
 
-1. **Missing JWT Token on Side A Passcode Unlock**:
-   - In `web/src/pages/system-admin.js`, unlocking with `PDP-ADMIN-2027` only sets `sessionStorage.setItem('pdp_master_admin_auth', 'true')`.
-   - It did **not** store a JWT token in `localStorage.getItem('token')`.
-   - In FastAPI, `POST /api/agents` and `GET /api/agents` require `require_admin` / `require_supervisor` via OAuth2 Bearer token.
-   - If an admin entered Side A via passcode without prior login, `apiFetch('/agents')` sends no Authorization header, causing `401 Unauthorized`.
-   - Thus, user creation either failed or Side B was unable to fetch live data.
+### Issue A: Polling Unit Agent Details Not Accepted on Mobile App
+1. **Vercel Ephemeral SQLite Reset**:
+   - On Vercel, the backend database is located in `/tmp/pollwatch.db`.
+   - In serverless environments, each Lambda function is spun up independently and `/tmp` is wiped on cold starts.
+   - When a polling unit agent is created in Side A on the web, it exists only in that specific transient container. When the mobile app attempts to authenticate against `https://jigawa-pdp-pollwatch-backend.vercel.app/api/auth/login`, it hits a cold-started container where the newly created agent does not exist in the database, triggering `401 Unauthorized: Incorrect username or password`.
+2. **Phone Number & Whitespace Mismatches**:
+   - Polling unit agents frequently enter phone numbers with spaces (e.g., `0803 123 4567`) or international prefixes (`+234...`), while the login screen might send `08031234567`. The backend previously did an exact string match without stripping spaces or formatting.
+3. **Mobile Network Timeout on Cold Starts**:
+   - `mobile/lib/services/api_service.dart` had a tight 6-second timeout. Serverless cold starts or slow mobile cellular connections in the field exceed 6 seconds, causing connection drops.
+4. **Chained Request Failure**:
+   - After `/auth/login`, the mobile app attempted a second call to `/auth/me` and a third to `/electoral/polling-units/$puId`. If the agent was created without a polling unit assigned, or if the PU call timed out, login failed.
 
-2. **Hardcoded Fallback Masking on Side B (`/admin.js`)**:
-   - In `web/src/pages/admin.js`, if `apiFetch('/agents')` fails (due to 401 or network error), it catches the error and silently renders `fallbackUsersList` (6 static hardcoded users).
-   - This completely hides any real users in the system.
-
-3. **Backend Sorting & Overload (4,835 Users)**:
-   - In `backend/app/routers/agents.py`, `get_agents()` returns `db.query(User).order_by(User.full_name).all()`.
-   - Because there are 4,835 seeded agents, ordering by `full_name` ascending buries any newly created user deep inside thousands of rows.
-   - Side B has no pagination and was attempting to render all records, making new users difficult to locate.
-
-4. **Serverless Ephemerality & Cross-Tab Sync**:
-   - On Vercel serverless deployments, `/tmp/pollwatch.db` is ephemeral across lambda instances.
-   - There was no client-side synchronization (`pdp_custom_users` in `localStorage`) or broadcast event to immediately sync users between Side A and Side B.
+### Issue B: Need for Persistent Production Hosting (Render & Neotech Hosting)
+- The application requires persistent databases (PostgreSQL or persistent disk) so that all agents, polling units, and results created anywhere are permanently saved and accessible across all web and mobile clients worldwide.
 
 ---
 
-## Proposed Changes
+## 2. Proposed Changes
 
-### 1. Backend: Prioritize Newest Users (`backend/app/routers/agents.py`)
-- Update `GET /api/agents` to sort by `User.id.desc()` so newly created users always appear at the very top.
-- Add an optional `limit` parameter (default 100 or all) to prevent browser freezes when loading thousands of users.
+### Component 1: Backend Auth & Phone Normalization (`backend/app/routers/auth.py`)
+- Clean and normalize phone numbers (strip spaces, hyphens, and standard Nigeria `+234`/`0` prefixes) so logging in with `0803 123 4567`, `08031234567`, or `+2348031234567` succeeds seamlessly.
+- Perform case-insensitive username checks (`func.lower(User.username) == form_data.username.lower()`).
+- Return full agent profile data directly in the `/auth/login` response (`id`, `full_name`, `username`, `role`, `polling_unit_id`, `lga_id`, `ward_id`, `allowed_pages`) so mobile clients have instant access without chaining additional requests.
 
-### 2. Side A: Auto-Provision Admin Token on Unlock (`web/src/pages/system-admin.js`)
-- When `PDP-ADMIN-2027` is entered in `system-admin.js`, automatically authenticate with the backend (or provision a valid Super Admin operator session into `localStorage`) so all subsequent API calls (`POST /api/agents`, `PATCH /api/agents`, `GET /api/agents`) are fully authorized.
-- When a user is saved in `handleSaveUser`, write the new user to `pdp_custom_users` in `localStorage` and dispatch a `pdp_users_updated` window event for instant cross-tab and cross-page synchronization.
+### Component 2: Mobile App Resilience & Server Presets (`mobile/`)
+- In `api_service.dart`:
+  - Increase timeout to 15 seconds to support field cellular connections.
+  - Parse user details directly from the login response.
+  - If PU details are missing or null, provide graceful fallbacks (`Assigned Polling Unit`, `DUT-01`, `Jigawa Command`) so the agent is never locked out of their dashboard.
+- In `login_screen.dart`:
+  - Add quick-select server preset chips in the connection dialog:
+    - **Render**: `https://jigawa-pdp-pollwatch.onrender.com/api`
+    - **Neotech Hosting**: `https://api.pdpjigawa2027.com/api`
+    - **Vercel Cloud**: `https://jigawa-pdp-pollwatch-backend.vercel.app/api`
+    - **Local / USB**: `http://10.0.2.2:8000/api` or `http://127.0.0.1:8000/api`
+  - Show clear, user-friendly error messages if credentials or server settings fail.
 
-### 3. Side B: Seamless Real-Time Sync & Newest First (`web/src/pages/admin.js` & `web/src/pages/agents.js`)
-- In `admin.js`:
-  - Listen for the `pdp_users_updated` event and `storage` event so any user added in Side A appears in Side B **instantly** without a manual page refresh.
-  - Merge `pdp_custom_users` with live backend users, ensuring custom/newly created users are pinned to the top of the table with a vibrant "NEW" badge.
-  - If backend fetch returns 401 or empty, include `pdp_custom_users` on top of fallback data instead of masking them.
-  - Add search and pagination/slicing to the user list table so newly added users are immediately visible.
-- In `agents.js`:
-  - Ensure custom users are integrated into the agents directory and status toggle.
+### Component 3: Database & PostgreSQL Support (`backend/`)
+- Add `psycopg2-binary>=2.9.9` to `backend/requirements.txt`.
+- Update `backend/app/database.py` to automatically normalize `postgres://` to `postgresql://` (required by SQLAlchemy on Render).
+- Ensure CORS in `backend/app/core/config.py` allows all domains (`*`, Render, Neotech Hosting, Vercel, localhost).
 
-### 4. Auth & Login Support (`web/src/lib/api.js` & `web/src/pages/login.js`)
-- In `login.js` and `api.js`:
-  - Allow newly created custom users stored in `pdp_custom_users` to log in smoothly even if the Vercel serverless SQLite database cold-started.
-  - Respect the exact `allowed_pages` and role permissions saved during user creation.
+### Component 4: Render Production Deployment Setup
+- Create `render.yaml` (Infrastructure-as-Code Blueprint):
+  - Web Service for FastAPI running `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+  - Managed PostgreSQL database service (`pdp-pollwatch-db`).
+  - Auto-linked `DATABASE_URL` environment variable.
+  - Automatic database initialization and seeding on startup.
+- Update `Dockerfile` for Render container builds with non-root user and production uvicorn parameters.
+
+### Component 5: Neotech Hosting Deployment Setup
+- Create `passenger_wsgi.py` for cPanel Python App Setup on Neotech Hosting.
+- Create `deploy_neotech.sh` for one-click setup on Linux VPS / Neotech Hosting with virtual environment, dependencies, and database migrations.
+- Create `systemd/pdp-pollwatch.service` for automatic background process management and auto-restart on boot.
+- Create `nginx/pdp-pollwatch.conf` for production Nginx reverse proxy with SSL and websocket support.
+- Create `docker-compose.prod.yml` for containerized Neotech hosting with PostgreSQL and FastAPI.
 
 ---
 
-## Verification Plan
+## 3. Verification Plan
 
-### Automated & Manual Tests:
-1. **Pytest Verification**:
-   - Run existing test suite (`pytest tests/`) to ensure no regressions in auth, agents, or results endpoints.
-2. **Side A to Side B Sync Test**:
-   - Open Side A (`/system-admin`), create a test user (e.g., `user_sync_test` with role `LGA Coordinator` and specific Side A & Side B pages).
-   - Navigate to Side B (`/admin` and `/agents`).
-   - Verify `user_sync_test` appears at the very top of the table with correct role badge, phone, and allowed pages scope.
-3. **Login & Sidebar Test**:
-   - Log out and log in as `user_sync_test`.
-   - Verify the sidebar filters precisely to the allowed pages assigned in Side A.
-4. **Browser Verification**:
-   - Capture browser screenshots of Side A and Side B demonstrating the live reflection.
+1. **Backend Auth & Phone Normalization Test**:
+   - Run Python verification testing login with various formats: standard username, lowercase/uppercase, phone number with spaces (`0803 123 4567`), raw phone (`08031234567`), and international format (`+2348031234567`).
+2. **Agent Creation & Mobile Login Simulation**:
+   - Create a new Polling Unit Agent via `/agents` API.
+   - Simulate mobile login using the exact request payload sent by the Flutter app.
+   - Verify token and profile return instantly.
+3. **Database URL & PostgreSQL Engine Test**:
+   - Verify `database.py` correctly parses both SQLite and PostgreSQL URLs.
+4. **Pytest Suite**:
+   - Run `PYTHONPATH=. pytest tests/` to confirm all 15/15 tests continue to pass.
+5. **Flutter Static Analysis**:
+   - Run `flutter analyze` or Dart checks to verify mobile app code compiles cleanly.

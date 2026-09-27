@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 
@@ -49,10 +50,29 @@ def login_for_access_token(
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
-    # 1. Authenticate user (by username or phone number)
-    user = db.query(User).filter(
-        (User.username == form_data.username) | (User.phone_number == form_data.username)
-    ).first()
+    input_str = form_data.username.strip()
+    digits_only = "".join(c for c in input_str if c.isdigit())
+    phone_core = digits_only[-10:] if len(digits_only) >= 10 else digits_only
+
+    # 1. Authenticate user by username (case-insensitive) or exact phone
+    user = (
+        db.query(User)
+        .filter(
+            (func.lower(User.username) == input_str.lower())
+            | (User.username == input_str)
+            | (User.phone_number == input_str)
+        )
+        .first()
+    )
+
+    # 2. If not matched, try matching normalized phone number
+    if not user and phone_core:
+        phone_candidates = db.query(User).filter(User.phone_number.isnot(None)).all()
+        for cand in phone_candidates:
+            cand_digits = "".join(c for c in cand.phone_number if c.isdigit())
+            if cand_digits and (cand_digits == digits_only or cand_digits.endswith(phone_core)):
+                user = cand
+                break
 
     is_master_admin = (
         user is not None
@@ -74,7 +94,7 @@ def login_for_access_token(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user account"
         )
 
-    # 2. Generate Access Token
+    # 3. Generate Access Token
     access_token_expires = timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -91,6 +111,11 @@ def login_for_access_token(
         "username": user.username,
         "full_name": user.full_name,
         "allowed_pages": user.allowed_pages,
+        "id": user.id,
+        "phone_number": user.phone_number,
+        "polling_unit_id": user.polling_unit_id,
+        "lga_id": user.lga_id,
+        "ward_id": user.ward_id,
     }
 
 

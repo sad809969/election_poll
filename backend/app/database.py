@@ -5,10 +5,22 @@ from app.core.config import settings
 
 
 DATABASE_URL = settings.DATABASE_URL
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+connect_args = {}
+engine_kwargs = {"pool_pre_ping": True}
+
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+else:
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
+    connect_args=connect_args,
+    **engine_kwargs,
 )
 
 SessionLocal = sessionmaker(

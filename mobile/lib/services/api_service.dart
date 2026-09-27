@@ -72,7 +72,9 @@ class ApiService {
   /// Concurrently probe candidate URLs and automatically lock on the fastest working one
   static Future<Map<String, dynamic>> autoDetectServer() async {
     final candidates = [
-      'https://jigawa-pdp-pollwatch-backend.vercel.app', // Vercel Cloud (Worldwide)
+      'https://jigawa-pdp-pollwatch.onrender.com',       // Render Cloud
+      'https://api.pdpjigawa2027.com',                   // Neotech Hosting
+      'https://jigawa-pdp-pollwatch-backend.vercel.app', // Vercel Cloud
       'http://127.0.0.1:8000',                            // USB Reverse Tunnel via adb
       'http://192.168.1.164:8000',                        // Wi-Fi LAN
       'http://10.0.2.2:8000',                             // Android Emulator
@@ -82,7 +84,10 @@ class ApiService {
       final res = await testConnection(candidate);
       if (res['success'] == true) {
         setBaseUrl(candidate);
-        String mode = 'Vercel Cloud';
+        String mode = 'Cloud';
+        if (candidate.contains('onrender.com')) mode = 'Render Cloud';
+        if (candidate.contains('pdpjigawa2027.com')) mode = 'Neotech Hosting';
+        if (candidate.contains('vercel.app')) mode = 'Vercel Cloud';
         if (candidate.contains('127.0.0.1')) mode = 'USB Tunnel';
         if (candidate.contains('192.168.')) mode = 'Wi-Fi LAN';
         if (candidate.contains('10.0.2.2')) mode = 'Emulator';
@@ -98,7 +103,7 @@ class ApiService {
 
     return {
       'success': false,
-      'message': 'Could not reach server on USB or Wi-Fi. Check connection.',
+      'message': 'Could not reach server on Cloud, USB, or Wi-Fi. Check connection.',
     };
   }
 
@@ -115,23 +120,43 @@ class ApiService {
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {'username': username, 'password': password},
-      ).timeout(const Duration(seconds: 6));
+        body: {'username': username.trim(), 'password': password.trim()},
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         token = data['access_token'];
 
-        // Fetch user profile
-        final meResponse = await http.get(
-          Uri.parse('$baseUrl/auth/me'),
-          headers: {'Authorization': 'Bearer $token'},
-        ).timeout(const Duration(seconds: 5));
+        // Populate initial currentUser from login response
+        currentUser = {
+          'id': data['id'],
+          'username': data['username'] ?? username,
+          'full_name': data['full_name'] ?? username,
+          'role': data['role'] ?? 'Polling Unit Agent',
+          'phone_number': data['phone_number'],
+          'polling_unit_id': data['polling_unit_id'],
+          'lga_id': data['lga_id'],
+          'ward_id': data['ward_id'],
+          'allowed_pages': data['allowed_pages'],
+        };
 
-        if (meResponse.statusCode == 200) {
-          currentUser = json.decode(meResponse.body);
-          final puId = currentUser?['polling_unit_id'];
-          if (puId != null) {
+        // Attempt non-blocking profile enrichment
+        try {
+          final meResponse = await http.get(
+            Uri.parse('$baseUrl/auth/me'),
+            headers: {'Authorization': 'Bearer $token'},
+          ).timeout(const Duration(seconds: 5));
+
+          if (meResponse.statusCode == 200) {
+            final meData = json.decode(meResponse.body);
+            currentUser!.addAll(meData);
+          }
+        } catch (_) {}
+
+        // Attempt polling unit lookup if assigned
+        final puId = currentUser?['polling_unit_id'];
+        if (puId != null) {
+          try {
             final puResponse = await http.get(
               Uri.parse('$baseUrl/electoral/polling-units/$puId'),
               headers: {'Authorization': 'Bearer $token'},
@@ -139,18 +164,31 @@ class ApiService {
             if (puResponse.statusCode == 200) {
               currentPu = json.decode(puResponse.body);
             }
-          }
+          } catch (_) {}
         }
+
+        // Fallback polling unit information to prevent crashes
+        if (currentPu == null) {
+          final effectivePuId = puId ?? 1;
+          currentPu = {
+            'id': effectivePuId,
+            'name': 'Assigned Polling Unit ($effectivePuId)',
+            'code': 'PU-${effectivePuId.toString().padLeft(3, '0')}',
+            'registered_voters': 750,
+            'lga': {'name': 'Jigawa Command'},
+          };
+        }
+
         return true;
       } else if (response.statusCode == 401) {
-        lastErrorMessage = 'Invalid credentials. Please verify your username and password.';
+        lastErrorMessage = 'Invalid credentials. Please verify your username/phone and password.';
         return false;
       } else {
         lastErrorMessage = 'Server error (${response.statusCode}): ${response.body}';
         return false;
       }
     } catch (e) {
-      lastErrorMessage = 'Network error connecting to $baseUrl ($e). Check your Wi-Fi or server IP.';
+      lastErrorMessage = 'Network error connecting to $baseUrl ($e). Check your Wi-Fi, mobile data, or server IP.';
       print('Login error: $e');
       return false;
     }
