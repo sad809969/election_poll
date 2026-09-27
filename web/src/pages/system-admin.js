@@ -47,7 +47,9 @@ import {
   ExternalLink,
   Camera,
   Layers,
-  Scale
+  Scale,
+  Trash2,
+  ChevronLeft
 } from 'lucide-react'
 
 // Default Master Passcode for Data Manager / Operator
@@ -146,10 +148,60 @@ export default function SystemAdminControlPanel() {
   // Live Data States
   const [lgasList, setLgasList] = useState([])
   const [wardsList, setWardsList] = useState([])
+  const [partiesList, setPartiesList] = useState([])
   const [pusList, setPusList] = useState([])
+  const [pusPagination, setPusPagination] = useState({ items: [], total: 0, page: 1, limit: 25, total_pages: 1 })
+  const [puSearch, setPuSearch] = useState('')
+  const [puLgaFilter, setPuLgaFilter] = useState('')
+  const [puWardFilter, setPuWardFilter] = useState('')
+  const [wardLgaFilter, setWardLgaFilter] = useState('')
   const [usersList, setUsersList] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
+  const [dashboardStats, setDashboardStats] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  // Permissions Matrix Interactive State
+  const [matrixUserId, setMatrixUserId] = useState(null)
+  const [matrixSelectedPages, setMatrixSelectedPages] = useState([])
+  const [savingPermissions, setSavingPermissions] = useState(false)
+  const [permToast, setPermToast] = useState('')
+
+  // CRUD Modals: LGA
+  const [showLgaModal, setShowLgaModal] = useState(false)
+  const [editingLga, setEditingLga] = useState(null)
+  const [lgaFormName, setLgaFormName] = useState('')
+  const [lgaFormCode, setLgaFormCode] = useState('')
+  const [lgaFormVoters, setLgaFormVoters] = useState('')
+
+  // CRUD Modals: Ward
+  const [showWardModal, setShowWardModal] = useState(false)
+  const [editingWard, setEditingWard] = useState(null)
+  const [wardFormName, setWardFormName] = useState('')
+  const [wardFormCode, setWardFormCode] = useState('')
+  const [wardFormLgaId, setWardFormLgaId] = useState('')
+
+  // CRUD Modals: Polling Unit
+  const [showPuModal, setShowPuModal] = useState(false)
+  const [editingPu, setEditingPu] = useState(null)
+  const [puFormCode, setPuFormCode] = useState('')
+  const [puFormName, setPuFormName] = useState('')
+  const [puFormLgaId, setPuFormLgaId] = useState('')
+  const [puFormWardId, setPuFormWardId] = useState('')
+  const [puFormVoters, setPuFormVoters] = useState('')
+  const [puFormLat, setPuFormLat] = useState('')
+  const [puFormLng, setPuFormLng] = useState('')
+
+  // CRUD Modals: Party
+  const [showPartyModal, setShowPartyModal] = useState(false)
+  const [editingParty, setEditingParty] = useState(null)
+  const [partyFormName, setPartyFormName] = useState('')
+  const [partyFormAbbr, setPartyFormAbbr] = useState('')
+  const [partyFormColor, setPartyFormColor] = useState('#008751')
+  const [partyFormLogo, setPartyFormLogo] = useState('')
+  const [partyFormActive, setPartyFormActive] = useState(true)
+
+  const [crudError, setCrudError] = useState('')
+  const [crudLoading, setCrudLoading] = useState(false)
 
   // User Creation / Permission Modal State
   const [showUserModal, setShowUserModal] = useState(false)
@@ -245,7 +297,28 @@ export default function SystemAdminControlPanel() {
     }
   }, [router.query])
 
-  // Load Data on Section Change
+  // Load Polling Units with Live Search & Pagination
+  const loadPollingUnits = async (page = 1, lgaId = '', wardId = '', search = '') => {
+    try {
+      const q = new URLSearchParams({
+        page: page.toString(),
+        limit: '25'
+      })
+      if (lgaId) q.append('lga_id', lgaId)
+      if (wardId) q.append('ward_id', wardId)
+      if (search) q.append('search', search)
+
+      const res = await apiFetch(`/admin/polling-units?${q.toString()}`)
+      if (res && res.items) {
+        setPusPagination(res)
+        setPusList(res.items)
+      }
+    } catch (e) {
+      console.warn('Load PUs error:', e)
+    }
+  }
+
+  // Load All Primary Live Data
   const loadData = async () => {
     setLoading(true)
     try {
@@ -253,38 +326,354 @@ export default function SystemAdminControlPanel() {
         await loginUser('admin', 'PDP-ADMIN-2027').catch(() => {})
       }
 
-      const [lgaRes, puRes, userRes, auditRes] = await Promise.allSettled([
-        apiFetch('/electoral/lgas'),
-        apiFetch('/electoral/polling-units?limit=100'),
-        apiFetch('/agents?limit=100'),
+      const [statsRes, lgaRes, wardRes, partyRes, permRes, auditRes] = await Promise.allSettled([
+        apiFetch('/admin/dashboard-stats'),
+        apiFetch('/admin/lgas'),
+        apiFetch('/admin/wards'),
+        apiFetch('/admin/parties'),
+        apiFetch('/admin/permissions'),
         apiFetch('/audit-logs?limit=50')
       ])
 
+      if (statsRes.status === 'fulfilled') setDashboardStats(statsRes.value)
       if (lgaRes.status === 'fulfilled' && Array.isArray(lgaRes.value)) setLgasList(lgaRes.value)
-      if (puRes.status === 'fulfilled' && Array.isArray(puRes.value)) setPusList(puRes.value)
-
-      // Fetch custom users from localStorage
-      let localCustom = []
-      if (typeof window !== 'undefined') {
-        try {
-          const stored = localStorage.getItem('pdp_custom_users')
-          if (stored) localCustom = JSON.parse(stored)
-        } catch (e) {}
+      if (wardRes.status === 'fulfilled' && Array.isArray(wardRes.value)) setWardsList(wardRes.value)
+      if (partyRes.status === 'fulfilled' && Array.isArray(partyRes.value)) setPartiesList(partyRes.value)
+      if (permRes.status === 'fulfilled' && Array.isArray(permRes.value)) {
+        setUsersList(permRes.value)
+        if (!matrixUserId && permRes.value.length > 0) {
+          setMatrixUserId(permRes.value[0].id)
+          setMatrixSelectedPages(permRes.value[0].allowed_pages || [])
+        }
       }
-
-      if (userRes.status === 'fulfilled' && Array.isArray(userRes.value)) {
-        const customUsernames = new Set(localCustom.map(u => u.username))
-        const remainingBackend = userRes.value.filter(u => !customUsernames.has(u.username))
-        setUsersList([...localCustom, ...remainingBackend])
-      } else if (localCustom.length > 0) {
-        setUsersList(localCustom)
-      }
-
       if (auditRes.status === 'fulfilled' && Array.isArray(auditRes.value)) setAuditLogs(auditRes.value)
+
+      await loadPollingUnits(1, puLgaFilter, puWardFilter, puSearch)
     } catch (err) {
       console.error('Master admin load error:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // -------------------------------------------------------------
+  // PERMISSIONS MATRIX HANDLERS
+  // -------------------------------------------------------------
+  const handleSelectMatrixUser = (user) => {
+    setMatrixUserId(user.id)
+    setMatrixSelectedPages(user.allowed_pages || [])
+    setPermToast('')
+  }
+
+  const handleToggleMatrixPage = (pageId) => {
+    setMatrixSelectedPages(prev => 
+      prev.includes(pageId) ? prev.filter(p => p !== pageId) : [...prev, pageId]
+    )
+  }
+
+  const handleSaveMatrixPermissions = async () => {
+    if (!matrixUserId) return
+    setSavingPermissions(true)
+    setPermToast('')
+    try {
+      await apiFetch('/admin/permissions/update', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: matrixUserId,
+          allowed_pages: matrixSelectedPages
+        })
+      })
+      setPermToast('Permissions successfully saved to database!')
+      // Update local state
+      setUsersList(prev => prev.map(u => u.id === matrixUserId ? { ...u, allowed_pages: matrixSelectedPages } : u))
+      setTimeout(() => setPermToast(''), 4000)
+    } catch (e) {
+      alert(`Failed to save permissions: ${e.message}`)
+    } finally {
+      setSavingPermissions(false)
+    }
+  }
+
+  const handleSaveRoleDefaults = async (roleName) => {
+    setSavingPermissions(true)
+    setPermToast('')
+    try {
+      const pages = ROLE_PRESETS[roleName] || matrixSelectedPages
+      const res = await apiFetch('/admin/permissions/role-update', {
+        method: 'POST',
+        body: JSON.stringify({
+          role: roleName,
+          allowed_pages: pages
+        })
+      })
+      setPermToast(`Applied defaults to all ${res.updated_users_count || 0} users with role ${roleName}!`)
+      await loadData()
+      setTimeout(() => setPermToast(''), 4000)
+    } catch (e) {
+      alert(`Failed to apply role defaults: ${e.message}`)
+    } finally {
+      setSavingPermissions(false)
+    }
+  }
+
+  // -------------------------------------------------------------
+  // INFRASTRUCTURE: LGA CRUD
+  // -------------------------------------------------------------
+  const openAddLgaModal = () => {
+    setEditingLga(null)
+    setLgaFormName('')
+    setLgaFormCode('')
+    setLgaFormVoters('')
+    setCrudError('')
+    setShowLgaModal(true)
+  }
+
+  const openEditLgaModal = (lga) => {
+    setEditingLga(lga)
+    setLgaFormName(lga.name)
+    setLgaFormCode(lga.code)
+    setLgaFormVoters(lga.registered_voters || '')
+    setCrudError('')
+    setShowLgaModal(true)
+  }
+
+  const handleSaveLga = async (e) => {
+    e.preventDefault()
+    setCrudLoading(true)
+    setCrudError('')
+    try {
+      const payload = {
+        name: lgaFormName.trim(),
+        code: lgaFormCode.trim().toUpperCase(),
+        registered_voters: parseInt(lgaFormVoters) || 0
+      }
+      if (editingLga) {
+        await apiFetch(`/admin/lgas/${editingLga.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiFetch('/admin/lgas', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      setShowLgaModal(false)
+      await loadData()
+    } catch (err) {
+      setCrudError(err.message || 'LGA operation failed')
+    } finally {
+      setCrudLoading(false)
+    }
+  }
+
+  const handleDeleteLga = async (lga) => {
+    if (!confirm(`Are you sure you want to delete LGA "${lga.name}"? This will delete associated Wards and Polling Units.`)) return
+    try {
+      await apiFetch(`/admin/lgas/${lga.id}`, { method: 'DELETE' })
+      await loadData()
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`)
+    }
+  }
+
+  // -------------------------------------------------------------
+  // INFRASTRUCTURE: WARD CRUD
+  // -------------------------------------------------------------
+  const openAddWardModal = () => {
+    setEditingWard(null)
+    setWardFormName('')
+    setWardFormCode('')
+    setWardFormLgaId(lgasList[0]?.id || '')
+    setCrudError('')
+    setShowWardModal(true)
+  }
+
+  const openEditWardModal = (w) => {
+    setEditingWard(w)
+    setWardFormName(w.name)
+    setWardFormCode(w.code || '')
+    setWardFormLgaId(w.lga_id)
+    setCrudError('')
+    setShowWardModal(true)
+  }
+
+  const handleSaveWard = async (e) => {
+    e.preventDefault()
+    setCrudLoading(true)
+    setCrudError('')
+    try {
+      const payload = {
+        name: wardFormName.trim(),
+        code: wardFormCode.trim().toUpperCase() || undefined,
+        lga_id: parseInt(wardFormLgaId)
+      }
+      if (editingWard) {
+        await apiFetch(`/admin/wards/${editingWard.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiFetch('/admin/wards', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      setShowWardModal(false)
+      await loadData()
+    } catch (err) {
+      setCrudError(err.message || 'Ward operation failed')
+    } finally {
+      setCrudLoading(false)
+    }
+  }
+
+  const handleDeleteWard = async (w) => {
+    if (!confirm(`Delete Ward "${w.name}"? This removes associated Polling Units.`)) return
+    try {
+      await apiFetch(`/admin/wards/${w.id}`, { method: 'DELETE' })
+      await loadData()
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`)
+    }
+  }
+
+  // -------------------------------------------------------------
+  // INFRASTRUCTURE: POLLING UNIT CRUD
+  // -------------------------------------------------------------
+  const openAddPuModal = () => {
+    setEditingPu(null)
+    setPuFormCode('')
+    setPuFormName('')
+    setPuFormLgaId(lgasList[0]?.id || '')
+    setPuFormWardId(wardsList[0]?.id || '')
+    setPuFormVoters('500')
+    setPuFormLat('11.7')
+    setPuFormLng('9.3')
+    setCrudError('')
+    setShowPuModal(true)
+  }
+
+  const openEditPuModal = (pu) => {
+    setEditingPu(pu)
+    setPuFormCode(pu.code)
+    setPuFormName(pu.name)
+    setPuFormLgaId(pu.lga_id)
+    setPuFormWardId(pu.ward_id)
+    setPuFormVoters(pu.registered_voters || '')
+    setPuFormLat(pu.latitude || '')
+    setPuFormLng(pu.longitude || '')
+    setCrudError('')
+    setShowPuModal(true)
+  }
+
+  const handleSavePu = async (e) => {
+    e.preventDefault()
+    setCrudLoading(true)
+    setCrudError('')
+    try {
+      const payload = {
+        code: puFormCode.trim().toUpperCase(),
+        name: puFormName.trim(),
+        lga_id: parseInt(puFormLgaId),
+        ward_id: parseInt(puFormWardId),
+        registered_voters: parseInt(puFormVoters) || 0,
+        latitude: puFormLat ? parseFloat(puFormLat) : undefined,
+        longitude: puFormLng ? parseFloat(puFormLng) : undefined
+      }
+      if (editingPu) {
+        await apiFetch(`/admin/polling-units/${editingPu.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiFetch('/admin/polling-units', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      setShowPuModal(false)
+      await loadPollingUnits(pusPagination.page, puLgaFilter, puWardFilter, puSearch)
+      const stats = await apiFetch('/admin/dashboard-stats')
+      if (stats) setDashboardStats(stats)
+    } catch (err) {
+      setCrudError(err.message || 'Polling Unit operation failed')
+    } finally {
+      setCrudLoading(false)
+    }
+  }
+
+  const handleDeletePu = async (pu) => {
+    if (!confirm(`Delete Polling Unit "${pu.code} - ${pu.name}"?`)) return
+    try {
+      await apiFetch(`/admin/polling-units/${pu.id}`, { method: 'DELETE' })
+      await loadPollingUnits(pusPagination.page, puLgaFilter, puWardFilter, puSearch)
+      const stats = await apiFetch('/admin/dashboard-stats')
+      if (stats) setDashboardStats(stats)
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`)
+    }
+  }
+
+  // -------------------------------------------------------------
+  // INFRASTRUCTURE: POLITICAL PARTIES CRUD
+  // -------------------------------------------------------------
+  const openAddPartyModal = () => {
+    setEditingParty(null)
+    setPartyFormName('')
+    setPartyFormAbbr('')
+    setPartyFormColor('#008751')
+    setPartyFormLogo('')
+    setPartyFormActive(true)
+    setCrudError('')
+    setShowPartyModal(true)
+  }
+
+  const openEditPartyModal = (p) => {
+    setEditingParty(p)
+    setPartyFormName(p.name)
+    setPartyFormAbbr(p.abbreviation)
+    setPartyFormColor(p.color || '#008751')
+    setPartyFormLogo(p.logo_url || '')
+    setPartyFormActive(p.is_active)
+    setCrudError('')
+    setShowPartyModal(true)
+  }
+
+  const handleSaveParty = async (e) => {
+    e.preventDefault()
+    setCrudLoading(true)
+    setCrudError('')
+    try {
+      const payload = {
+        name: partyFormName.trim(),
+        abbreviation: partyFormAbbr.trim().toUpperCase(),
+        color: partyFormColor,
+        logo_url: partyFormLogo.trim() || undefined,
+        is_active: partyFormActive
+      }
+      if (editingParty) {
+        await apiFetch(`/admin/parties/${editingParty.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      } else {
+        await apiFetch('/admin/parties', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      setShowPartyModal(false)
+      const parties = await apiFetch('/admin/parties')
+      if (Array.isArray(parties)) setPartiesList(parties)
+      const stats = await apiFetch('/admin/dashboard-stats')
+      if (stats) setDashboardStats(stats)
+    } catch (err) {
+      setCrudError(err.message || 'Party operation failed')
+    } finally {
+      setCrudLoading(false)
+    }
+  }
+
+  const handleTogglePartyActive = async (p) => {
+    try {
+      await apiFetch(`/admin/parties/${p.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !p.is_active })
+      })
+      const parties = await apiFetch('/admin/parties')
+      if (Array.isArray(parties)) setPartiesList(parties)
+    } catch (e) {
+      alert(`Toggle failed: ${e.message}`)
+    }
+  }
+
+  const handleDeleteParty = async (p) => {
+    if (!confirm(`Delete Political Party "${p.abbreviation} - ${p.name}"?`)) return
+    try {
+      await apiFetch(`/admin/parties/${p.id}`, { method: 'DELETE' })
+      const parties = await apiFetch('/admin/parties')
+      if (Array.isArray(parties)) setPartiesList(parties)
+      const stats = await apiFetch('/admin/dashboard-stats')
+      if (stats) setDashboardStats(stats)
+    } catch (e) {
+      alert(`Delete failed: ${e.message}`)
     }
   }
 
@@ -793,41 +1182,109 @@ export default function SystemAdminControlPanel() {
           {/* SECTION 1: DASHBOARD */}
           {activeSection === 'dashboard' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Configured LGAs</span>
-                  <div className="flex items-baseline justify-between pt-1">
-                    <span className="text-2xl font-black text-white">{lgasList.length || 27}</span>
-                    <span className="text-xs text-emerald-400 font-bold">100% Mapped</span>
+              {/* Top Banner */}
+              <div className={`${cardClass} border rounded-2xl p-6 relative overflow-hidden`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                      LIVE SYSTEM ENGINE TELEMETRY
+                    </span>
+                    <h3 className="text-xl font-black text-white mt-2">Jigawa PDP PollWatch 2027 — Side A Dashboard</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+                      Real-time master control room monitoring electoral geography, system personnel, ballot infrastructure, and live field telemetry.
+                    </p>
                   </div>
-                </div>
-                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Electoral Wards</span>
-                  <div className="flex items-baseline justify-between pt-1">
-                    <span className="text-2xl font-black text-white">287</span>
-                    <span className="text-xs text-emerald-400 font-bold">All Active</span>
-                  </div>
-                </div>
-                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">Total Polling Units</span>
-                  <div className="flex items-baseline justify-between pt-1">
-                    <span className="text-2xl font-black text-white">4,827</span>
-                    <span className="text-xs text-emerald-400 font-bold">In Database</span>
-                  </div>
-                </div>
-                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">System Users</span>
-                  <div className="flex items-baseline justify-between pt-1">
-                    <span className="text-2xl font-black text-white">{usersList.length || 4829}</span>
-                    <span className="text-xs text-blue-400 font-bold">Roster Loaded</span>
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
+                      DB Driver: <strong className="text-emerald-400">{dashboardStats?.database_driver || 'SQLite'}</strong>
+                    </span>
+                    <button
+                      onClick={loadData}
+                      disabled={loading}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-2 transition"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Quick Jump Grid */}
+              {/* 8-Card Live Metric Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Local Govt Areas</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-white">{dashboardStats?.lgas_count ?? lgasList.length ?? 27}</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">100% Configured</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Electoral Wards</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-white">{dashboardStats?.wards_count ?? wardsList.length ?? 299}</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">All Active</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Total Polling Units</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-white">{(dashboardStats?.polling_units_count ?? 4827).toLocaleString()}</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Master Inventory</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Registered Voters</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-emerald-400">{(dashboardStats?.registered_voters ?? 3201565).toLocaleString()}</span>
+                    <span className="text-[10px] text-slate-400 font-bold">Quota</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Political Parties</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-purple-400">{dashboardStats?.parties_count ?? partiesList.length ?? 7}</span>
+                    <span className="text-[10px] text-purple-400 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded">Ballot Registered</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">System Users</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-blue-400">{dashboardStats?.users_count ?? usersList.length ?? 9}</span>
+                    <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded">Staff Active</span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Live Collation Results</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-white">{dashboardStats?.results_count ?? 0}</span>
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      {dashboardStats?.results_count === 0 ? 'Awaiting Votes' : `${dashboardStats?.verified_results || 0} Verified`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={`${cardClass} border rounded-xl p-4 space-y-1`}>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">Field Incidents</span>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="text-2xl font-black text-white">{dashboardStats?.incidents_count ?? 0}</span>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                      {dashboardStats?.incidents_count === 0 ? 'Clear / Quiet' : 'Active Logs'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Workflows Grid */}
               <div className={`${cardClass} border rounded-2xl p-6 space-y-4`}>
-                <h3 className="text-sm font-black text-white">System Admin Workflows</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <h3 className="text-sm font-black text-white">System Admin Core Workflows</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <button
                     onClick={() => setActiveSection('permissions')}
                     className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group border-emerald-500/30 bg-emerald-950/20`}
@@ -842,26 +1299,44 @@ export default function SystemAdminControlPanel() {
                     className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group`}
                   >
                     <MapPin className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
-                    <h4 className="text-xs font-bold text-white mt-2">Manage Electoral Structure</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Configure 27 LGAs, 287 Wards, and 4,827 Polling Units</p>
+                    <h4 className="text-xs font-bold text-white mt-2">Manage 27 LGAs</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Add, edit boundaries, or remove Local Government Areas</p>
                   </button>
 
                   <button
-                    onClick={() => setActiveSection('users')}
+                    onClick={() => { setActiveSection('setup'); setSetupTab('wards'); }}
                     className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group`}
                   >
-                    <Users className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
-                    <h4 className="text-xs font-bold text-white mt-2">Manage User Roles & Access</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Administrators, State, LGA, and Ward Coordinators</p>
+                    <Building2 className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
+                    <h4 className="text-xs font-bold text-white mt-2">Manage 299 Electoral Wards</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Filter by LGA, add, edit, and audit ward collation zones</p>
                   </button>
 
                   <button
-                    onClick={() => { setActiveSection('security'); setSecurityTab('audit'); }}
+                    onClick={() => { setActiveSection('setup'); setSetupTab('polling-units'); }}
                     className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group`}
                   >
-                    <FileText className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
-                    <h4 className="text-xs font-bold text-white mt-2">Audit Logs & Security</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Immutable audit trail and real-time login histories</p>
+                    <Activity className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
+                    <h4 className="text-xs font-bold text-white mt-2">Manage 4,827 Polling Units</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Search PU inventory, adjust voter quotas and coordinates</p>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveSection('setup'); setSetupTab('parties'); }}
+                    className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group`}
+                  >
+                    <Flag className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
+                    <h4 className="text-xs font-bold text-white mt-2">Manage Political Parties</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Configure official parties, ballot colors, and status</p>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveSection('exports')}
+                    className={`${subcardClass} border rounded-xl p-4 text-left hover:border-emerald-500 transition group`}
+                  >
+                    <FolderArchive className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
+                    <h4 className="text-xs font-bold text-white mt-2">Data & Media Vault</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Batch ZIP archives, EC8A photo proofs, and court-ready packs</p>
                   </button>
                 </div>
               </div>
@@ -1000,6 +1475,174 @@ export default function SystemAdminControlPanel() {
                 </div>
               </div>
 
+              {/* Active User Live Permission Customizer */}
+              <div className={`${cardClass} border rounded-2xl p-6 space-y-5`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-emerald-400" />
+                      <span>Live Database Permission Editor</span>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Select a database user account below, toggle individual page access, and save directly to the system database.</p>
+                  </div>
+                  
+                  {/* User Selector Dropdown */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-300">Target User:</span>
+                    <select
+                      value={matrixUserId || ''}
+                      onChange={(e) => {
+                        const targetId = parseInt(e.target.value)
+                        const targetUser = usersList.find(u => u.id === targetId)
+                        if (targetUser) handleSelectMatrixUser(targetUser)
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-bold focus:border-emerald-500 outline-none"
+                    >
+                      {usersList.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.full_name || u.username} ({u.role}) — @{u.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {permToast && (
+                  <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>{permToast}</span>
+                  </div>
+                )}
+
+                {/* Preset Role Quick-Set Buttons */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-[11px] font-bold text-slate-400">Apply Preset Template:</span>
+                  {Object.keys(ROLE_PRESETS).slice(0, 6).map(presetName => (
+                    <button
+                      key={presetName}
+                      type="button"
+                      onClick={() => setMatrixSelectedPages(ROLE_PRESETS[presetName] || [])}
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-[10px] font-bold transition"
+                    >
+                      {presetName}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setMatrixSelectedPages([...ALL_SIDE_B_PAGES.map(p => p.id), ...ALL_SIDE_A_MODULES.map(m => m.id)])}
+                    className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold transition"
+                  >
+                    Select All (100%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatrixSelectedPages([])}
+                    className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 text-[10px] font-bold transition"
+                  >
+                    Clear All
+                  </button>
+                </div>
+
+                {/* Live Permission Toggle Checkboxes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                  {/* Side B Checkboxes */}
+                  <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <span className="text-xs font-black text-emerald-400 uppercase tracking-wider">
+                        Side B: Situation Room Pages ({matrixSelectedPages.filter(p => !p.startsWith('side-a')).length} / {ALL_SIDE_B_PAGES.length})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {ALL_SIDE_B_PAGES.map(page => {
+                        const isChecked = matrixSelectedPages.includes(page.id)
+                        const Icon = page.icon
+                        return (
+                          <label
+                            key={page.id}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer select-none transition ${
+                              isChecked 
+                                ? 'bg-emerald-500/15 border-emerald-500/40 text-white' 
+                                : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleMatrixPage(page.id)}
+                              className="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer"
+                            />
+                            <Icon className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                            <span className="truncate font-semibold">{page.label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Side A Checkboxes */}
+                  <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <span className="text-xs font-black text-blue-400 uppercase tracking-wider">
+                        Side A: System Admin Modules ({matrixSelectedPages.filter(p => p.startsWith('side-a')).length} / {ALL_SIDE_A_MODULES.length})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {ALL_SIDE_A_MODULES.map(mod => {
+                        const isChecked = matrixSelectedPages.includes(mod.id)
+                        return (
+                          <label
+                            key={mod.id}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer select-none transition ${
+                              isChecked 
+                                ? 'bg-blue-500/15 border-blue-500/40 text-white' 
+                                : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleMatrixPage(mod.id)}
+                              className="w-3.5 h-3.5 accent-blue-500 rounded cursor-pointer"
+                            />
+                            <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 text-blue-400" />
+                            <span className="truncate font-semibold">{mod.label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Permissions Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                  <div className="text-xs text-slate-400">
+                    Target account: <strong className="text-white">{usersList.find(u => u.id === matrixUserId)?.username || 'No user selected'}</strong> • Total Granted: <strong className="text-emerald-400">{matrixSelectedPages.length} Pages</strong>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetUser = usersList.find(u => u.id === matrixUserId)
+                        if (targetUser && targetUser.role) handleSaveRoleDefaults(targetUser.role)
+                      }}
+                      disabled={savingPermissions}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition"
+                    >
+                      Apply to All with Same Role
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMatrixPermissions}
+                      disabled={savingPermissions || !matrixUserId}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition shadow-lg shadow-emerald-600/30 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {savingPermissions ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>Save Permissions to Database</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Complete Permissions Directory Table */}
               <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
                 <h4 className="text-sm font-black text-white">Full Role Permission Mapping Directory</h4>
@@ -1065,88 +1708,392 @@ export default function SystemAdminControlPanel() {
             </div>
           )}
 
-          {/* SECTION 2: SYSTEM SETUP */}
+          {/* SECTION 2: SYSTEM SETUP & INFRASTRUCTURE CRUD */}
           {activeSection === 'setup' && (
             <div className="space-y-4">
               {/* Setup Tabs */}
-              <div className="flex gap-2 border-b border-slate-800 pb-3">
+              <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
                 {[
-                  { id: 'lgas', label: '1. Manage LGAs (27)' },
-                  { id: 'wards', label: '2. Manage Wards (287)' },
-                  { id: 'polling-units', label: '3. Manage Polling Units (4,827)' },
-                  { id: 'parties', label: '4. Manage Political Parties' },
+                  { id: 'lgas', label: `1. Manage LGAs (${lgasList.length})`, count: lgasList.length },
+                  { id: 'wards', label: `2. Manage Wards (${wardsList.length})`, count: wardsList.length },
+                  { id: 'polling-units', label: `3. Manage Polling Units (${pusPagination.total || 4827})`, count: pusPagination.total },
+                  { id: 'parties', label: `4. Political Parties (${partiesList.length})`, count: partiesList.length },
                 ].map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setSetupTab(tab.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-                      setupTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      setupTab === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    {tab.label}
+                    <span>{tab.label}</span>
                   </button>
                 ))}
               </div>
 
-              {/* Setup Subview: LGAs */}
+              {/* -------------------------------------------------------- */}
+              {/* SUBVIEW 1: MANAGE LGAS */}
+              {/* -------------------------------------------------------- */}
               {setupTab === 'lgas' && (
                 <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
                     <div>
                       <h3 className="text-sm font-black text-white">All 27 Local Government Areas of Jigawa</h3>
-                      <p className="text-xs text-slate-400">Configured boundary zones and collation keys</p>
+                      <p className="text-xs text-slate-400">Official administrative boundaries, ward mapping, and voter quotas</p>
                     </div>
+                    <button
+                      onClick={openAddLgaModal}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition self-start sm:self-auto shadow-md"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add New LGA</span>
+                    </button>
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {lgasList.map((lga) => (
-                      <div key={lga.id} className={`${subcardClass} border rounded-xl p-3 flex justify-between items-center`}>
-                        <div>
-                          <h4 className="text-xs font-bold text-white">{lga.name}</h4>
-                          <span className="text-[10px] text-slate-400 font-mono">Code: {lga.code || `LGA-${lga.id}`}</span>
+                      <div key={lga.id} className={`${subcardClass} border rounded-xl p-3.5 flex flex-col justify-between space-y-3`}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{lga.name}</h4>
+                            <span className="text-[10px] text-slate-400 font-mono">Code: {lga.code}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Active
+                          </span>
                         </div>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
+
+                        <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-800/60 text-center text-xs">
+                          <div className="p-1 bg-slate-950/60 rounded">
+                            <span className="text-[9px] text-slate-400 block">Wards</span>
+                            <span className="font-bold text-white">{lga.wards_count ?? 10}</span>
+                          </div>
+                          <div className="p-1 bg-slate-950/60 rounded">
+                            <span className="text-[9px] text-slate-400 block">PUs</span>
+                            <span className="font-bold text-white">{lga.polling_units_count ?? 180}</span>
+                          </div>
+                          <div className="p-1 bg-slate-950/60 rounded">
+                            <span className="text-[9px] text-slate-400 block">Voters</span>
+                            <span className="font-bold text-emerald-400">{(lga.registered_voters || 0).toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/40">
+                          <button
+                            onClick={() => openEditLgaModal(lga)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition"
+                            title="Edit LGA"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLga(lga)}
+                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs transition"
+                            title="Delete LGA"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Setup Subview: Political Parties */}
+              {/* -------------------------------------------------------- */}
+              {/* SUBVIEW 2: MANAGE WARDS */}
+              {/* -------------------------------------------------------- */}
+              {setupTab === 'wards' && (
+                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Electoral Wards Directory ({wardsList.length} Wards)</h3>
+                      <p className="text-xs text-slate-400">Ward collation centers and supervisory jurisdiction</p>
+                    </div>
+                    <div className="flex items-center gap-2.5 self-start sm:self-auto">
+                      <select
+                        value={wardLgaFilter}
+                        onChange={(e) => {
+                          setWardLgaFilter(e.target.value)
+                          apiFetch(e.target.value ? `/admin/wards?lga_id=${e.target.value}` : '/admin/wards')
+                            .then(data => { if (Array.isArray(data)) setWardsList(data) })
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white outline-none"
+                      >
+                        <option value="">All 27 LGAs</option>
+                        {lgasList.map(lga => (
+                          <option key={lga.id} value={lga.id}>{lga.name}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        onClick={openAddWardModal}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add New Ward</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="pb-2">Ward Name & Code</th>
+                          <th className="pb-2">Parent LGA</th>
+                          <th className="pb-2">Polling Units</th>
+                          <th className="pb-2">Registered Voters</th>
+                          <th className="pb-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {wardsList.map((w) => (
+                          <tr key={w.id} className="hover:bg-slate-800/30">
+                            <td className="py-2.5 font-bold text-white">
+                              {w.name}
+                              <span className="text-[10px] text-slate-500 font-mono ml-2">[{w.code || `W-${w.id}`}]</span>
+                            </td>
+                            <td className="py-2.5 text-slate-300 font-semibold">{w.lga_name}</td>
+                            <td className="py-2.5 text-slate-400">{w.polling_units_count ?? 15} PUs</td>
+                            <td className="py-2.5 text-emerald-400 font-mono font-bold">{(w.registered_voters || 0).toLocaleString()}</td>
+                            <td className="py-2.5 text-right space-x-1">
+                              <button
+                                onClick={() => openEditWardModal(w)}
+                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                title="Edit Ward"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteWard(w)}
+                                className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                                title="Delete Ward"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------- */}
+              {/* SUBVIEW 3: MANAGE POLLING UNITS */}
+              {/* -------------------------------------------------------- */}
+              {setupTab === 'polling-units' && (
+                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Polling Units Inventory ({pusPagination.total || 4827} Total)</h3>
+                      <p className="text-xs text-slate-400">Live voter quotas, GPS coordinates, and real-time statuses</p>
+                    </div>
+                    <button
+                      onClick={openAddPuModal}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition self-start sm:self-auto shadow-md"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Polling Unit</span>
+                    </button>
+                  </div>
+
+                  {/* Filter and Search Bar */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex-1 min-w-[200px] relative">
+                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search PU Code (e.g. DUT-0101) or PU Name..."
+                        value={puSearch}
+                        onChange={(e) => {
+                          setPuSearch(e.target.value)
+                          loadPollingUnits(1, puLgaFilter, puWardFilter, e.target.value)
+                        }}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <select
+                      value={puLgaFilter}
+                      onChange={(e) => {
+                        setPuLgaFilter(e.target.value)
+                        loadPollingUnits(1, e.target.value, puWardFilter, puSearch)
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white outline-none"
+                    >
+                      <option value="">All LGAs</option>
+                      {lgasList.map(lga => (
+                        <option key={lga.id} value={lga.id}>{lga.name}</option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => {
+                        setPuSearch('')
+                        setPuLgaFilter('')
+                        setPuWardFilter('')
+                        loadPollingUnits(1, '', '', '')
+                      }}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="pb-2">PU Code & Name</th>
+                          <th className="pb-2">LGA / Ward</th>
+                          <th className="pb-2">Registered Voters</th>
+                          <th className="pb-2">GPS Coordinates</th>
+                          <th className="pb-2">Status</th>
+                          <th className="pb-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {pusList.map((pu) => (
+                          <tr key={pu.id} className="hover:bg-slate-800/30">
+                            <td className="py-2.5 font-bold text-white">
+                              <div>{pu.name}</div>
+                              <span className="text-[10px] text-emerald-400 font-mono font-bold">{pu.code}</span>
+                            </td>
+                            <td className="py-2.5 text-slate-300">
+                              <div>{pu.lga_name}</div>
+                              <div className="text-[10px] text-slate-400">{pu.ward_name}</div>
+                            </td>
+                            <td className="py-2.5 text-emerald-400 font-mono font-bold">
+                              {(pu.registered_voters || 0).toLocaleString()}
+                            </td>
+                            <td className="py-2.5 text-slate-400 font-mono text-[10px]">
+                              {pu.latitude ? `${pu.latitude.toFixed(4)}, ${pu.longitude.toFixed(4)}` : 'Unpinned'}
+                            </td>
+                            <td className="py-2.5">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                {pu.status || 'Normal'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right space-x-1">
+                              <button
+                                onClick={() => openEditPuModal(pu)}
+                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                                title="Edit PU"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePu(pu)}
+                                className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                                title="Delete PU"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+                    <span className="text-slate-400">
+                      Showing page <strong className="text-white">{pusPagination.page}</strong> of <strong className="text-white">{pusPagination.total_pages || 1}</strong> ({pusPagination.total} total units)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => loadPollingUnits(pusPagination.page - 1, puLgaFilter, puWardFilter, puSearch)}
+                        disabled={pusPagination.page <= 1}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40 font-bold"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => loadPollingUnits(pusPagination.page + 1, puLgaFilter, puWardFilter, puSearch)}
+                        disabled={pusPagination.page >= pusPagination.total_pages}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40 font-bold"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------- */}
+              {/* SUBVIEW 4: MANAGE POLITICAL PARTIES */}
+              {/* -------------------------------------------------------- */}
               {setupTab === 'parties' && (
                 <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
-                  <h3 className="text-sm font-black text-white">Registered Political Parties</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {politicalParties.map((p) => (
-                      <div key={p.code} className={`${subcardClass} border rounded-xl p-4 space-y-2`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-base font-black" style={{ color: p.color }}>{p.code}</span>
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{p.status}</span>
-                        </div>
-                        <h4 className="text-xs font-bold text-white">{p.name}</h4>
-                        <p className="text-xs text-slate-300">Flagbearer: <strong className="text-white">{p.candidate}</strong></p>
-                        <p className="text-[10px] text-slate-400 font-mono">Ballot Symbol: {p.symbol}</p>
-                      </div>
-                    ))}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Registered Political Parties ({partiesList.length} Parties)</h3>
+                      <p className="text-xs text-slate-400">INEC recognized ballot parties, brand colors, and status</p>
+                    </div>
+                    <button
+                      onClick={openAddPartyModal}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition self-start sm:self-auto shadow-md"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Political Party</span>
+                    </button>
                   </div>
-                </div>
-              )}
 
-              {/* Setup Subview: Polling Units / Wards */}
-              {(setupTab === 'wards' || setupTab === 'polling-units') && (
-                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black text-white">
-                      {setupTab === 'wards' ? 'Electoral Wards Directory' : 'Polling Units Directory (Sample Records)'}
-                    </h3>
-                  </div>
-                  <div className="divide-y divide-slate-800 text-xs">
-                    {pusList.slice(0, 10).map((pu, i) => (
-                      <div key={i} className="py-2.5 flex justify-between items-center">
-                        <div>
-                          <span className="font-bold text-white">{pu.name}</span>
-                          <span className="text-[10px] text-slate-400 ml-2 font-mono">[{pu.code}]</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {partiesList.map((p) => (
+                      <div key={p.id} className={`${subcardClass} border rounded-xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden`}>
+                        <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: p.color || '#008751' }}></div>
+                        <div className="flex items-start justify-between pt-1">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-base shadow-inner text-white" style={{ backgroundColor: p.color || '#008751' }}>
+                              {p.abbreviation}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-white">{p.abbreviation}</h4>
+                              <p className="text-[11px] text-slate-400">{p.name}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            p.is_active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          }`}>
+                            {p.is_active ? 'Active' : 'Inactive'}
+                          </span>
                         </div>
-                        <span className="text-slate-400 font-mono text-[11px]">{pu.registered_voters || 500} voters</span>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color || '#008751' }}></span>
+                            <span className="font-mono text-slate-400 text-[11px]">{p.color}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleTogglePartyActive(p)}
+                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold"
+                            >
+                              {p.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button
+                              onClick={() => openEditPartyModal(p)}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                              title="Edit Party"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteParty(p)}
+                              className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                              title="Delete Party"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2240,6 +3187,445 @@ export default function SystemAdminControlPanel() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LGA MODAL */}
+      {showLgaModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B132B] border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white">
+                  {editingLga ? 'Edit Local Government Area' : 'Register New LGA'}
+                </h3>
+                <p className="text-xs text-slate-400">Jigawa State Electoral Infrastructure</p>
+              </div>
+              <button 
+                onClick={() => setShowLgaModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLga} className="space-y-4 text-xs">
+              {crudError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{crudError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">LGA Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={lgaFormName}
+                  onChange={(e) => setLgaFormName(e.target.value)}
+                  placeholder="e.g. Dutse"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Official Code *</label>
+                <input
+                  required
+                  type="text"
+                  value={lgaFormCode}
+                  onChange={(e) => setLgaFormCode(e.target.value)}
+                  placeholder="e.g. JG-DTS"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp uppercase font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Registered Voters</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={lgaFormVoters}
+                  onChange={(e) => setLgaFormVoters(e.target.value)}
+                  placeholder="e.g. 135400"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowLgaModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={crudLoading}
+                  className="px-5 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark shadow-md shadow-pdp/20 flex items-center gap-1.5"
+                >
+                  {crudLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{editingLga ? 'Save LGA Changes' : 'Create LGA'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WARD MODAL */}
+      {showWardModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B132B] border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white">
+                  {editingWard ? 'Edit Electoral Ward' : 'Register New Ward'}
+                </h3>
+                <p className="text-xs text-slate-400">Jigawa State Electoral Infrastructure</p>
+              </div>
+              <button 
+                onClick={() => setShowWardModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWard} className="space-y-4 text-xs">
+              {crudError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{crudError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Parent Local Government Area (LGA) *</label>
+                <select
+                  required
+                  value={wardFormLgaId}
+                  onChange={(e) => setWardFormLgaId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-semibold"
+                >
+                  <option value="">-- Select LGA --</option>
+                  {lgasList.map(lga => (
+                    <option key={lga.id} value={lga.id}>{lga.name} ({lga.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Ward Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={wardFormName}
+                  onChange={(e) => setWardFormName(e.target.value)}
+                  placeholder="e.g. Dutse Town"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Ward Code</label>
+                <input
+                  type="text"
+                  value={wardFormCode}
+                  onChange={(e) => setWardFormCode(e.target.value)}
+                  placeholder="e.g. JG-DTS-01 (optional)"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp uppercase font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowWardModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={crudLoading}
+                  className="px-5 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark shadow-md shadow-pdp/20 flex items-center gap-1.5"
+                >
+                  {crudLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{editingWard ? 'Save Ward Changes' : 'Create Ward'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POLLING UNIT MODAL */}
+      {showPuModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B132B] border border-slate-800 w-full max-w-xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white">
+                  {editingPu ? 'Edit Polling Unit' : 'Register New Polling Unit'}
+                </h3>
+                <p className="text-xs text-slate-400">Jigawa State Electoral Directory</p>
+              </div>
+              <button 
+                onClick={() => setShowPuModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePu} className="space-y-4 text-xs">
+              {crudError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{crudError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Local Government Area (LGA) *</label>
+                  <select
+                    required
+                    value={puFormLgaId}
+                    onChange={(e) => {
+                      const newLgaId = e.target.value
+                      setPuFormLgaId(newLgaId)
+                      const lgaWards = wardsList.filter(w => !newLgaId || String(w.lga_id) === String(newLgaId))
+                      if (lgaWards.length > 0) setPuFormWardId(lgaWards[0].id)
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-semibold"
+                  >
+                    <option value="">-- Select LGA --</option>
+                    {lgasList.map(lga => (
+                      <option key={lga.id} value={lga.id}>{lga.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Electoral Ward *</label>
+                  <select
+                    required
+                    value={puFormWardId}
+                    onChange={(e) => setPuFormWardId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-semibold"
+                  >
+                    <option value="">-- Select Ward --</option>
+                    {wardsList
+                      .filter(w => !puFormLgaId || String(w.lga_id) === String(puFormLgaId))
+                      .map(w => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">PU Official Code *</label>
+                  <input
+                    required
+                    type="text"
+                    value={puFormCode}
+                    onChange={(e) => setPuFormCode(e.target.value)}
+                    placeholder="e.g. 17-01-01-001"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp uppercase font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Registered Voters</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={puFormVoters}
+                    onChange={(e) => setPuFormVoters(e.target.value)}
+                    placeholder="e.g. 650"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Polling Unit Facility Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={puFormName}
+                  onChange={(e) => setPuFormName(e.target.value)}
+                  placeholder="e.g. Central Primary School / Kofar Fada"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Latitude (GPS)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={puFormLat}
+                    onChange={(e) => setPuFormLat(e.target.value)}
+                    placeholder="e.g. 11.7584"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Longitude (GPS)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={puFormLng}
+                    onChange={(e) => setPuFormLng(e.target.value)}
+                    placeholder="e.g. 9.3371"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowPuModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={crudLoading}
+                  className="px-5 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark shadow-md shadow-pdp/20 flex items-center gap-1.5"
+                >
+                  {crudLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{editingPu ? 'Save PU Changes' : 'Register Polling Unit'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POLITICAL PARTY MODAL */}
+      {showPartyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0B132B] border border-slate-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-black text-white">
+                  {editingParty ? 'Edit Political Party' : 'Register Political Party'}
+                </h3>
+                <p className="text-xs text-slate-400">Official INEC Registered Ballot Contender</p>
+              </div>
+              <button 
+                onClick={() => setShowPartyModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveParty} className="space-y-4 text-xs">
+              {crudError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{crudError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Party Abbreviation *</label>
+                  <input
+                    required
+                    type="text"
+                    value={partyFormAbbr}
+                    onChange={(e) => setPartyFormAbbr(e.target.value)}
+                    placeholder="e.g. PDP"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp uppercase font-black tracking-wider"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-300">Brand Color *</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={partyFormColor}
+                      onChange={(e) => setPartyFormColor(e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-slate-700 bg-transparent cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={partyFormColor}
+                      onChange={(e) => setPartyFormColor(e.target.value)}
+                      placeholder="#008751"
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp uppercase font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Official Party Name *</label>
+                <input
+                  required
+                  type="text"
+                  value={partyFormName}
+                  onChange={(e) => setPartyFormName(e.target.value)}
+                  placeholder="e.g. Peoples Democratic Party"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-300">Party Logo URL (Optional)</label>
+                <input
+                  type="text"
+                  value={partyFormLogo}
+                  onChange={(e) => setPartyFormLogo(e.target.value)}
+                  placeholder="https://... or /logo.png"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-pdp font-mono text-[11px]"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <input
+                  type="checkbox"
+                  id="partyActiveCheck"
+                  checked={partyFormActive}
+                  onChange={(e) => setPartyFormActive(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                />
+                <label htmlFor="partyActiveCheck" className="cursor-pointer select-none">
+                  <span className="font-bold text-white block text-xs">Active Ballot Contender</span>
+                  <span className="text-[10px] text-slate-400">Included on voter collation cards and result sheets</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowPartyModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={crudLoading}
+                  className="px-5 py-2 bg-pdp text-white font-bold rounded-lg hover:bg-pdp-dark shadow-md shadow-pdp/20 flex items-center gap-1.5"
+                >
+                  {crudLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{editingParty ? 'Save Party Changes' : 'Register Party'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

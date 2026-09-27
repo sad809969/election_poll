@@ -25,8 +25,8 @@ def seed_database(db: Session = None):
         admin = db.query(User).filter(User.username == "admin").first()
 
         if admin:
-            admin.full_name = "System Administrator"
-            admin.hashed_password = get_password_hash("admin1283")
+            admin.full_name = "Super Administrator"
+            admin.hashed_password = get_password_hash("PDP-ADMIN-2027")
             admin.role = "Super Admin"
             admin.is_active = True
 
@@ -37,9 +37,9 @@ def seed_database(db: Session = None):
 
         else:
             admin = User(
-                full_name="System Administrator",
+                full_name="Super Administrator",
                 username="admin",
-                hashed_password=get_password_hash("admin1283"),
+                hashed_password=get_password_hash("PDP-ADMIN-2027"),
                 role="Super Admin",
                 is_active=True,
                 phone_number=None,
@@ -218,54 +218,10 @@ def seed_database(db: Session = None):
                             db.commit()
                             db.refresh(agent)
 
-                        # Form EC8A Vote Results
-                        pdp = 210 + ((index * 19 + w_idx * 11 + p_idx * 5) % 160)
-                        apc = 160 + ((index * 13 + w_idx * 7 + p_idx * 3) % 110)
-                        nnpp = 35 + ((index * 5 + w_idx * 3) % 45)
-                        lp = 12 + ((index * 3) % 25)
-                        rejected = 8 + (index % 10)
+                        # Dummy VoteResult and Incident generation removed for real live operations.
+                        pass
 
-                        res_exist = db.query(VoteResult).filter(VoteResult.polling_unit_id == pu.id).first()
-                        if not res_exist:
-                            total_valid = pdp + apc + nnpp + lp + 5
-                            total_cast = total_valid + rejected
-                            is_overvote = total_cast > pu.registered_voters
-                            flagged_status = "FLAGGED" if (is_overvote or status == "Critical") else ("PENDING_PHOTO" if status == "Attention" else "VERIFIED")
-                            result = VoteResult(
-                                polling_unit_id=pu.id,
-                                agent_id=agent.id,
-                                pdp_votes=pdp,
-                                apc_votes=apc,
-                                nnpp_votes=nnpp,
-                                lp_votes=lp,
-                                others_votes=5,
-                                rejected_votes=rejected,
-                                total_valid_votes=total_valid,
-                                total_votes_cast=total_cast,
-                                verification_status=flagged_status,
-                                notes=f"[ALERT] Over-voting: {total_cast} vs {pu.registered_voters}" if is_overvote else None
-                            )
-                            db.add(result)
-                            db.commit()
-
-                        # Seed Incidents for Attention/Critical PUs
-                        if status in ["Attention", "Critical"]:
-                            inc_exist = db.query(Incident).filter(Incident.polling_unit_id == pu.id).first()
-                            if not inc_exist:
-                                inc = Incident(
-                                    polling_unit_id=pu.id,
-                                    reported_by=agent.id,
-                                    incident_type=categories[index % len(categories)],
-                                    severity="CRITICAL" if status == "Critical" else "MEDIUM",
-                                    description=f"{categories[index % len(categories)]} reported at {pu_name}. Field intervention in progress.",
-                                    status="INVESTIGATING" if status == "Attention" else "REPORTED",
-                                    latitude=11.7 + (index * 0.03),
-                                    longitude=9.3 + (w_idx * 0.02)
-                                )
-                                db.add(inc)
-                                db.commit()
-
-        print("Successfully seeded all 27 Jigawa State LGAs, Wards, Polling Units, Agents, Results, and Incidents!")
+        print("Successfully seeded all 27 Jigawa State LGAs, Wards, and Polling Units (0 dummy results, 0 dummy incidents)!")
 
     except Exception as e:
         db.rollback()
