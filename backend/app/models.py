@@ -141,6 +141,12 @@ class PollingUnit(Base):
         cascade="all, delete-orphan",
     )
 
+    election_agent_assignments = relationship(
+    "ElectionAgentAssignment",
+    back_populates="polling_unit",
+    cascade="all, delete-orphan",
+)
+
 
 # =============================================================================
 # 2. ELECTIONS
@@ -220,6 +226,12 @@ class Election(Base):
         cascade="all, delete-orphan",
     )
 
+    agent_assignments = relationship(
+    "ElectionAgentAssignment",
+    back_populates="election",
+    cascade="all, delete-orphan",
+)
+
     __table_args__ = (
         UniqueConstraint(
             "election_type",
@@ -229,6 +241,72 @@ class Election(Base):
         ),
     )
 
+# =============================================================================
+# 2B. ELECTION AGENT ASSIGNMENTS
+# =============================================================================
+
+class ElectionAgentAssignment(Base):
+    __tablename__ = "election_agent_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    election_id = Column(
+        Integer,
+        ForeignKey("elections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    agent_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    polling_unit_id = Column(
+        Integer,
+        ForeignKey("polling_units.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    assigned_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    is_active = Column(
+        Boolean,
+        default=True,
+        nullable=False,
+        index=True,
+    )
+
+    election = relationship(
+        "Election",
+        back_populates="agent_assignments",
+    )
+
+    agent = relationship(
+        "User",
+        back_populates="election_assignments",
+    )
+
+    polling_unit = relationship(
+        "PollingUnit",
+        back_populates="election_agent_assignments",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "election_id",
+            "agent_id",
+            "polling_unit_id",
+            name="uq_election_agent_pu_assignment",
+        ),
+    )
 
 # =============================================================================
 # 3. CONSTITUENCIES
@@ -629,6 +707,12 @@ class User(Base):
         back_populates="verified_by_user",
         foreign_keys="ElectionResult.verified_by",
     )
+
+    election_assignments = relationship(
+    "ElectionAgentAssignment",
+    back_populates="agent",
+    cascade="all, delete-orphan",
+)
 
 
 # =============================================================================
