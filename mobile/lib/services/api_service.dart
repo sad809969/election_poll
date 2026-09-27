@@ -72,6 +72,7 @@ class ApiService {
   /// Concurrently probe candidate URLs and automatically lock on the fastest working one
   static Future<Map<String, dynamic>> autoDetectServer() async {
     final candidates = [
+      'https://pdp-pollwatch-backend.onrender.com',      // Render Cloud (Blueprint)
       'https://jigawa-pdp-pollwatch.onrender.com',       // Render Cloud
       'https://api.pdpjigawa2027.com',                   // Neotech Hosting
       'https://jigawa-pdp-pollwatch-backend.vercel.app', // Vercel Cloud
