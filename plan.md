@@ -1,68 +1,143 @@
-# Implementation Plan: Fix User Synchronization Between Side A and Side B
 
-## Problem Diagnosis
-The user reported: *"I added user in side A but unfortunately didn't reflect in side B"*.
-Our investigation uncovered 4 interconnected root causes:
+# Implementation Plan: Jigawa State PDP PollWatch
 
-1. **Missing JWT Token on Side A Passcode Unlock**:
-   - In `web/src/pages/system-admin.js`, unlocking with `PDP-ADMIN-2027` only sets `sessionStorage.setItem('pdp_master_admin_auth', 'true')`.
-   - It did **not** store a JWT token in `localStorage.getItem('token')`.
-   - In FastAPI, `POST /api/agents` and `GET /api/agents` require `require_admin` / `require_supervisor` via OAuth2 Bearer token.
-   - If an admin entered Side A via passcode without prior login, `apiFetch('/agents')` sends no Authorization header, causing `401 Unauthorized`.
-   - Thus, user creation either failed or Side B was unable to fetch live data.
+## 1. User Synchronization Between Side A and Side B
 
-2. **Hardcoded Fallback Masking on Side B (`/admin.js`)**:
-   - In `web/src/pages/admin.js`, if `apiFetch('/agents')` fails (due to 401 or network error), it catches the error and silently renders `fallbackUsersList` (6 static hardcoded users).
-   - This completely hides any real users in the system.
+### Problem Diagnosis
 
-3. **Backend Sorting & Overload (4,835 Users)**:
-   - In `backend/app/routers/agents.py`, `get_agents()` returns `db.query(User).order_by(User.full_name).all()`.
-   - Because there are 4,835 seeded agents, ordering by `full_name` ascending buries any newly created user deep inside thousands of rows.
-   - Side B has no pagination and was attempting to render all records, making new users difficult to locate.
+The user reported that adding a user in Side A did not make the user appear in Side B.
 
-4. **Serverless Ephemerality & Cross-Tab Sync**:
-   - On Vercel serverless deployments, `/tmp/pollwatch.db` is ephemeral across lambda instances.
-   - There was no client-side synchronization (`pdp_custom_users` in `localStorage`) or broadcast event to immediately sync users between Side A and Side B.
+The identified causes include:
 
----
+1. **Missing JWT token on Side A:** Unlocking Side A with the admin passcode did not necessarily provide a JWT token for protected backend API requests.
+2. **Hardcoded fallback users:** Side B could display static fallback users when the backend request failed, hiding actual users.
+3. **User ordering and large datasets:** Thousands of seeded agents could make newly created users difficult to find.
+4. **Cross-tab synchronization:** Side A and Side B needed a way to reflect newly created users without requiring manual refreshes.
+5. **Serverless database limitations:** Temporary serverless storage may not reliably share newly created users across separate instances.
 
-## Proposed Changes
+### Proposed Changes
 
-### 1. Backend: Prioritize Newest Users (`backend/app/routers/agents.py`)
-- Update `GET /api/agents` to sort by `User.id.desc()` so newly created users always appear at the very top.
-- Add an optional `limit` parameter (default 100 or all) to prevent browser freezes when loading thousands of users.
+#### Backend: Agent Listing
 
-### 2. Side A: Auto-Provision Admin Token on Unlock (`web/src/pages/system-admin.js`)
-- When `PDP-ADMIN-2027` is entered in `system-admin.js`, automatically authenticate with the backend (or provision a valid Super Admin operator session into `localStorage`) so all subsequent API calls (`POST /api/agents`, `PATCH /api/agents`, `GET /api/agents`) are fully authorized.
-- When a user is saved in `handleSaveUser`, write the new user to `pdp_custom_users` in `localStorage` and dispatch a `pdp_users_updated` window event for instant cross-tab and cross-page synchronization.
+- Sort agents with the newest users first.
+- Add an optional limit to prevent excessive data loading.
+- Ensure that the API returns the appropriate user information.
 
-### 3. Side B: Seamless Real-Time Sync & Newest First (`web/src/pages/admin.js` & `web/src/pages/agents.js`)
-- In `admin.js`:
-  - Listen for the `pdp_users_updated` event and `storage` event so any user added in Side A appears in Side B **instantly** without a manual page refresh.
-  - Merge `pdp_custom_users` with live backend users, ensuring custom/newly created users are pinned to the top of the table with a vibrant "NEW" badge.
-  - If backend fetch returns 401 or empty, include `pdp_custom_users` on top of fallback data instead of masking them.
-  - Add search and pagination/slicing to the user list table so newly added users are immediately visible.
-- In `agents.js`:
-  - Ensure custom users are integrated into the agents directory and status toggle.
+#### Side A: User Management
 
-### 4. Auth & Login Support (`web/src/lib/api.js` & `web/src/pages/login.js`)
-- In `login.js` and `api.js`:
-  - Allow newly created custom users stored in `pdp_custom_users` to log in smoothly even if the Vercel serverless SQLite database cold-started.
-  - Respect the exact `allowed_pages` and role permissions saved during user creation.
+- Ensure that administrative API requests have valid authorization.
+- When a user is saved, update the local custom-user list where appropriate.
+- Dispatch a `pdp_users_updated` event to notify other pages.
 
----
+#### Side B: User Management and Agent Directory
 
-## Verification Plan
+- Listen for the `pdp_users_updated` and browser `storage` events.
+- Display newly created users promptly.
+- Merge locally stored custom users with backend users without creating duplicates.
+- Show new users at the top of the list and identify them with a NEW badge.
+- Add search and pagination to make large user lists easier to manage.
+- Ensure custom users are reflected in the agent directory and status controls.
 
-### Automated & Manual Tests:
-1. **Pytest Verification**:
-   - Run existing test suite (`pytest tests/`) to ensure no regressions in auth, agents, or results endpoints.
-2. **Side A to Side B Sync Test**:
-   - Open Side A (`/system-admin`), create a test user (e.g., `user_sync_test` with role `LGA Coordinator` and specific Side A & Side B pages).
-   - Navigate to Side B (`/admin` and `/agents`).
-   - Verify `user_sync_test` appears at the very top of the table with correct role badge, phone, and allowed pages scope.
-3. **Login & Sidebar Test**:
-   - Log out and log in as `user_sync_test`.
-   - Verify the sidebar filters precisely to the allowed pages assigned in Side A.
-4. **Browser Verification**:
-   - Capture browser screenshots of Side A and Side B demonstrating the live reflection.
+#### Login and Permissions
+
+- Ensure that user login uses the backend as the source of truth.
+- Respect the user's assigned role and `allowed_pages`.
+- Avoid relying on browser storage alone for authentication or authorization.
+
+## 2. Polling Unit Agent Login and Mobile App Resilience
+
+### Problem Diagnosis
+
+The mobile app may fail to authenticate polling unit agents for several reasons:
+
+1. **Temporary serverless database:** A user created in one temporary serverless instance may not exist in another instance.
+2. **Phone number formatting:** Agents may enter phone numbers with spaces or international prefixes, while the backend expects a different format.
+3. **Short network timeout:** Slow cellular connections or server cold starts may exceed the mobile app's previous timeout.
+4. **Chained request failures:** Additional requests for user or polling unit details may fail even after successful authentication.
+
+### Proposed Changes
+
+#### Backend Authentication
+
+- Normalize phone numbers to support common Nigerian formats.
+- Support case-insensitive username matching.
+- Return the user's profile information directly in the login response, including their role, polling unit, LGA, ward, and allowed pages.
+- Maintain appropriate authentication and account-status checks.
+
+#### Mobile App
+
+- Increase the API timeout to accommodate slower network connections.
+- Parse user details directly from the login response.
+- Handle missing polling unit details gracefully without incorrectly treating an unassigned agent as assigned.
+- Provide clear error messages when credentials or server settings are incorrect.
+- Add server presets for Render, Neotech Hosting, Vercel, and local development.
+
+## 3. Database and Production Hosting
+
+### Database Requirements
+
+The application requires persistent storage so that users, polling units, assignments, incidents, and results remain available across web and mobile clients.
+
+### Proposed Changes
+
+- Support PostgreSQL connection URLs.
+- Normalize PostgreSQL URL formats where required by SQLAlchemy.
+- Configure database access for production hosting.
+- Ensure that production data is not dependent on temporary serverless storage.
+
+### Render Deployment
+
+- Provide a `render.yaml` deployment configuration.
+- Configure the FastAPI web service.
+- Configure a managed PostgreSQL database.
+- Link the database URL to the backend service.
+- Configure production startup and database initialization safely.
+
+### Neotech Hosting Deployment
+
+- Provide a `passenger_wsgi.py` entry point for supported cPanel hosting.
+- Provide a deployment script for Linux environments.
+- Configure a systemd service where supported.
+- Provide an Nginx reverse proxy configuration where supported.
+- Provide a production Docker Compose configuration.
+
+## 4. Verification Plan
+
+### User Synchronization
+
+1. Create a test user in Side A.
+2. Confirm that the user appears in Side B.
+3. Confirm that the user is displayed with the correct role and permissions.
+4. Test synchronization between browser tabs.
+5. Confirm that search and pagination work correctly.
+
+### Authentication and Mobile Login
+
+1. Test login using usernames in different letter cases.
+2. Test phone numbers with and without spaces and country prefixes.
+3. Verify that successful login returns the correct user profile and access token.
+4. Test login for users with and without polling unit assignments.
+5. Confirm that inactive accounts cannot log in.
+
+### Database and Deployment
+
+1. Verify that SQLite and PostgreSQL connection configurations work as intended.
+2. Confirm that production data persists after service restarts.
+3. Test the configured deployment process.
+4. Verify that the web dashboard and mobile application can access the production backend.
+
+### Automated Tests
+
+- Run the backend test suite.
+- Test authentication, agent management, and results endpoints.
+- Run Flutter static analysis.
+- Verify that frontend builds successfully.
+
+## 5. Implementation Order
+
+1. Complete the frontend user synchronization changes.
+2. Review and update the backend user and agent APIs.
+3. Complete authentication and mobile login improvements.
+4. Verify database persistence and deployment configurations.
+5. Run automated and manual tests.
+6. Deploy only after the required checks pass.

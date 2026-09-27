@@ -113,6 +113,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
+                  _presetChip('🚀 Render Cloud', 'https://jigawa-pdp-pollwatch.onrender.com', serverController),
+                  _presetChip('🏢 Neotech Hosting', 'https://api.pdpjigawa2027.com', serverController),
                   _presetChip('☁️ Vercel Cloud', 'https://jigawa-pdp-pollwatch-backend.vercel.app', serverController),
                   _presetChip('USB Tunnel (127.0.0.1:8000)', 'http://127.0.0.1:8000', serverController),
                   _presetChip('Wi-Fi LAN (192.168.1.164:8000)', 'http://192.168.1.164:8000', serverController),

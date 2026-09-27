@@ -13,6 +13,11 @@ class Token(BaseModel):
     username: str
     full_name: Optional[str] = None
     allowed_pages: Optional[str] = None
+    id: Optional[int] = None
+    phone_number: Optional[str] = None
+    polling_unit_id: Optional[int] = None
+    lga_id: Optional[int] = None
+    ward_id: Optional[int] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None

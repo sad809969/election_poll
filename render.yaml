@@ -1,0 +1,35 @@
+# Render Infrastructure-as-Code Blueprint
+# Deploy instantly by connecting your GitHub repo on https://render.com
+services:
+  # 1. FastAPI Persistent Backend Web Service
+  - type: web
+    name: pdp-pollwatch-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /docs
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pdp-pollwatch-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+databases:
+  # 2. Managed Persistent PostgreSQL Database
+  - name: pdp-pollwatch-db
+    databaseName: pollwatch
+    user: pollwatch_user
+    plan: free
+    region: oregon

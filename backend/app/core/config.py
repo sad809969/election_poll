@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "/tmp/uploads" if is_vercel else "uploads"
 
     ALLOWED_ORIGINS: list[str] = [
+        "*",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://jigawa-pdp-pollwatch.vercel.app",
         "https://jigawa-pdp-pollwatch-backend.vercel.app",
+        "https://jigawa-pdp-pollwatch.onrender.com",
     ]
 
     model_config = SettingsConfigDict(
