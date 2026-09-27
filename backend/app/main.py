@@ -9,7 +9,7 @@ from app.database import init_db
 
 
 # Core Routers
-from app.routers import auth, results, incidents, agents, audit, announcements, activities, collation
+from app.routers import auth, results, incidents, agents, audit, announcements, activities, collation, exports
 from app.routers import dashboard
 
 # Optional extra routers if those files exist in your routers/ folder:
@@ -82,6 +82,7 @@ app.include_router(audit.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(activities.router, prefix=settings.API_V1_STR)
 app.include_router(collation.router, prefix=settings.API_V1_STR)
+app.include_router(exports.router, prefix=settings.API_V1_STR)
 
 if ws:
     app.include_router(ws.router)

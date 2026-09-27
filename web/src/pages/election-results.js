@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
@@ -15,7 +16,8 @@ import {
   TrendingUp, 
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  FolderArchive
 } from 'lucide-react'
 
 // Nigerian Election Offices Data & Constituencies in Jigawa State
@@ -284,6 +286,13 @@ export default function ElectionResultsPage() {
 
             {/* Export & Actions */}
             <div className="flex items-center gap-3">
+              <Link
+                href="/system-admin?section=exports"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition"
+              >
+                <FolderArchive className="w-4 h-4 text-emerald-400" />
+                <span>Super Admin Media & Data Vault</span>
+              </Link>
               <button
                 onClick={exportToCsv}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pdp hover:bg-pdp-dark text-white font-bold text-xs shadow-lg shadow-pdp/20 transition active:scale-95"

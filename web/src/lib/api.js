@@ -1,4 +1,4 @@
-const getApiBase = () => {
+export const getApiBase = () => {
   if (process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
@@ -8,7 +8,7 @@ const getApiBase = () => {
   return 'http://localhost:8000/api';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 /**
  * Generic API request wrapper
