@@ -18,7 +18,7 @@ import {
   Filter
 } from 'lucide-react'
 
-// Nigerian Election Offices Data & Constituencies in Jigawa State
+// Election types available in Jigawa State
 const ELECTION_OFFICES = [
   {
     id: 'gov',
@@ -26,26 +26,11 @@ const ELECTION_OFFICES = [
     subtitle: 'Executive Governor & Deputy Governor (Statewide)',
     icon: Landmark,
     category: 'State',
-    date: 'Saturday, 20th April 2027',
-    totalPus: 4827,
-    reportingPus: 4827,
-    pdpCandidate: 'Mustapha Sule Lamido',
-    apcCandidate: 'Umar Namadi',
-    nnppCandidate: 'Aminu Ibrahim Ringim',
-    lpCandidate: 'Abdullahi Tsoho',
-    results: [
-      { party: 'PDP', candidate: 'Mustapha Sule Lamido', votes: 488210, share: '49.1%', status: 'Leading', color: '#10B981' },
-      { party: 'APC', candidate: 'Umar Namadi', votes: 421670, share: '42.4%', status: 'Runner-up', color: '#3B82F6' },
-      { party: 'NNPP', candidate: 'Aminu Ibrahim Ringim', votes: 71430, share: '7.2%', status: 'Trailing', color: '#EF4444' },
-      { party: 'LP', candidate: 'Abdullahi Tsoho', votes: 12890, share: '1.3%', status: 'Trailing', color: '#8B5CF6' },
-    ],
-    constituencies: [
-      { name: 'Dutse Emirate Zone (7 LGAs)', pdp: 142100, apc: 112400, leader: 'PDP' },
-      { name: 'Hadejia Emirate Zone (8 LGAs)', pdp: 135400, apc: 121800, leader: 'PDP' },
-      { name: 'Gumel Emirate Zone (4 LGAs)', pdp: 74200, apc: 69100, leader: 'PDP' },
-      { name: 'Kazaure Emirate Zone (4 LGAs)', pdp: 68900, apc: 61300, leader: 'PDP' },
-      { name: 'Ringim Zone (4 LGAs)', pdp: 67610, apc: 57070, leader: 'PDP' },
-    ]
+    date: 'Election date to be confirmed',
+    totalPus: 0,
+    reportingPus: 0,
+    results: [],
+    constituencies: [],
   },
   {
     id: 'senate',
@@ -53,111 +38,34 @@ const ELECTION_OFFICES = [
     subtitle: 'Senate of the Federal Republic (3 Senatorial Districts)',
     icon: Vote,
     category: 'Federal',
-    date: 'Saturday, 20th February 2027',
-    totalPus: 4827,
-    reportingPus: 4810,
-    subDistricts: [
-      {
-        id: 'sen-ne',
-        name: 'Jigawa North-East Senatorial District',
-        lgas: 'Hadejia, Birniwa, Guri, Kirikasamma, Kafin Hausa, Auyo, Malam Madori, Kaugama (8 LGAs)',
-        pdpCandidate: 'Nuruddeen Muhammad',
-        apcCandidate: 'Ahmed Abdulhamid Malam-Madori',
-        results: [
-          { party: 'PDP', candidate: 'Nuruddeen Muhammad', votes: 148920, share: '51.8%', status: 'Leading', color: '#10B981' },
-          { party: 'APC', candidate: 'Ahmed Abdulhamid Malam-Madori', votes: 126430, share: '44.0%', status: 'Runner-up', color: '#3B82F6' },
-          { party: 'NNPP', candidate: 'Aliyu Haruna', votes: 12100, share: '4.2%', status: 'Trailing', color: '#EF4444' },
-        ]
-      },
-      {
-        id: 'sen-nw',
-        name: 'Jigawa North-West Senatorial District',
-        lgas: 'Babura, Garki, Gumel, Gwiwa, Kazaure, Maigatari, Roni, Ringim, Sule Tankarkar, Taura, Yankwashi, Gagarawa (12 LGAs)',
-        pdpCandidate: 'Nasiru Umar Dano',
-        apcCandidate: 'Babangida Hussaini',
-        results: [
-          { party: 'PDP', candidate: 'Nasiru Umar Dano', votes: 182400, share: '49.8%', status: 'Leading', color: '#10B981' },
-          { party: 'APC', candidate: 'Babangida Hussaini', votes: 165210, share: '45.1%', status: 'Runner-up', color: '#3B82F6' },
-          { party: 'NNPP', candidate: 'Mukhtar Zaki', votes: 18450, share: '5.1%', status: 'Trailing', color: '#EF4444' },
-        ]
-      },
-      {
-        id: 'sen-sw',
-        name: 'Jigawa South-West Senatorial District',
-        lgas: 'Birnin Kudu, Buji, Dutse, Gwaram, Jahun, Kiyawa, Miga (7 LGAs)',
-        pdpCandidate: 'Mustapha Khabeeb',
-        apcCandidate: 'Sabiy’u Titi',
-        results: [
-          { party: 'PDP', candidate: 'Mustapha Khabeeb', votes: 156890, share: '52.3%', status: 'Leading', color: '#10B981' },
-          { party: 'APC', candidate: 'Sabiy’u Titi', votes: 130030, share: '43.3%', status: 'Runner-up', color: '#3B82F6' },
-          { party: 'NNPP', candidate: 'Umar Danjani', votes: 13120, share: '4.4%', status: 'Trailing', color: '#EF4444' },
-        ]
-      }
-    ]
+    date: 'Election date to be confirmed',
+    totalPus: 0,
+    reportingPus: 0,
+    subDistricts: [],
   },
   {
     id: 'reps',
     title: 'House of Representatives Election',
-    subtitle: 'National Assembly Federal Constituencies (11 Federal Seats)',
+    subtitle: 'National Assembly Federal Constituencies',
     icon: Building2,
     category: 'Federal',
-    date: 'Saturday, 20th February 2027',
-    totalPus: 4827,
-    reportingPus: 4798,
-    constituencies: [
-      { name: 'Dutse / Kiyawa Federal Constituency', pdp: 'Aliyu Sani (PDP)', apc: 'Abdullahi Umar (APC)', pdpVotes: 48200, apcVotes: 39100, winner: 'PDP' },
-      { name: 'Birnin Kudu / Buji Federal Constituency', pdp: 'Adam Gwaram (PDP)', apc: 'Ibrahim Bala (APC)', pdpVotes: 44100, apcVotes: 36200, winner: 'PDP' },
-      { name: 'Gwaram Federal Constituency', pdp: 'Isah Yusuf (PDP)', apc: 'Yusuf Shitu Galambi (APC)', pdpVotes: 31200, apcVotes: 28400, winner: 'PDP' },
-      { name: 'Jahun / Miga Federal Constituency', pdp: 'Haruna Said (PDP)', apc: 'Saidu Miga (APC)', pdpVotes: 36500, apcVotes: 32100, winner: 'PDP' },
-      { name: 'Ringim / Taura Federal Constituency', pdp: 'Saidu Ringim (PDP)', apc: 'Nasiru Taura (APC)', pdpVotes: 42100, apcVotes: 37400, winner: 'PDP' },
-      { name: 'Kazaure / Roni / Gwiwa / Yankwashi', pdp: 'Kabiru Kazaure (PDP)', apc: 'Muhammed Gudaji (APC)', pdpVotes: 41900, apcVotes: 38800, winner: 'PDP' },
-      { name: 'Babura / Garki Federal Constituency', pdp: 'Aminu Babura (PDP)', apc: 'Musa Garki (APC)', pdpVotes: 38200, apcVotes: 34100, winner: 'PDP' },
-      { name: 'Gumel / Maigatari / Sule Tankarkar / Gagarawa', pdp: 'Suleiman Gumel (PDP)', apc: 'Nazifi Sani (APC)', pdpVotes: 49800, apcVotes: 45200, winner: 'PDP' },
-      { name: 'Hadejia / Kafin Hausa / Auyo Constituency', pdp: 'Usman Hadejia (PDP)', apc: 'Ibrahim Auyo (APC)', pdpVotes: 51200, apcVotes: 46100, winner: 'PDP' },
-      { name: 'Birniwa / Guri / Kirikasamma Constituency', pdp: 'Abubakar Birniwa (PDP)', apc: 'Bello Kirikasamma (APC)', pdpVotes: 37400, apcVotes: 33200, winner: 'PDP' },
-      { name: 'Malam Madori / Kaugama Constituency', pdp: 'Murtala Kaugama (PDP)', apc: 'Makki Abubakar (APC)', pdpVotes: 33100, apcVotes: 29800, winner: 'PDP' },
-    ]
-  },
-  {
-    id: 'presidential',
-    title: 'Presidential Election',
-    subtitle: 'Federal Republic of Nigeria — Jigawa State Aggregate Return',
-    icon: Landmark,
-    category: 'Federal',
-    date: 'Saturday, 20th February 2027',
-    totalPus: 4827,
-    reportingPus: 4827,
-    results: [
-      { party: 'PDP', candidate: 'PDP Presidential Flagbearer', votes: 476890, share: '48.9%', status: 'Leading', color: '#10B981' },
-      { party: 'APC', candidate: 'APC Presidential Candidate', votes: 418300, share: '42.9%', status: 'Runner-up', color: '#3B82F6' },
-      { party: 'NNPP', candidate: 'NNPP Presidential Candidate', votes: 68400, share: '7.0%', status: 'Trailing', color: '#EF4444' },
-      { party: 'LP', candidate: 'LP Presidential Candidate', votes: 11410, share: '1.2%', status: 'Trailing', color: '#8B5CF6' },
-    ],
-    summaryNotes: 'Jigawa State Presidential Collation Complete across 27 Local Government Areas.'
+    date: 'Election date to be confirmed',
+    totalPus: 0,
+    reportingPus: 0,
+    constituencies: [],
   },
   {
     id: 'assembly',
     title: 'State House of Assembly Election',
-    subtitle: 'Jigawa State House of Assembly (30 State Constituencies)',
+    subtitle: 'Jigawa State House of Assembly',
     icon: Layers,
     category: 'State',
-    date: 'Saturday, 20th April 2027',
-    totalPus: 4827,
-    reportingPus: 4815,
-    summarySeats: [
-      { party: 'PDP', seatsWon: 19, share: '63.3%', color: '#10B981' },
-      { party: 'APC', seatsWon: 10, share: '33.3%', color: '#3B82F6' },
-      { party: 'NNPP', seatsWon: 1, share: '3.4%', color: '#EF4444' },
-    ],
-    sampleSeats: [
-      { constituency: 'Dutse Central Constituency', winner: 'PDP Candidate', margin: '+3,410' },
-      { constituency: 'Hadejia Constituency', winner: 'PDP Candidate', margin: '+2,190' },
-      { constituency: 'Birnin Kudu Constituency', winner: 'PDP Candidate', margin: '+4,120' },
-      { constituency: 'Gumel Constituency', winner: 'PDP Candidate', margin: '+1,850' },
-      { constituency: 'Kazaure Constituency', winner: 'PDP Candidate', margin: '+1,430' },
-      { constituency: 'Ringim Constituency', winner: 'PDP Candidate', margin: '+2,890' },
-    ]
-  }
+    date: 'Election date to be confirmed',
+    totalPus: 0,
+    reportingPus: 0,
+    summarySeats: [],
+    sampleSeats: [],
+  },
 ]
 
 export default function ElectionResultsPage() {
@@ -295,6 +203,18 @@ export default function ElectionResultsPage() {
           </div>
 
           {/* Office-Specific Renderers */}
+          {currentOffice.totalPus === 0 && (
+  <div className={`${cardClass} border rounded-2xl p-8 text-center`}>
+    <Vote className="w-10 h-10 mx-auto mb-3 text-slate-400" />
+    <h3 className="text-lg font-bold">
+      No Election Results Available
+    </h3>
+    <p className="text-sm text-slate-400 mt-2">
+      Results for this election have not yet been submitted.
+      They will appear here when data becomes available.
+    </p>
+  </div>
+)}
           {/* 1. GOVERNORSHIP / PRESIDENTIAL VIEW */}
           {(currentOffice.id === 'gov' || currentOffice.id === 'presidential') && currentOffice.results && (
             <div className="space-y-6">
