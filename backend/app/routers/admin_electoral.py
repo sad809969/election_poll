@@ -147,25 +147,22 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
     """
     Trigger seeding of all 4,827 official INEC Jigawa polling units.
 
-    - Default (force=false): adds polling units only if count is 0.
-    - force=true: deletes all polling units via CASCADE then re-seeds.
+    Safe to call at any time — idempotent by default (skips if PUs exist).
+    Use ?force=true to wipe and re-seed from scratch (admin only).
     """
     from app.seed import _seed_polling_units, _refresh_polling_unit_counts
-    from sqlalchemy import text
 
     count_before = db.query(PollingUnit).count()
 
     if count_before > 0 and not force:
         return {
-            "message": f"Polling units already exist: {count_before} units. Use ?force=true to wipe and re-seed.",
+            "message": f"Polling units already exist: {count_before} units found. Use ?force=true to re-seed.",
             "seeded": False,
             "polling_units": count_before,
         }
 
     if force and count_before > 0:
-        # TRUNCATE ... CASCADE is the most reliable way to wipe a table with
-        # FK dependents in PostgreSQL — it removes all child rows in one shot.
-        db.execute(text("TRUNCATE TABLE polling_units CASCADE"))
+        db.query(PollingUnit).delete()
         db.commit()
 
     _seed_polling_units(db)
