@@ -1,465 +1,343 @@
-import Sidebar from '../components/Sidebar'
-import Header from '../components/Header'
-import JigawaMap from '../components/JigawaMap'
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import Sidebar from "../components/Sidebar";
+import Header from "../components/Header";
+import JigawaMap from "../components/JigawaMap";
 import { useTheme } from "./_app";
-import { apiFetch } from "../lib/api";
-import { 
-  Building2, 
-  Users, 
-  FileText, 
-  AlertTriangle, 
-  Clock, 
-  TrendingUp,
-  ShieldAlert
-} from 'lucide-react'
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  PieChart as RePieChart, 
-  Pie, 
-  Cell 
-} from 'recharts'
+import {
+  Vote,
+  Users,
+  MapPin,
+  AlertTriangle,
+  FileText,
+  Building2,
+  Landmark,
+  House,
+  ChevronRight,
+  Radio,
+  ShieldCheck,
+  Clock3,
+} from "lucide-react";
 
-export default function DarkMonitoringDashboard() {
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
+const electionSections = [
+  {
+    id: "governorship",
+    title: "Governorship",
+    description: "Statewide governorship election monitoring",
+    icon: Building2,
+  },
+  {
+    id: "senate",
+    title: "Senate",
+    description: "Senatorial district election monitoring",
+    icon: Building2,
+  },
+  {
+    id: "house-of-representatives",
+    title: "House of Representatives",
+    description: "Federal constituency election monitoring",
+    icon: Building2,
+  },
+  {
+    id: "house-of-assembly",
+    title: "House of Assembly",
+    description: "State constituency election monitoring",
+    icon: FileText,
+  },
+];
+
+const overviewCards = [
+  {
+    title: "Polling Units",
+    description: "Registered polling units",
+    icon: MapPin,
+    href: "/polling-units",
+  },
+  {
+    title: "Field Agents",
+    description: "Agent management and assignments",
+    icon: Users,
+    href: "/agents",
+  },
+  {
+    title: "Results",
+    description: "Submitted election results",
+    icon: Vote,
+    href: "/results",
+  },
+  {
+    title: "Incidents",
+    description: "Reported election incidents",
+    icon: AlertTriangle,
+    href: "/incidents",
+  },
+];
+
+export default function Dashboard() {
+  const { theme } = useTheme();
+  const [selectedElection, setSelectedElection] = useState("governorship");
+
+  const isDark = theme === "dark";
 
   const cardClass = isDark
-  ? "bg-[#141E38] border border-slate-800 shadow-lg"
-  : "bg-white border border-slate-200 shadow";
+    ? "bg-gray-900 border-gray-800 text-gray-100"
+    : "bg-white border-gray-200 text-gray-900";
 
-  const [dashboard, setDashboard] = useState(null);
+  const mutedText = isDark ? "text-gray-400" : "text-gray-500";
 
-const [timelineData, setTimelineData] = useState([]);
-
-const [incidentPieData, setIncidentPieData] = useState([]);
-
-const [recentReports, setRecentReports] = useState([]);
-
-const [topLgas, setTopLgas] = useState([]);
-
-const [loading, setLoading] = useState(true);
-
-const [error, setError] = useState("");
-
-useEffect(() => {
-  loadDashboard();
-}, []);
-
-async function loadDashboard() {
-  try {
-    setLoading(true);
-    setError("");
-
-    const [
-      results,
-      incidents,
-      lgas,
-      agents,
-      pollingUnits,
-    ] = await Promise.all([
-      apiFetch("/results"),
-      apiFetch("/incidents"),
-      apiFetch("/electoral/lgas"),
-      apiFetch("/agents"),
-      apiFetch("/electoral/polling-units"),
-    ]);
-
-    //---------------------------------------
-    // Defensive Data Normalization
-    //---------------------------------------
-
-    const resultsList = Array.isArray(results) ? results : (results?.results || []);
-    const incidentsList = Array.isArray(incidents) ? incidents : [];
-    const agentsList = Array.isArray(agents) ? agents : [];
-    const pollingUnitsList = Array.isArray(pollingUnits) ? pollingUnits : [];
-    const lgasList = Array.isArray(lgas) ? lgas : [];
-
-    //---------------------------------------
-    // Dashboard Numbers
-    //---------------------------------------
-
-    const totalPollingUnits = pollingUnitsList.length;
-
-    const activeAgents = agentsList.filter(
-      (a) => a.is_active === true
-    ).length;
-
-    const totalReports = results?.summary?.collated_pus ?? resultsList.length;
-
-    const totalIncidents = incidentsList.length;
-
-    const pendingReports = results?.summary
-      ? (totalPollingUnits - results.summary.collated_pus)
-      : (totalPollingUnits - resultsList.length);
-
-    //---------------------------------------
-    // Timeline
-    //---------------------------------------
-
-    const hourly = {};
-
-    resultsList.forEach((r) => {
-      const hour = r.created_at ? new Date(r.created_at).getHours() : 10;
-      hourly[hour] = (hourly[hour] || 0) + 1;
-    });
-
-    const timeline = [];
-
-    for (let i = 0; i < 24; i++) {
-      timeline.push({
-        time: `${i}:00`,
-        reports: hourly[i] || 0,
-      });
-    }
-
-    //---------------------------------------
-    // Incidents Pie
-    //---------------------------------------
-
-    const types = {};
-
-    incidentsList.forEach((i) => {
-      const typeKey = i.incident_type || i.category || "General";
-      types[typeKey] = (types[typeKey] || 0) + 1;
-    });
-
-    const colors = [
-      "#EF4444",
-      "#F59E0B",
-      "#10B981",
-      "#3B82F6",
-      "#8B5CF6",
-      "#EC4899",
-    ];
-
-    const pie = Object.entries(types).map(
-      ([name, value], index) => ({
-        name,
-        value,
-        color: colors[index % colors.length],
-      })
-    );
-
-    //---------------------------------------
-    // Recent Reports
-    //---------------------------------------
-
-    const recent = resultsList
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.created_at || 0) -
-          new Date(a.created_at || 0)
-      )
-      .slice(0, 10)
-      .map((r) => ({
-        pu:
-          r.polling_unit_name ??
-          (r.polling_unit_code ? `PU ${r.polling_unit_code}` : `PU ${r.polling_unit_id}`),
-
-        msg: `PDP ${r.pdp_votes ?? 0} | APC ${r.apc_votes ?? 0}`,
-
-        status:
-          r.verification_status === "VERIFIED"
-            ? "Normal"
-            : "Attention",
-
-        agent:
-          r.agent_name ??
-          `Agent ${r.agent_id}`,
-
-        time: r.created_at
-          ? new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : "Recently",
-      }));
-
-    //---------------------------------------
-    // Top LGAs
-    //---------------------------------------
-
-    const coverage = lgasList.map((lga) => {
-      const total = pollingUnitsList.filter(
-        (p) => p.lga_id === lga.id
-      ).length;
-
-      const reported = resultsList.filter(
-        (r) => r.lga_id === lga.id
-      ).length;
-
-      return {
-        name: lga.name,
-        pct:
-          total === 0
-            ? 0
-            : Math.round(
-                (reported / total) * 100
-              ),
-      };
-    });
-
-    coverage.sort((a, b) => b.pct - a.pct);
-
-    //---------------------------------------
-
-    setTimelineData(timeline);
-
-    setIncidentPieData(pie);
-
-    setRecentReports(recent);
-
-    setTopLgas(
-      coverage.slice(0, 5)
-    );
-
-    setDashboard({
-      totalPollingUnits,
-      activeAgents,
-      totalReports,
-      totalIncidents,
-      pendingReports,
-    });
-
-  } catch (err) {
-    console.error(err);
-
-    setError(err.message);
-
-  } finally {
-    setLoading(false);
-  }
-}
+  const selectedSection = electionSections.find(
+    (section) => section.id === selectedElection
+  );
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
-      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
-    }`}>
+    <div
+      className={`min-h-screen flex ${
+        isDark ? "bg-gray-950 text-gray-100" : "bg-gray-50 text-gray-900"
+      }`}
+    >
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Header 
-          title="Dashboard" 
-          subtitle="Overview of election activities across Jigawa State" 
+      <main className="flex-1 min-w-0">
+        <Header
+          title="Dashboard"
+          subtitle="Election monitoring and situation room overview"
         />
 
-        <main className="p-4 sm:p-6 space-y-6">
-          {/* Top Date & Election Banner */}
-          <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center rounded-xl p-4 sm:px-5 sm:py-3 border gap-3 ${
-            isDark ? 'bg-[#141E38] border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-          }`}>
+        <div className="p-4 md:p-6 space-y-6">
+          {/* Page heading */}
+          <section
+            className={`rounded-2xl border p-5 md:p-6 ${cardClass}`}
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="rounded-lg bg-green-100 p-2 text-green-700">
+                    <ShieldCheck size={22} />
+                  </span>
+                  <span className="text-sm font-semibold text-green-600">
+                    JIGAWA STATE PDP POLLWATCH
+                  </span>
+                </div>
+
+                <h1 className="text-xl md:text-2xl font-bold">
+                  Election Situation Room
+                </h1>
+
+                <p className={`mt-1 text-sm ${mutedText}`}>
+                  Central monitoring workspace for election operations.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-800">
+                <Clock3 size={18} />
+                <div>
+                  <p className="text-sm font-semibold">Pre-election mode</p>
+                  <p className="text-xs">Live election data not available</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Election selector */}
+          <section className="space-y-3">
             <div>
-              <span className={`text-[11px] sm:text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Jigawa State PDP Election Command Center</span>
-              <h2 className={`text-xs sm:text-sm font-bold flex flex-wrap items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <span>Governorship Election Situation Room</span>
-                <span className="bg-emerald-500/20 text-emerald-500 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">LIVE FEED</span>
-              </h2>
-            </div>
-            <div className={`flex items-center gap-2 border px-3 py-1.5 rounded-lg text-xs font-semibold ${
-              isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
-            }`}>
-              <Clock className="w-4 h-4 text-pdp" />
-              <span>Election Date: <strong className={isDark ? 'text-white' : 'text-slate-900'}>Sat, 20th April 2027</strong></span>
-            </div>
-          </div>
-
-          {/* 5 Top KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
-              <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total Polling Units</span>
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><Building2 className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalPollingUnits ?? 0}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Across 27 LGAs</p>
-              </div>
+              <h2 className="text-lg font-bold">Election workspaces</h2>
+              <p className={`text-sm ${mutedText}`}>
+                Select an election to open its monitoring workspace.
+              </p>
             </div>
 
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
-              <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Active Agents</span>
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500"><Users className="w-4 h-4" /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {electionSections.map((section) => {
+                const Icon = section.icon;
+                const selected = selectedElection === section.id;
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setSelectedElection(section.id)}
+                    className={`text-left rounded-2xl border p-5 transition-all ${
+                      selected
+                        ? "border-green-600 bg-green-50 ring-2 ring-green-500/20"
+                        : `${cardClass} hover:border-green-500`
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span
+                        className={`rounded-xl p-3 ${
+                          selected
+                            ? "bg-green-600 text-white"
+                            : isDark
+                            ? "bg-gray-800 text-gray-300"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        <Icon size={23} />
+                      </span>
+
+                      <ChevronRight
+                        size={19}
+                        className={
+                          selected ? "text-green-700" : mutedText
+                        }
+                      />
+                    </div>
+
+                    <h3
+                      className={`mt-4 font-bold ${
+                        selected ? "text-green-800" : ""
+                      }`}
+                    >
+                      {section.title}
+                    </h3>
+
+                    <p
+                      className={`mt-1 text-sm ${
+                        selected ? "text-green-700" : mutedText
+                      }`}
+                    >
+                      {section.description}
+                    </p>
+
+                    {selected && (
+                      <span className="mt-3 inline-block text-xs font-semibold text-green-700">
+                        Selected workspace
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Selected election information */}
+          <section className={`rounded-2xl border p-5 ${cardClass}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className={`text-xs uppercase tracking-wide ${mutedText}`}>
+                  Current workspace
+                </p>
+                <h2 className="mt-1 text-xl font-bold">
+                  {selectedSection?.title}
+                </h2>
+                <p className={`mt-1 text-sm ${mutedText}`}>
+                  {selectedSection?.description}
+                </p>
               </div>
-              <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.activeAgents ?? 0}</h3>
-                <p className="text-[10px] text-emerald-500 font-semibold mt-0.5">93.5% of total agents</p>
-              </div>
+
+              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                <Clock3 size={14} />
+                Awaiting election data
+              </span>
             </div>
 
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
-              <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Reports Received</span>
-                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500"><FileText className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalReports ?? 0}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Today, 20th Apr 2027</p>
-              </div>
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <p className={`text-sm ${mutedText}`}>
+                This workspace is selected locally. Connecting election-specific
+                results, polling units, incidents, and assignments to the backend
+                will be done in a later step.
+              </p>
+            </div>
+          </section>
+
+          {/* Operational overview */}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-bold">Operational overview</h2>
+              <p className={`text-sm ${mutedText}`}>
+                Access the main monitoring areas.
+              </p>
             </div>
 
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between`}>
-              <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Incidents Reported</span>
-                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500"><AlertTriangle className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.totalIncidents ?? 0}</h3>
-                <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Today, 20th Apr 2027</p>
-              </div>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {overviewCards.map((item) => {
+                const Icon = item.icon;
 
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between sm:col-span-2 lg:col-span-1`}>
-              <div className="flex justify-between items-start">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Pending Reports</span>
-                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500"><Clock className="w-4 h-4" /></div>
-              </div>
-              <div className="mt-3">
-                <h3 className={`text-2xl font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>{dashboard?.pendingReports ?? 0}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">From 289 Polling Units</p>
-              </div>
-            </div>
-          </div>
+                return (
+                  <a
+                    key={item.title}
+                    href={item.href}
+                    className={`flex items-center gap-4 rounded-2xl border p-5 transition hover:border-green-500 ${cardClass}`}
+                  >
+                    <span
+                      className={`rounded-xl p-3 ${
+                        isDark
+                          ? "bg-gray-800 text-green-400"
+                          : "bg-green-50 text-green-700"
+                      }`}
+                    >
+                      <Icon size={22} />
+                    </span>
 
-          {/* Map + Recent Reports Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold">{item.title}</h3>
+                      <p className={`mt-1 text-xs ${mutedText}`}>
+                        {item.description}
+                      </p>
+                    </div>
+
+                    <ChevronRight size={18} className={mutedText} />
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Map and status */}
+          <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className={`xl:col-span-2 rounded-2xl border p-4 md:p-5 ${cardClass}`}>
+              <div className="mb-4">
+                <h2 className="text-lg font-bold">Jigawa State monitoring map</h2>
+                <p className={`mt-1 text-sm ${mutedText}`}>
+                  Select an LGA to view its current data availability.
+                </p>
+              </div>
+
               <JigawaMap />
             </div>
 
-            {/* Recent Reports List */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col h-[320px]`}>
-              <div className={`flex justify-between items-center pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Recent Field Reports</span>
-                <button className="text-[10px] font-semibold text-pdp hover:underline">View All</button>
+            <div className={`rounded-2xl border p-5 ${cardClass}`}>
+              <div className="flex items-center gap-2">
+                <Radio size={20} className="text-green-600" />
+                <h2 className="text-lg font-bold">Situation room status</h2>
               </div>
-              <div className="flex-1 overflow-y-auto mt-3 space-y-2.5 pr-1">
-                {recentReports.map((item, idx) => (
-                  <div key={idx} className={`p-2.5 rounded-lg border flex items-start justify-between gap-3 ${
-                    isDark ? 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                  }`}>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${
-                          item.status === 'Critical' ? 'bg-red-500' : item.status === 'Attention' ? 'bg-amber-500' : 'bg-emerald-500'
-                        }`}></span>
-                        <span className={`text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{item.pu}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{item.msg}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-[10px] text-slate-400 font-mono block">{item.time}</span>
-                      <span className="text-[10px] text-slate-500 font-medium">Agent: {item.agent}</span>
-                    </div>
+
+              <p className={`mt-2 text-sm ${mutedText}`}>
+                The dashboard is in pre-election mode. Operational figures will
+                appear when verified data is connected.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {[
+                  "Election workspace",
+                  "Polling unit records",
+                  "Agent activity",
+                  "Result submissions",
+                  "Incident reports",
+                ].map((label) => (
+                  <div
+                    key={label}
+                    className={`flex items-center justify-between gap-3 border-b pb-3 ${
+                      isDark ? "border-gray-800" : "border-gray-100"
+                    }`}
+                  >
+                    <span className="text-sm">{label}</span>
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
+                      Pending
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Bottom Analytics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Reports Over Time */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px]`}>
-              <div className="flex justify-between items-center">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Reports Over Time (Today)</span>
-                <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" /> Peak: 12PM
-                </span>
-              </div>
-              <div className="h-[200px] w-full mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timelineData}>
-                    <defs>
-                      <linearGradient id="colorReports" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="time" stroke="#64748b" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: isDark ? '#0f172a' : '#ffffff', borderColor: isDark ? '#334155' : '#e2e8f0', borderRadius: '8px', fontSize: '11px' }} />
-                    <Area type="monotone" dataKey="reports" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorReports)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Incidents by Type */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px]`}>
-              <div className="flex justify-between items-center">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Incidents by Type (Today)</span>
-                <span className="text-[10px] text-slate-400">Total: 156</span>
-              </div>
-              <div className="flex items-center justify-between h-[200px] px-2">
-                <div className="w-1/2 h-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RePieChart>
-                      <Pie data={incidentPieData} innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value">
-                        {incidentPieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </RePieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="w-1/2 space-y-1.5 text-[10px]">
-                  {incidentPieData.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></span>
-                        <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{item.name}</span>
-                      </div>
-                      <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Top LGAs Coverage */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col justify-between h-[280px] md:col-span-2 lg:col-span-1`}>
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className={`text-xs font-bold ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>Top LGAs by Coverage</span>
-                  <span className="text-[10px] font-semibold text-pdp">View All</span>
-                </div>
-                <div className="space-y-2.5">
-                  {topLgas.map((lga, idx) => (
-                    <div key={idx} className="space-y-1">
-                      <div className="flex justify-between text-[11px] font-semibold">
-                        <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>{lga.name}</span>
-                        <span className="text-emerald-500">{lga.pct}%</span>
-                      </div>
-                      <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${lga.pct}%` }}></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Critical Alert Sub-card */}
-              <div className="mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold text-red-500">22 Critical Incidents</p>
-                    <p className="text-[9px] text-red-400">Require immediate situation room dispatch</p>
-                  </div>
-                </div>
-                <button className="bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded transition">
-                  Dispatch
-                </button>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
+          {/* Footer note */}
+          <p className={`text-center text-xs ${mutedText}`}>
+            Election information will be displayed from connected system records.
+            No live results or incident totals are shown until available.
+          </p>
+        </div>
+      </main>
     </div>
-  )
+  );
 }
