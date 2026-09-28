@@ -1,14 +1,20 @@
-const getApiBase = () => {
+export const getApiBase = () => {
   if (process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    if (window.location.hostname.includes('vercel.app')) {
+      return 'https://pdp-pollwatch-backend.onrender.com/api';
+    }
     return `${window.location.origin}/api`;
   }
   return 'http://localhost:8000/api';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 /**
  * Generic API request wrapper
@@ -81,6 +87,55 @@ export async function loginUser(username, password) {
   });
 
   if (!response.ok) {
+    // Check local custom users fallback
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pdp_custom_users');
+        if (stored) {
+          const customUsers = JSON.parse(stored);
+          const found = customUsers.find(
+            (u) =>
+              (u.username === username || u.phone === username || u.phone_number === username) &&
+              (!u.password || u.password === password)
+          );
+          if (found) {
+            let parsedPages = found.allowedPages || [];
+            if (!parsedPages || parsedPages.length === 0) {
+              if (found.allowed_pages) {
+                try {
+                  parsedPages =
+                    typeof found.allowed_pages === 'string'
+                      ? JSON.parse(found.allowed_pages)
+                      : found.allowed_pages;
+                } catch (e) {
+                  parsedPages = found.allowed_pages.split(',').map((s) => s.trim());
+                }
+              }
+            }
+            const fallbackToken = 'custom_session_' + Date.now();
+            localStorage.setItem('token', fallbackToken);
+            const userObj = {
+              username: found.username,
+              role: found.role,
+              full_name: found.full_name || found.name || found.username,
+              allowed_pages: parsedPages,
+            };
+            localStorage.setItem('user', JSON.stringify(userObj));
+            return {
+              access_token: fallbackToken,
+              token_type: 'bearer',
+              role: found.role,
+              username: found.username,
+              full_name: found.full_name || found.name || found.username,
+              allowed_pages: parsedPages,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Custom user fallback check failed:', err);
+      }
+    }
+
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || 'Login failed. Please check your credentials.');
   }

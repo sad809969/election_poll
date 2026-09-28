@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.core.config import DEV_SECRET_KEY, Settings
 from app.models import User
 from app.core.security import get_password_hash
-from app.seed import seed_database
+from app.seed import DEMO_ADMIN_PASSWORD, seed_database
 from app.services.upload_service import upload_service
 
 from tests.test_api import TestingSessionLocal, client, get_admin_headers
@@ -144,14 +144,14 @@ def test_seed_does_not_reset_changed_passwords():
     seed_database(db=db)
     db.close()
 
-    res = client.post("/api/auth/login", data={"username": "admin", "password": "admin1283"})
+    res = client.post("/api/auth/login", data={"username": "admin", "password": DEMO_ADMIN_PASSWORD})
     assert res.status_code == 401
     login("admin", "a-new-strong-password")
 
     # Restore for the other tests.
     db = TestingSessionLocal()
     admin = db.query(User).filter(User.username == "admin").first()
-    admin.hashed_password = get_password_hash("admin1283")
+    admin.hashed_password = get_password_hash(DEMO_ADMIN_PASSWORD)
     db.commit()
     db.close()
 
@@ -166,3 +166,22 @@ def test_production_rejects_default_secret_key():
     prod = Settings(ENVIRONMENT="production", SECRET_KEY="x" * 40)
     assert prod.seed_demo_data is False
     assert Settings(ENVIRONMENT="development").seed_demo_data is True
+
+
+def test_admin_has_no_master_password():
+    for password in ("admin", "admin1283", "PDP-ADMIN-2027x"):
+        res = client.post("/api/auth/login", data={"username": "admin", "password": password})
+        assert res.status_code == 401
+
+
+def test_admin_and_export_endpoints_require_admin():
+    assert client.get("/api/exports/database-backup.json").status_code == 401
+    assert client.get("/api/admin/lgas").status_code == 401
+
+    agent = login("agent", "agent123")
+    assert client.get("/api/exports/agents.csv", headers=agent).status_code == 403
+    assert client.post("/api/admin/lgas", headers=agent, json={"name": "X", "code": "X"}).status_code == 403
+
+    admin = get_admin_headers()
+    assert client.get("/api/admin/lgas", headers=admin).status_code == 200
+    assert client.get("/api/exports/stats", headers=admin).status_code == 200

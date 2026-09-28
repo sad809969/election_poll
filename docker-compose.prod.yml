@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL 15 Persistent Database
+  db:
+    image: postgres:15-alpine
+    container_name: pdp_pollwatch_db
+    restart: always
+    environment:
+      POSTGRES_DB: pollwatch
+      POSTGRES_USER: pdp_admin
+      POSTGRES_PASSWORD: pdp_secure_password_2027
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdp_admin -d pollwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pdp_pollwatch_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://pdp_admin:pdp_secure_password_2027@db:5432/pollwatch
+      - SECRET_KEY=jigawa-pdp-pollwatch-production-key-2027-xyz
+      - DEBUG=False
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+
+  # 3. Next.js Web Frontend Service
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: pdp_pollwatch_web
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - PORT=3000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  backend_uploads:

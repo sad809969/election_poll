@@ -3,14 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.database import SessionLocal, engine
-from app.models import Base, User
+from app.models import Base, LGA, PollingUnit, User, Ward
 from app.core.security import get_password_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Development-only credentials. Never created when ENVIRONMENT=production.
-DEMO_ADMIN_PASSWORD = "admin1283"
+DEMO_ADMIN_PASSWORD = "PDP-ADMIN-2027"
 DEMO_AGENT_PASSWORD = "agent123"
 
 
@@ -36,10 +36,18 @@ def seed_database(db: Session = None):
 
         _ensure_admin(db)
 
+        # LGAs and INEC wards are real reference data, seeded in every
+        # environment. Polling units are generated placeholders (random
+        # registered-voter counts and coordinates), so only in demo mode;
+        # production must import the official INEC polling unit register.
+        _seed_electoral_structure(db)
+
         if settings.seed_demo_data:
-            # Electoral data first: demo accounts reference LGA/ward/PU ids.
-            _seed_demo_electoral_data(db)
+            # Polling units first: demo accounts are linked to them.
+            _seed_demo_polling_units(db)
             _seed_demo_accounts(db)
+
+        _refresh_polling_unit_counts(db)
 
     except Exception as e:
         db.rollback()
@@ -65,7 +73,7 @@ def _ensure_admin(db: Session):
 
     db.add(
         User(
-            full_name="System Administrator",
+            full_name="Super Administrator",
             username="admin",
             hashed_password=get_password_hash(password),
             role="Super Admin",
@@ -86,13 +94,19 @@ def _seed_demo_accounts(db: Session):
                 hashed_password=get_password_hash(DEMO_AGENT_PASSWORD),
                 role="Polling Unit Agent",
                 is_active=True,
-                lga_id=1,
-                ward_id=1,
-                polling_unit_id=1,
             )
         )
         db.commit()
         logger.info("Demo agent account seeded.")
+
+    # Link the demo agent to the first polling unit if not yet assigned.
+    first_pu = db.query(PollingUnit).order_by(PollingUnit.id).first()
+    demo_agent = db.query(User).filter(User.username == "agent").first()
+    if first_pu and demo_agent and not demo_agent.polling_unit_id:
+        demo_agent.polling_unit_id = first_pu.id
+        demo_agent.lga_id = first_pu.lga_id
+        demo_agent.ward_id = first_pu.ward_id
+        db.commit()
 
     coordinator_accounts = [
         {
@@ -153,8 +167,11 @@ def _seed_demo_accounts(db: Session):
     logger.info("Situation Room coordinator and analyst accounts seeded.")
 
 
-def _seed_demo_electoral_data(db: Session):
-    # Seed all 27 Jigawa LGAs
+
+def _seed_electoral_structure(db: Session):
+    """All 27 Jigawa LGAs and their authentic INEC electoral wards."""
+    from app.seed_full import KNOWN_WARDS
+
     jigawa_lgas = [
         ("Dutse", "DUT"), ("Hadejia", "HAD"), ("Gumel", "GUM"), ("Kazaure", "KAZ"), 
         ("Ringim", "RIN"), ("Birnin Kudu", "BKU"), ("Babura", "BAB"), ("Jahun", "JAH"), 
@@ -165,118 +182,88 @@ def _seed_demo_electoral_data(db: Session):
         ("Auyo", "AUY"), ("Birniwa", "BIR"), ("Gagarawa", "GAG"), ("Garki", "GAR")
     ]
 
-    from app.models import LGA
     for name, code in jigawa_lgas:
-        exists = db.query(LGA).filter(LGA.name == name).first()
-        if not exists:
-            lga_obj = LGA(name=name, code=code, registered_voters=25000, total_polling_units=180)
-            db.add(lga_obj)
+        if not db.query(LGA).filter(LGA.name == name).first():
+            db.add(LGA(name=name, code=code, registered_voters=25000, total_polling_units=180))
     db.commit()
 
-    # Comprehensive Seeding Across ALL 27 Jigawa LGAs
-    from app.models import Ward, PollingUnit, Incident, VoteResult
+    for lga in db.query(LGA).all():
+        for w_idx, ward_name in enumerate(KNOWN_WARDS.get(lga.name, []), start=1):
+            ward_code = f"{lga.code}-W{w_idx:02d}"
+            existing = (
+                db.query(Ward)
+                .filter(
+                    Ward.lga_id == lga.id,
+                    (Ward.code == ward_code) | (Ward.name == ward_name),
+                )
+                .first()
+            )
+            if not existing:
+                db.add(Ward(lga_id=lga.id, name=ward_name, code=ward_code))
+    db.commit()
 
-    all_lgas = db.query(LGA).all()
-    statuses = ["Normal", "Normal", "Normal", "Attention", "Normal", "Critical", "Normal"]
-    categories = ["BVAS Issues", "Late Officials", "Minor Crowd", "Intimidation", "Vote Buying", "Ballot Shortage"]
 
-    for index, lga in enumerate(all_lgas):
-        for w_idx in [1, 2]:
-            ward_name = f"{lga.name} Ward {w_idx}"
-            ward = db.query(Ward).filter(Ward.lga_id == lga.id, Ward.name == ward_name).first()
-            if not ward:
-                ward = Ward(lga_id=lga.id, name=ward_name, code=f"{lga.code}-W{w_idx}")
-                db.add(ward)
-                db.commit()
-                db.refresh(ward)
+def _seed_demo_polling_units(db: Session):
+    """
+    Generate 4,827 placeholder polling units spread across the INEC wards.
 
-            for p_idx in [1, 2]:
-                pu_code = f"{lga.code}-{w_idx:02d}{p_idx:02d}"
-                pu_name = f"{pu_code} - {ward_name} Unit {p_idx}"
-                status = statuses[(index + w_idx + p_idx) % len(statuses)]
-                registered = 500 + ((index * 37 + w_idx * 13 + p_idx * 7) % 450)
+    Codes, registered-voter counts and coordinates are generated, not
+    official. No results or incidents are created.
+    """
+    if db.query(PollingUnit).count() > 0:
+        return
 
-                pu = db.query(PollingUnit).filter(PollingUnit.code == pu_code).first()
-                if not pu:
-                    pu = PollingUnit(
-                        lga_id=lga.id,
-                        ward_id=ward.id,
-                        code=pu_code,
-                        name=pu_name,
-                        status=status,
-                        registered_voters=registered,
-                        latitude=11.7 + (index * 0.03),
-                        longitude=9.3 + (w_idx * 0.02)
-                    )
-                    db.add(pu)
-                    db.commit()
-                    db.refresh(pu)
+    import random
+    from app.seed_full import JIGAWA_LGAS
 
-                    # Agent User
-                    agent_uname = f"agent_{lga.code.lower()}_w{w_idx}_p{p_idx}"
-                    agent = db.query(User).filter(User.username == agent_uname).first()
-                    if not agent:
-                        agent = User(
-                            full_name=f"Agent {lga.name} W{w_idx}P{p_idx}",
-                            username=agent_uname,
-                            hashed_password=get_password_hash(DEMO_AGENT_PASSWORD),
-                            role="Polling Unit Agent",
-                            polling_unit_id=pu.id,
-                            lga_id=lga.id,
-                            ward_id=ward.id
-                        )
-                        db.add(agent)
-                        db.commit()
-                        db.refresh(agent)
+    lga_info_map = {l["name"]: l for l in JIGAWA_LGAS}
+    all_wards = db.query(Ward).join(LGA).order_by(LGA.id, Ward.id).all()
+    if not all_wards:
+        return
 
-                    # Form EC8A Vote Results
-                    pdp = 210 + ((index * 19 + w_idx * 11 + p_idx * 5) % 160)
-                    apc = 160 + ((index * 13 + w_idx * 7 + p_idx * 3) % 110)
-                    nnpp = 35 + ((index * 5 + w_idx * 3) % 45)
-                    lp = 12 + ((index * 3) % 25)
-                    rejected = 8 + (index % 10)
+    total_target_pus = 4827
+    pus_per_ward = total_target_pus // len(all_wards)
+    remainder = total_target_pus % len(all_wards)
 
-                    res_exist = db.query(VoteResult).filter(VoteResult.polling_unit_id == pu.id).first()
-                    if not res_exist:
-                        total_valid = pdp + apc + nnpp + lp + 5
-                        total_cast = total_valid + rejected
-                        is_overvote = total_cast > pu.registered_voters
-                        flagged_status = "FLAGGED" if (is_overvote or status == "Critical") else ("PENDING_PHOTO" if status == "Attention" else "VERIFIED")
-                        result = VoteResult(
-                            polling_unit_id=pu.id,
-                            agent_id=agent.id,
-                            pdp_votes=pdp,
-                            apc_votes=apc,
-                            nnpp_votes=nnpp,
-                            lp_votes=lp,
-                            others_votes=5,
-                            rejected_votes=rejected,
-                            total_valid_votes=total_valid,
-                            total_votes_cast=total_cast,
-                            verification_status=flagged_status,
-                            notes=f"[ALERT] Over-voting: {total_cast} vs {pu.registered_voters}" if is_overvote else None
-                        )
-                        db.add(result)
-                        db.commit()
+    pu_counter = 0
+    for idx, ward in enumerate(all_wards):
+        lga_info = lga_info_map.get(ward.lga.name, {"code": ward.lga.code, "lat": 11.7594, "lon": 9.3390})
+        num_pus = pus_per_ward + (1 if idx < remainder else 0)
+        w_code = ward.code.split("-")[-1] if "-" in ward.code else f"W{idx+1:02d}"
+        w_num = w_code.replace("W", "")
 
-                    # Seed Incidents for Attention/Critical PUs
-                    if status in ["Attention", "Critical"]:
-                        inc_exist = db.query(Incident).filter(Incident.polling_unit_id == pu.id).first()
-                        if not inc_exist:
-                            inc = Incident(
-                                polling_unit_id=pu.id,
-                                reported_by=agent.id,
-                                incident_type=categories[index % len(categories)],
-                                severity="CRITICAL" if status == "Critical" else "MEDIUM",
-                                description=f"{categories[index % len(categories)]} reported at {pu_name}. Field intervention in progress.",
-                                status="INVESTIGATING" if status == "Attention" else "REPORTED",
-                                latitude=11.7 + (index * 0.03),
-                                longitude=9.3 + (w_idx * 0.02)
-                            )
-                            db.add(inc)
-                            db.commit()
+        for p_idx in range(1, num_pus + 1):
+            pu_counter += 1
+            pu_code = f"{lga_info['code']}-{w_num}{p_idx:02d}"
+            lat = round(lga_info.get("lat", 11.7594) + random.gauss(0, 0.045), 6)
+            lon = round(lga_info.get("lon", 9.3390) + random.gauss(0, 0.045), 6)
 
-    logger.info("Demo electoral data seeded.")
+            db.add(
+                PollingUnit(
+                    lga_id=ward.lga_id,
+                    ward_id=ward.id,
+                    code=pu_code,
+                    name=f"{pu_code} - {ward.name} Unit {p_idx}",
+                    status="Normal",
+                    registered_voters=random.randint(480, 850),
+                    latitude=max(11.05, min(13.00, lat)),
+                    longitude=max(8.05, min(10.55, lon)),
+                )
+            )
+
+        if idx % 25 == 0:
+            db.commit()
+
+    db.commit()
+    logger.info("Demo polling units seeded: %s (no results, no incidents).", pu_counter)
+
+
+def _refresh_polling_unit_counts(db: Session):
+    for lga in db.query(LGA).all():
+        lga.total_polling_units = db.query(PollingUnit).filter(PollingUnit.lga_id == lga.id).count()
+    for ward in db.query(Ward).all():
+        ward.total_polling_units = db.query(PollingUnit).filter(PollingUnit.ward_id == ward.id).count()
+    db.commit()
 
 
 if __name__ == "__main__":

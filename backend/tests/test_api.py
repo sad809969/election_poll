@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app as fastapi_app
 from app.database import Base, get_db
-from app.seed import seed_database
+from app.seed import DEMO_ADMIN_PASSWORD, seed_database
 
 # 1. Create an in-memory SQLite database with StaticPool for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -47,7 +47,7 @@ def setup_db():
 def get_admin_headers():
     res = client.post(
         "/api/auth/login",
-        data={"username": "admin", "password": "admin1283"}
+        data={"username": "admin", "password": DEMO_ADMIN_PASSWORD}
     )
     assert res.status_code == 200
     token = res.json()["access_token"]
@@ -57,7 +57,7 @@ def get_admin_headers():
 def get_admin_token():
     res = client.post(
         "/api/auth/login",
-        data={"username": "admin", "password": "admin1283"}
+        data={"username": "admin", "password": DEMO_ADMIN_PASSWORD}
     )
     assert res.status_code == 200
     return res.json()["access_token"]
@@ -86,7 +86,7 @@ def test_auth_login_valid_and_me():
     """Test login with seeded admin credentials and check /me endpoint."""
     response = client.post(
         "/api/auth/login",
-        data={"username": "admin", "password": "admin1283"}
+        data={"username": "admin", "password": DEMO_ADMIN_PASSWORD}
     )
     assert response.status_code == 200
     data = response.json()
@@ -421,11 +421,32 @@ def test_delete_agent_with_results_deactivates():
     """Test that an admin cannot physically delete an agent with existing results."""
     headers = get_admin_headers()
 
-    results_resp = client.get("/api/results", headers=headers)
-    assert results_resp.status_code == 200
-    results_data = results_resp.json()
-    assert len(results_data["results"]) > 0
-    agent_id = results_data["results"][0]["agent_id"]
+    # Create a dedicated agent and record a result as that agent.
+    pu_id = client.get("/api/electoral/polling-units", headers=headers).json()[5]["id"]
+    created = client.post(
+        "/api/agents",
+        headers=headers,
+        json={
+            "full_name": "Results Agent",
+            "username": "results_agent_delete_test",
+            "password": "agentpassword123",
+            "role": "Polling Unit Agent",
+            "polling_unit_id": pu_id,
+        },
+    )
+    assert created.status_code == 201
+    agent_id = created.json()["id"]
+
+    agent_token = client.post(
+        "/api/auth/login",
+        data={"username": "results_agent_delete_test", "password": "agentpassword123"},
+    ).json()["access_token"]
+    submit = client.post(
+        "/api/results/submit",
+        headers={"Authorization": f"Bearer {agent_token}"},
+        json={"polling_unit_id": pu_id, "election_type": "GOVERNORSHIP", "pdp_votes": 10},
+    )
+    assert submit.status_code == 200
 
     delete_response = client.delete(
         f"/api/agents/{agent_id}",

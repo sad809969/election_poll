@@ -44,7 +44,15 @@ export default function LoginPage() {
       const user = await loginUser(username.trim(), password);
       const userRole = (user.role || "").toUpperCase();
 
-      // Intelligent Role-based Redirection based on user details
+      // Intelligent Role-based Redirection based on user details and custom permissions
+      if (Array.isArray(user.allowed_pages) && user.allowed_pages.length > 0) {
+        const firstSideB = user.allowed_pages.find((p) => typeof p === 'string' && !p.startsWith('side-a'));
+        if (firstSideB) {
+          router.replace(firstSideB);
+          return;
+        }
+      }
+
       if (userRole.includes("SUPER") || userRole.includes("ADMIN") || userRole.includes("STATE")) {
         router.replace("/");
       } else if (userRole.includes("LGA")) {

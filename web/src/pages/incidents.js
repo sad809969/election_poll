@@ -100,7 +100,7 @@ export default function IncidentTrackerPage() {
     { id: 3, pu: 'PU 078, Gumel Central', lga: 'Gumel', category: 'BVAS Issues', severity: 'MEDIUM', status: 'RESOLVED', reporter: 'Aisha M.', phone: '0807 111 2233', time: '10:42 AM', desc: 'BVAS fingerprint scanner malfunction resolved by INEC technical support team.', lat: 27.12, lng: 12.45 },
     { id: 4, pu: 'PU 105, Hadejia Ward B', lga: 'Hadejia', category: 'Late Officials', severity: 'LOW', status: 'RESOLVED', reporter: 'Sani R.', phone: '0809 876 5432', time: '09:15 AM', desc: 'INEC ad-hoc staff arrived 45 minutes late. Voting started at 09:15 AM.', lat: 27.20, lng: 12.50 },
     { id: 5, pu: 'PU 056, Kazaure Ward C', lga: 'Kazaure', category: 'Vote Buying', severity: 'HIGH', status: 'REPORTED', reporter: 'Yusuf B.', phone: '0706 111 2233', time: '11:05 AM', desc: 'Alleged vote buying activity observed 100 meters outside polling center perimeter.', lat: 27.30, lng: 12.60 },
-    { id: 6, pu: 'PU 012, Kaugama Ward 1', lga: 'Kaugama', category: 'Ballot Shortage', severity: 'MEDIUM', status: 'INVESTIGATING', reporter: 'Musa A.', phone: '0803 123 4567', time: '11:20 AM', desc: 'Shortage of official ballot papers reported. Requesting electoral officer intervention.', lat: 27.40, lng: 12.70 },
+    { id: 6, pu: 'PU 012, Kaugama - Arbus', lga: 'Kaugama', category: 'Ballot Shortage', severity: 'MEDIUM', status: 'INVESTIGATING', reporter: 'Musa A.', phone: '0803 123 4567', time: '11:20 AM', desc: 'Shortage of official ballot papers reported. Requesting electoral officer intervention.', lat: 27.40, lng: 12.70 },
   ]
 
   const activeIncidents = incidentsList.length > 0 ? incidentsList : defaultIncidents

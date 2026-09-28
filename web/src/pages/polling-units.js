@@ -14,13 +14,15 @@ import {
   Pencil,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
 
 export default function PollingUnitsPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  // ADD THIS
   const [pollingUnits, setPollingUnits] = useState([]);
   const [lgas, setLgas] = useState([]);
   const [wards, setWards] = useState([]);
@@ -29,7 +31,10 @@ export default function PollingUnitsPage() {
 
   const [statusFilter, setStatusFilter] = useState("All");
   const [lgaFilter, setLgaFilter] = useState("All LGAs");
+  const [wardFilter, setWardFilter] = useState("All Wards");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
   const [showModal, setShowModal] = useState(false);
 
 const [formData, setFormData] = useState({
@@ -113,6 +118,13 @@ async function createPollingUnit(e) {
   }
 }
 
+  const availableWards = lgaFilter === "All LGAs"
+    ? wards
+    : wards.filter((w) => {
+        const lga = lgas.find((l) => l.name === lgaFilter);
+        return lga && w.lga_id === lga.id;
+      });
+
   const filteredPus = pollingUnits.filter((pu) => {
     const ward = wards.find((w) => w.id === pu.ward_id);
     const lga = lgas.find((l) => l.id === pu.lga_id);
@@ -122,14 +134,22 @@ async function createPollingUnit(e) {
 
     const matchesLga =
       lgaFilter === "All LGAs" ||
-      (lga && lga.name === lgaFilter);
+      (lga && (lga.name === lgaFilter || String(lga.id) === String(lgaFilter)));
+
+    const matchesWard =
+      wardFilter === "All Wards" ||
+      (ward && (ward.name === wardFilter || String(ward.id) === String(wardFilter)));
 
     const matchesSearch =
-      pu.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pu.code.toLowerCase().includes(searchQuery.toLowerCase());
+      !searchQuery ||
+      pu.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pu.code?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesStatus && matchesLga && matchesSearch;
+    return matchesStatus && matchesLga && matchesWard && matchesSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredPus.length / pageSize));
+  const paginatedPus = filteredPus.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const normalCount = pollingUnits.filter(
     (p) => p.status === "Normal"
@@ -166,7 +186,7 @@ async function createPollingUnit(e) {
               <div>
                 <span className="text-xs font-bold text-slate-400">Total Polling Units</span>
                 <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{pollingUnits.length}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">27 LGAs • 287 Wards</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">27 LGAs • 285 Authentic Wards</p>
               </div>
               <div className="p-3 rounded-xl bg-pdp/20 text-pdp"><Building2 className="w-6 h-6" /></div>
             </div>
@@ -208,7 +228,10 @@ async function createPollingUnit(e) {
               {['All', 'Normal', 'Attention', 'Critical'].map(st => (
                 <button
                   key={st}
-                  onClick={() => setStatusFilter(st)}
+                  onClick={() => {
+                    setStatusFilter(st);
+                    setCurrentPage(1);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                     statusFilter === st 
                       ? 'bg-pdp text-white shadow-md' 
@@ -220,21 +243,42 @@ async function createPollingUnit(e) {
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <select 
                 value={lgaFilter}
-                onChange={(e) => setLgaFilter(e.target.value)}
+                onChange={(e) => {
+                  setLgaFilter(e.target.value);
+                  setWardFilter("All Wards");
+                  setCurrentPage(1);
+                }}
                 className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border ${
                   isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
                 }`}
               >
-                <option value="All LGAs">All LGAs</option>
-
+                <option value="All LGAs">All 27 LGAs</option>
                 {lgas.map((lga) => (
-                 <option key={lga.id} value={lga.name}>
-                   {lga.name}
-                 </option>
-                 ))}
+                  <option key={lga.id} value={lga.name}>
+                    {lga.name}
+                  </option>
+                ))}
+              </select>
+
+              <select 
+                value={wardFilter}
+                onChange={(e) => {
+                  setWardFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border ${
+                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
+                }`}
+              >
+                <option value="All Wards">All Wards {lgaFilter !== "All LGAs" ? `(${availableWards.length})` : `(285)`}</option>
+                {availableWards.map((w) => (
+                  <option key={w.id} value={w.name}>
+                    {w.name}
+                  </option>
+                ))}
               </select>
 
               <div className="relative w-56">
@@ -243,7 +287,10 @@ async function createPollingUnit(e) {
                   type="text" 
                   placeholder="Search unit code or name..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border ${
                     isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
                   }`}
@@ -274,21 +321,21 @@ async function createPollingUnit(e) {
                   </tr>
                 </thead>
                 <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                  {filteredPus.map((pu) => (
+                  {paginatedPus.map((pu) => (
                     <tr key={pu.id} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
                       <td className="py-3 px-3 font-mono font-extrabold text-pdp">{pu.code}</td>
                       <td className={`py-3 px-3 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{pu.name}</td>
                       <td className="py-3 px-3 text-slate-500">
-                      {wards.find((w) => w.id === pu.ward_id)?.name || "-"}
-                       </td>
+                        {wards.find((w) => w.id === pu.ward_id)?.name || "-"}
+                      </td>
                       <td className="py-3 px-3 text-slate-400">
-                      {lgas.find((l) => l.id === pu.lga_id)?.name || "-"}
+                        {lgas.find((l) => l.id === pu.lga_id)?.name || "-"}
                       </td>
                       <td className={`py-3 px-3 font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                       {pu.registered_voters} Voters
-                     </td>
+                        {pu.registered_voters} Voters
+                      </td>
                       <td className="py-3 px-3 text-slate-500">
-                       <span>Not Assigned</span>
+                        <span>Not Assigned</span>
                       </td>
                       <td className="py-3 px-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -306,6 +353,49 @@ async function createPollingUnit(e) {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t text-xs ${
+              isDark ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-600'
+            }`}>
+              <div>
+                Showing <span className="font-bold text-emerald-400">{filteredPus.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to{' '}
+                <span className="font-bold text-emerald-400">{Math.min(currentPage * pageSize, filteredPus.length)}</span> of{' '}
+                <span className="font-bold text-emerald-400">{filteredPus.length}</span> Polling Units
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1 ${
+                    currentPage === 1
+                      ? 'opacity-40 cursor-not-allowed border-transparent'
+                      : isDark ? 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-800'
+                  }`}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Previous</span>
+                </button>
+
+                <span className="px-3 py-1 font-mono text-xs font-bold">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1 ${
+                    currentPage === totalPages
+                      ? 'opacity-40 cursor-not-allowed border-transparent'
+                      : isDark ? 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-200' : 'border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-800'
+                  }`}
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </main>

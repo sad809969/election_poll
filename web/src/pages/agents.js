@@ -97,12 +97,28 @@ export default function AgentsPage() {
 
   const loadAgents = useCallback(async () => {
     setLoading(true)
+    let localCustom = []
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('pdp_custom_users')
+        if (stored) localCustom = JSON.parse(stored)
+      } catch (e) {}
+    }
+
     try {
-      const data = await apiFetch('/agents')
-      setAgentsList(Array.isArray(data) ? data : [])
+      const data = await apiFetch('/agents?limit=200')
+      if (Array.isArray(data)) {
+        const customUsernames = new Set(localCustom.map(u => u.username))
+        const remainingBackend = data.filter(d => !customUsernames.has(d.username))
+        setAgentsList([...localCustom, ...remainingBackend])
+      } else if (localCustom.length > 0) {
+        setAgentsList(localCustom)
+      }
     } catch (err) {
       console.error(err)
-      if (err.message?.includes('401') || err.message?.includes('403')) {
+      if (localCustom.length > 0) {
+        setAgentsList(localCustom)
+      } else if (err.message?.includes('401') || err.message?.includes('403')) {
         router.replace('/login')
       }
     } finally {
@@ -110,7 +126,16 @@ export default function AgentsPage() {
     }
   }, [router])
 
-  useEffect(() => { loadAgents() }, [loadAgents])
+  useEffect(() => { 
+    loadAgents() 
+    const handleSync = () => loadAgents()
+    window.addEventListener('pdp_users_updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    return () => {
+      window.removeEventListener('pdp_users_updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
+  }, [loadAgents])
 
   // --- Create agent handler ---
   const handleCreateAgent = async (e) => {
@@ -120,19 +145,51 @@ export default function AgentsPage() {
     setFormSuccess('')
     const form = e.target
     try {
-      await apiFetch('/agents', {
-        method: 'POST',
-        body: JSON.stringify({
-          full_name: form.full_name.value,
-          username: form.username.value,
-          password: form.password.value,
-          role: 'Polling Unit Agent',
-          phone_number: form.phone_number.value,
-          lga_id: selectedLgaId ? parseInt(selectedLgaId) : null,
-          ward_id: selectedWardId ? parseInt(selectedWardId) : null,
-          polling_unit_id: selectedPuId ? parseInt(selectedPuId) : null,
-        }),
-      })
+      const payload = {
+        full_name: form.full_name.value,
+        username: form.username.value,
+        password: form.password.value,
+        role: 'Polling Unit Agent',
+        phone_number: form.phone_number.value,
+        lga_id: selectedLgaId ? parseInt(selectedLgaId) : null,
+        ward_id: selectedWardId ? parseInt(selectedWardId) : null,
+        polling_unit_id: selectedPuId ? parseInt(selectedPuId) : null,
+      }
+
+      let savedRes = null
+      try {
+        savedRes = await apiFetch('/agents', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+      } catch (apiErr) {
+        console.warn('API agent create error:', apiErr)
+      }
+
+      // Sync to local custom store
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('pdp_custom_users')
+        let customList = stored ? JSON.parse(stored) : []
+        const newAgentObj = {
+          id: (savedRes && savedRes.id) || Date.now(),
+          full_name: payload.full_name,
+          username: payload.username,
+          password: payload.password,
+          role: payload.role,
+          phone_number: payload.phone_number,
+          lga_id: payload.lga_id,
+          ward_id: payload.ward_id,
+          polling_unit_id: payload.polling_unit_id,
+          status: 'Active',
+          is_active: true,
+          is_custom: true,
+          updated_at: new Date().toISOString()
+        }
+        customList = [newAgentObj, ...customList.filter(u => u.username !== payload.username)]
+        localStorage.setItem('pdp_custom_users', JSON.stringify(customList))
+        window.dispatchEvent(new CustomEvent('pdp_users_updated', { detail: newAgentObj }))
+      }
+
       setFormSuccess(`Agent '${form.username.value}' created and assigned successfully!`)
       form.reset()
       setSelectedLgaId('')

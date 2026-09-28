@@ -1,0 +1,20 @@
+[Unit]
+Description=Jigawa PDP PollWatch 2027 FastAPI Production Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/election_poll/backend
+Environment="PATH=/var/www/election_poll/backend/venv/bin:/usr/local/bin:/usr/bin"
+Environment="PORT=8000"
+EnvironmentFile=/var/www/election_poll/backend/.env
+ExecStart=/var/www/election_poll/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+
+Restart=always
+RestartSec=5
+KillSignal=SIGQUIT
+
+[Install]
+WantedBy=multi-user.target
