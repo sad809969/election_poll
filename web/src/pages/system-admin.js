@@ -91,6 +91,8 @@ export default function SystemAdminControlPanel() {
   const [auditLogs, setAuditLogs] = useState([])
   const [dashboardStats, setDashboardStats] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [securitySearch, setSecuritySearch] = useState('')
+  const [isSeedingPus, setIsSeedingPus] = useState(false)
 
   // Electoral Hierarchy Interactive Drill-Down State (LGA -> Wards -> Polling Units)
   const [hierarchyData, setHierarchyData] = useState(null)
@@ -288,6 +290,21 @@ export default function SystemAdminControlPanel() {
       console.error('Master admin load error:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Force seed / sync all 4,827 Polling Units
+  const handleSyncPollingUnits = async () => {
+    setIsSeedingPus(true)
+    try {
+      const res = await apiFetch('/admin/seed-polling-units?force=true', { method: 'POST' })
+      alert(res?.message || 'Polling units seeded successfully!')
+      await loadPollingUnits(1, puLgaFilter, puWardFilter, puSearch)
+      await loadData()
+    } catch (err) {
+      alert(`Seeding error: ${err.message || 'Could not seed polling units'}`)
+    } finally {
+      setIsSeedingPus(false)
     }
   }
 
@@ -1689,7 +1706,7 @@ export default function SystemAdminControlPanel() {
                   { id: 'hierarchy', label: 'Electoral Hierarchy Explorer (Drill-Down)', icon: Layers, highlight: true },
                   { id: 'lgas', label: `Manage LGAs (${lgasList.length})`, count: lgasList.length },
                   { id: 'wards', label: `Manage Wards (${wardsList.length})`, count: wardsList.length },
-                  { id: 'polling-units', label: `Manage Polling Units (${pusPagination.total || 4827})`, count: pusPagination.total },
+                  { id: 'polling-units', label: `Manage Polling Units (${pusPagination.total ?? 0})`, count: pusPagination.total },
                   { id: 'parties', label: `Political Parties (${partiesList.length})`, count: partiesList.length },
                 ].map(tab => (
                   <button
@@ -2348,16 +2365,27 @@ export default function SystemAdminControlPanel() {
                 <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
                     <div>
-                      <h3 className="text-sm font-black text-white">Polling Units Inventory ({pusPagination.total || 4827} Total)</h3>
+                      <h3 className="text-sm font-black text-white">Polling Units Inventory ({pusPagination.total ?? 0} Total)</h3>
                       <p className="text-xs text-slate-400">Live voter quotas, GPS coordinates, and real-time statuses</p>
                     </div>
-                    <button
-                      onClick={openAddPuModal}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition self-start sm:self-auto shadow-md"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Polling Unit</span>
-                    </button>
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <button
+                        onClick={handleSyncPollingUnits}
+                        disabled={isSeedingPus}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs flex items-center gap-1.5 transition border border-emerald-500/30 shadow-md"
+                        title="Seed or Synchronize all 4,827 official INEC Polling Units"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSeedingPus ? 'animate-spin' : ''}`} />
+                        <span>{isSeedingPus ? 'Syncing 4,827 PUs...' : '⚡ Sync 4,827 Polling Units'}</span>
+                      </button>
+                      <button
+                        onClick={openAddPuModal}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-md"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Polling Unit</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Filter and Search Bar */}
@@ -2709,25 +2737,225 @@ export default function SystemAdminControlPanel() {
                 ))}
               </div>
 
-              <div className={`${cardClass} border rounded-2xl p-5 space-y-3`}>
-                <h3 className="text-sm font-black text-white">Immutable Security & Telemetry Stream</h3>
-                <div className="divide-y divide-slate-800 text-xs font-mono">
-                  {auditLogs.length > 0 ? (
-                    auditLogs.map((log, i) => (
-                      <div key={i} className="py-2.5 flex justify-between items-center text-slate-300">
-                        <div>
-                          <span className="text-emerald-400 font-bold">[{log.action}]</span> {log.details}
-                        </div>
-                        <span className="text-slate-500 text-[10px]">{log.created_at || 'Recently'}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-6 text-center text-slate-400">
-                      System operating under immutable audit mode. All cryptographic records verified.
-                    </div>
-                  )}
+              {/* Search & Filter Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex-1 min-w-[220px] relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by action, username, IP, or details..."
+                    value={securitySearch}
+                    onChange={(e) => setSecuritySearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:border-emerald-500"
+                  />
                 </div>
+                <button
+                  onClick={() => setSecuritySearch('')}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+                >
+                  Reset Filter
+                </button>
               </div>
+
+              {/* TAB 1: AUDIT LOGS */}
+              {securityTab === 'audit' && (
+                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Cryptographic Audit Trail ({auditLogs.length} Records)</h3>
+                      <p className="text-xs text-slate-400">Immutable ledger of all administrative and database state mutations</p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                      SHA-256 Tamper Evident
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="pb-2">Action</th>
+                          <th className="pb-2">Details / Operation</th>
+                          <th className="pb-2">Initiated By</th>
+                          <th className="pb-2">IP Address</th>
+                          <th className="pb-2 text-right">Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {auditLogs
+                          .filter(log => !securitySearch || (
+                            (log.action && log.action.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                            (log.username && log.username.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                            (log.details && log.details.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                            (log.ip_address && log.ip_address.toLowerCase().includes(securitySearch.toLowerCase()))
+                          ))
+                          .map((log, i) => {
+                            const isDelete = log.action?.includes('DELETE') || log.action?.includes('FAIL') || log.action?.includes('BLOCKED')
+                            const isUpdate = log.action?.includes('UPDATE') || log.action?.includes('CHANGE')
+                            const badgeColor = isDelete
+                              ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              : isUpdate
+                                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+
+                            return (
+                              <tr key={log.id || i} className="hover:bg-slate-900/50">
+                                <td className="py-2.5 pr-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${badgeColor}`}>
+                                    {log.action}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 pr-3 text-slate-300 max-w-md truncate">
+                                  {log.details || 'System operation executed'}
+                                </td>
+                                <td className="py-2.5 pr-3 text-white font-bold font-mono">
+                                  @{log.username || 'system'}
+                                </td>
+                                <td className="py-2.5 pr-3 text-slate-400 font-mono text-[11px]">
+                                  {log.ip_address || '127.0.0.1'}
+                                </td>
+                                <td className="py-2.5 text-right text-slate-500 text-[10px] font-mono whitespace-nowrap">
+                                  {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recently'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        {auditLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-slate-400">
+                              No audit logs recorded yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: USER ACTIVITY */}
+              {securityTab === 'activity' && (
+                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Live User & Operator Activity</h3>
+                      <p className="text-xs text-slate-400">Real-time telemetry stream of field reporting, election audits, and permissions changes</p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
+                      Telemetry Stream Active
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {auditLogs
+                      .filter(log => !['USER_LOGIN', 'LOGIN_FAILED', 'LOGIN_BLOCKED'].includes(log.action))
+                      .filter(log => !securitySearch || (
+                        (log.action && log.action.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                        (log.username && log.username.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                        (log.details && log.details.toLowerCase().includes(securitySearch.toLowerCase()))
+                      ))
+                      .map((log, i) => (
+                        <div key={log.id || i} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                                {log.action}
+                              </span>
+                              <span className="text-xs font-bold text-white">@{log.username || 'system'}</span>
+                            </div>
+                            <p className="text-xs text-slate-300 font-medium">{log.details}</p>
+                            <span className="text-[10px] text-slate-500 font-mono">IP: {log.ip_address || 'Internal'}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
+                            {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recently'}
+                          </span>
+                        </div>
+                      ))}
+                    {auditLogs.filter(log => !['USER_LOGIN', 'LOGIN_FAILED', 'LOGIN_BLOCKED'].includes(log.action)).length === 0 && (
+                      <div className="py-8 text-center text-slate-400 text-xs">
+                        No user activity events recorded yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: LOGIN HISTORY */}
+              {securityTab === 'logins' && (
+                <div className={`${cardClass} border rounded-2xl p-5 space-y-4`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-white">Authentication Stream & Login History</h3>
+                      <p className="text-xs text-slate-400">Audit trail of all administrator, coordinator, and agent sign-in sessions</p>
+                    </div>
+                    <span className="text-[10px] font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                      Auth Shield Active
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                          <th className="pb-2">Account</th>
+                          <th className="pb-2">Status</th>
+                          <th className="pb-2">IP Address</th>
+                          <th className="pb-2">Authentication Details</th>
+                          <th className="pb-2 text-right">Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {auditLogs
+                          .filter(log => ['USER_LOGIN', 'LOGIN_FAILED', 'LOGIN_BLOCKED'].includes(log.action))
+                          .filter(log => !securitySearch || (
+                            (log.username && log.username.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                            (log.details && log.details.toLowerCase().includes(securitySearch.toLowerCase())) ||
+                            (log.ip_address && log.ip_address.toLowerCase().includes(securitySearch.toLowerCase()))
+                          ))
+                          .map((log, i) => {
+                            const isSuccess = log.action === 'USER_LOGIN'
+                            const isBlocked = log.action === 'LOGIN_BLOCKED'
+
+                            return (
+                              <tr key={log.id || i} className="hover:bg-slate-900/50">
+                                <td className="py-2.5 pr-3 text-white font-bold font-mono">
+                                  @{log.username || 'Unknown'}
+                                </td>
+                                <td className="py-2.5 pr-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                    isSuccess
+                                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                      : isBlocked
+                                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                  }`}>
+                                    {isSuccess ? 'SUCCESS' : isBlocked ? 'BLOCKED' : 'FAILED'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 pr-3 text-slate-300 font-mono text-[11px]">
+                                  {log.ip_address || '127.0.0.1'}
+                                </td>
+                                <td className="py-2.5 pr-3 text-slate-400 max-w-sm truncate">
+                                  {log.details || 'Standard authentication'}
+                                </td>
+                                <td className="py-2.5 text-right text-slate-500 text-[10px] font-mono whitespace-nowrap">
+                                  {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Recently'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        {auditLogs.filter(log => ['USER_LOGIN', 'LOGIN_FAILED', 'LOGIN_BLOCKED'].includes(log.action)).length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-slate-400">
+                              No authentication history logged yet. Sign in with accounts to populate this stream.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

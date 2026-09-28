@@ -161,19 +161,26 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
             "polling_units": count_before,
         }
 
-    if force and count_before > 0:
-        db.query(PollingUnit).delete()
-        db.commit()
+    try:
+        if force and count_before > 0:
+            db.query(PollingUnit).delete()
+            db.commit()
 
-    _seed_polling_units(db)
-    _refresh_polling_unit_counts(db)
+        _seed_polling_units(db)
+        _refresh_polling_unit_counts(db)
 
-    count_after = db.query(PollingUnit).count()
-    return {
-        "message": f"Successfully seeded {count_after} official INEC Jigawa polling units across all 27 LGAs.",
-        "seeded": True,
-        "polling_units": count_after,
-    }
+        count_after = db.query(PollingUnit).count()
+        return {
+            "message": f"Successfully seeded {count_after} official INEC Jigawa polling units across all 27 LGAs.",
+            "seeded": True,
+            "polling_units": count_after,
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Seeding failed: {str(exc)}"
+        )
 
 
 # =============================================================================
