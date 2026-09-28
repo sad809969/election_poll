@@ -168,6 +168,7 @@ export default function ElectionResultsPage() {
                   • {currentOffice.date}
                 </span>
               </div>
+            </div>
 
             {/* Export & Actions */}
             <div className="flex items-center gap-3">
@@ -176,28 +177,18 @@ export default function ElectionResultsPage() {
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition"
               >
                 <FolderArchive className="w-4 h-4 text-emerald-400" />
-                <span>Super Admin Media & Data Vault</span>
+                <span>Super Admin Media &amp; Data Vault</span>
               </Link>
               <button
                 onClick={exportToCsv}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pdp hover:bg-pdp-dark text-white font-bold text-xs shadow-lg shadow-pdp/20 transition active:scale-95"
               >
-                {currentOffice.title}
-              </h2>
-
-              <p className="text-xs text-slate-400 mt-1">
-                {currentOffice.subtitle}
-              </p>
+                <Download className="w-4 h-4" />
+                <span>Export to CSV</span>
+              </button>
             </div>
-
-            <button
-              onClick={exportToCsv}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pdp hover:bg-pdp-dark text-white font-bold text-xs shadow-lg shadow-pdp/20 transition active:scale-95"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export to CSV</span>
-            </button>
           </div>
+
 
           <div
             className={`${cardClass} border rounded-2xl p-8 text-center`}
