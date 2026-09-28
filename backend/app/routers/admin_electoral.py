@@ -148,13 +148,10 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
     Trigger seeding of all 4,827 official INEC Jigawa polling units.
 
     - Default (force=false): adds polling units only if count is 0.
-    - force=true: nulls FK refs on all dependent tables, wipes, and re-seeds.
+    - force=true: deletes all polling units via CASCADE then re-seeds.
     """
     from app.seed import _seed_polling_units, _refresh_polling_unit_counts
-    from app.models import (
-        ElectionResult, ElectionResultVote, Incident,
-        ElectionActivity, VoteResult, ElectionAgentAssignment, User
-    )
+    from sqlalchemy import text
 
     count_before = db.query(PollingUnit).count()
 
@@ -166,17 +163,9 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
         }
 
     if force and count_before > 0:
-        # Null FK references on all tables that point to polling_unit_id
-        # so we don't hit FK constraint violations on delete.
-        db.query(ElectionResultVote).delete(synchronize_session=False)
-        db.query(ElectionResult).update({"polling_unit_id": None}, synchronize_session=False)
-        db.query(VoteResult).delete(synchronize_session=False)
-        db.query(Incident).update({"polling_unit_id": None}, synchronize_session=False)
-        db.query(ElectionActivity).update({"polling_unit_id": None}, synchronize_session=False)
-        db.query(ElectionAgentAssignment).update({"polling_unit_id": None}, synchronize_session=False)
-        db.query(User).update({"polling_unit_id": None}, synchronize_session=False)
-        db.commit()
-        db.query(PollingUnit).delete(synchronize_session=False)
+        # Use raw SQL so PostgreSQL's ondelete=CASCADE runs on all child tables.
+        # SQLAlchemy ORM .delete() skips database-level cascade triggers.
+        db.execute(text("DELETE FROM polling_units"))
         db.commit()
 
     _seed_polling_units(db)
@@ -188,7 +177,6 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
         "seeded": True,
         "polling_units": count_after,
     }
-
 
 
 # =============================================================================
