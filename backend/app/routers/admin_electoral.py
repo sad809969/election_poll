@@ -163,9 +163,9 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
         }
 
     if force and count_before > 0:
-        # Use raw SQL so PostgreSQL's ondelete=CASCADE runs on all child tables.
-        # SQLAlchemy ORM .delete() skips database-level cascade triggers.
-        db.execute(text("DELETE FROM polling_units"))
+        # TRUNCATE ... CASCADE is the most reliable way to wipe a table with
+        # FK dependents in PostgreSQL — it removes all child rows in one shot.
+        db.execute(text("TRUNCATE TABLE polling_units CASCADE"))
         db.commit()
 
     _seed_polling_units(db)
