@@ -1,14 +1,20 @@
-const getApiBase = () => {
+export const getApiBase = () => {
   if (process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
   }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    if (window.location.hostname.includes('vercel.app')) {
+      return 'https://pdp-pollwatch-backend.onrender.com/api';
+    }
     return `${window.location.origin}/api`;
   }
   return 'http://localhost:8000/api';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 /**
  * Generic API request wrapper

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
@@ -21,7 +22,8 @@ import {
   Sliders,
   ShieldCheck,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  FolderArchive
 } from 'lucide-react'
 import { 
   ResponsiveContainer, 
@@ -301,13 +303,22 @@ export default function AdminPage() {
                   <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>System Personnel Directory</h3>
                   <p className="text-xs text-slate-400">Manage user accounts and their authorized Side A & Side B page visibility</p>
                 </div>
-                <button 
-                  onClick={() => setShowAddModal(true)}
-                  className="px-3.5 py-2 bg-pdp hover:bg-pdp-dark text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm self-start sm:self-auto"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add User & Assign Pages</span>
-                </button>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <Link 
+                    href="/system-admin?section=exports"
+                    className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold flex items-center gap-1.5 transition"
+                  >
+                    <FolderArchive className="w-4 h-4 text-emerald-400" />
+                    <span>Data & Media Vault</span>
+                  </Link>
+                  <button 
+                    onClick={() => setShowAddModal(true)}
+                    className="px-3.5 py-2 bg-pdp hover:bg-pdp-dark text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add User & Assign Pages</span>
+                  </button>
+                </div>
               </div>
 
               {/* Filters & Search */}
