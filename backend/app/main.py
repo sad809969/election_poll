@@ -9,7 +9,7 @@ from app.database import init_db
 
 
 # Core Routers
-from app.routers import auth, results, incidents, agents, audit, announcements, activities, collation
+from app.routers import auth, results, incidents, agents, audit, announcements, activities, collation, exports, admin_electoral, uploads
 from app.routers import dashboard
 
 # Optional extra routers if those files exist in your routers/ folder:
@@ -58,7 +58,7 @@ origins = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$|^https:\/\/.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,9 +82,17 @@ app.include_router(audit.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(activities.router, prefix=settings.API_V1_STR)
 app.include_router(collation.router, prefix=settings.API_V1_STR)
+app.include_router(exports.router, prefix=settings.API_V1_STR)
+app.include_router(admin_electoral.router, prefix=settings.API_V1_STR)
+app.include_router(uploads.router, prefix=settings.API_V1_STR)
 
 if ws:
     app.include_router(ws.router)
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 
 @app.get("/")
 def root():

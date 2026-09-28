@@ -40,15 +40,116 @@ JIGAWA_LGAS = [
     {"name": "Garki", "code": "GAR", "lat": 12.4167, "lon": 9.1667, "wards": 11},
 ]
 
-# Real known ward lists for key LGAs
+# Complete authentic INEC Ward Names for all 27 Jigawa LGAs
 KNOWN_WARDS = {
-    "Dutse": ["Chamo", "Limawa", "Kachi", "Madobi", "Dundubus", "Takur", "Yalwawa", "Kudai", "Danmasara", "Larabar"],
-    "Gwaram": ["Basirka", "Dingaya", "Fagam", "Farin Dutse", "Gwaram", "Kila", "Kwandiko", "Maruta", "Sara", "Tsangarwa", "Zandam Nagogo"],
-    "Birnin Kudu": ["Birnin Kudu", "Kangire", "Surko", "Wurno", "Kiyako", "Sundimina", "Kantoga", "Lafiya", "Kwangwara", "Kiyawa", "Yalwan Damai"],
-    "Hadejia": ["Atafi", "Dubantu", "Gagukul", "Kasangagi", "Kasuwar Kofa", "Majema", "Matsaro", "Rumfa", "Sabon Garu", "Yankoli", "Yayari"],
-    "Kazaure": ["Ba'auzini", "Daba", "Dabaza", "Dandi", "Gaba", "Kanti", "Maradawa", "Sabaru", "Unguwar Arewa", "Unguwar Gabas", "Unguwar Yamma"],
-    "Gumel": ["Baikarya", "Danama", "Dantanoma", "Garin Gambo", "Gusau", "Hammado", "Kofar Arewa", "Kofar Yamma", "Zango", "Garin Bakari", "Babbawa"],
-    "Ringim": ["Ringim", "Amagu", "Dabi", "Kafin Babushe", "Karshi", "Sankara", "Sintilma", "Yandutse", "Chaichai", "Tofa"]
+    "Auyo": [
+        "Auyo", "Auyakayi", "Ayama", "Ayan", "Gamafoi", 
+        "Gamsarka", "Gatafa", "Kafur", "Tsidir", "Unik"
+    ],
+    "Babura": [
+        "Babura", "Batali", "Dorawa", "Garu", "Gasakoli", 
+        "Insharuwa", "Jigawa", "Kanya", "Kuzunzumi", "Kyambo", "Takwasa"
+    ],
+    "Birniwa": [
+        "Batu", "Birniwa", "Dangwaleri", "Diginsa", "Fagi", 
+        "Kachallari", "Karanka", "Kazura", "Machinamari", "Matamu", "Nguwa"
+    ],
+    "Birnin Kudu": [
+        "Birnin Kudu", "Kangire", "Kantoga", "Kiyako", "Kwangwara", 
+        "Lafiya", "Sundimina", "Surko", "Unguwar'ya", "Wurno", "Yalwan Damai"
+    ],
+    "Buji": [
+        "Ahoto", "Buji", "Churbun", "Falageri", "Gantsa", 
+        "K/Lelen Kudu", "Kawaya", "Kukuma", "Madabe", "Y/Tukur"
+    ],
+    "Dutse": [
+        "Chamo", "Limawa", "Kachi", "Madobi", "Dundubus", 
+        "Takur", "Yalwawa", "Kudai", "Danmasara", "Larabar"
+    ],
+    "Gagarawa": [
+        "Gagarawa Gari", "Gagarawa Tasha", "Garin Chiroma", "Kore Balatu", "Madaka", 
+        "Maiaduwa", "Maikilili", "Medu", "Yalawa", "Zarada"
+    ],
+    "Garki": [
+        "Buduru", "Doko", "Garki", "Gwarzon Garki", "Jirima", 
+        "Kanya", "Kargo", "Kore", "Muku", "Rafin Marke", "Siyori"
+    ],
+    "Gumel": [
+        "Baikarya", "Danama", "Dantanoma", "Galagamma", "Garin Gambo", 
+        "Garin Alhaji Barka", "Gusau", "Hammado", "Kofar Arewa", "Kofar Yamma", "Zango"
+    ],
+    "Guri": [
+        "Abunabo", "Adiyani", "Dawa", "Garbagal", "Guri", 
+        "Kadira", "Lafiya", "Margadu", "Matara Baba", "Musari"
+    ],
+    "Gwaram": [
+        "Basirka", "Dingaya", "Fagam", "Farin Dutse", "Gwaram", 
+        "Kila", "Kwandiko", "Maruta", "Sara", "Tsangarwa", "Zandam Nagogo"
+    ],
+    "Gwiwa": [
+        "Buntusu", "Dabi", "Darina", "F/Yamma", "Guntai", 
+        "Gwiwa", "Korayel", "Rorau", "Shafe", "Yola", "Zaumar Sainawa"
+    ],
+    "Hadejia": [
+        "Atafi", "Dubantu", "Gagulmari", "Kasangagi", "Kasuwar Kofa", 
+        "Majema", "Matsaro", "Rumfa", "Sabon Garu", "Yankoli", "Yayari"
+    ],
+    "Jahun": [
+        "Aujara", "Gangawa", "Gauza Tazara", "Gunka", "Harbo Sabuwa", 
+        "Harbo Tsohuwa", "Idanduna", "Jabarna", "Jahun", "Kale", "Kanwa"
+    ],
+    "Kafin Hausa": [
+        "Balangu", "Dumadumin Toka", "Gafaya", "Jabo", "Kafin Hausa", 
+        "Kazalewa", "Majawa", "Mezan", "Ruba", "Sarawa", "Zago"
+    ],
+    "Kaugama": [
+        "Arbus", "Askandu", "Dabuwaran", "Dakaiyawa", "Hadin", 
+        "Ja’e", "Jarkasa", "Kaugama", "Marke", "Unguwar Jibrin"
+    ],
+    "Kazaure": [
+        "Ba'auzini", "Daba", "Dabaza", "Dandi", "Gada", 
+        "Kanti", "Maradawa", "Sabaru", "Unguwar Arewa", "Unguwar Gabas", "Unguwar Yamma"
+    ],
+    "Kirikasamma": [
+        "Baturiya", "Bulunchai", "Doleri", "Fandum", "Gayin", 
+        "Kirika Samma", "Madachi", "Marma", "Tsheguwa", "Tarabu"
+    ],
+    "Kiyawa": [
+        "Abalago", "Andaza", "Faki", "Garko", "Guruduba", 
+        "Katanga", "Katuka", "Kiyawa", "Kwanda", "Maje", "Tsurma"
+    ],
+    "Maigatari": [
+        "Balarabe", "Dankumbo", "Fulata", "Galadi", "Jajeri", 
+        "Kukayasku", "Madana", "Maigatari Arewa", "Maigatari Kudu", "Matoya", "Turbus"
+    ],
+    "Malam Madori": [
+        "Arki", "Dunari", "Fateka Akurya", "Garin Gabas", "Maira Kumi-Bara Musa", 
+        "Maka Ddari", "Malam Madori", "Shaiya", "Tagwaro", "Tashena", "Tonikutara"
+    ],
+    "Miga": [
+        "Dangyatin", "Garbo", "Hantsu", "Koya", "Miga", 
+        "Sabon Gari Takanebu", "Sansani", "Tsakuwawa", "Yanduna", "Zareku"
+    ],
+    "Ringim": [
+        "Chai-Chai", "Dabi", "Kafin Babushe", "Karshi", "Kyarama", 
+        "Ringim", "Sankara", "Sintilmawa", "Tofa", "Yandutse"
+    ],
+    "Roni": [
+        "Amaryawa", "Baragumi", "Dansure", "Fara", "Gora", 
+        "Kwaita", "Roni", "Sankau", "Tunas", "Yanzaki", "Zugai"
+    ],
+    "Sule Tankarkar": [
+        "Albasu", "Amanga", "Dangwanki", "Danladi", "Danzomo", 
+        "Jeke", "Shabaru", "Sule-Tankarkar", "Takatsaba", "Yandamo"
+    ],
+    "Taura": [
+        "Ajaura", "Chakwaikwaiwa", "Chukuto", "Gujungu", "Kiri", 
+        "Kwalam", "Maje", "Majiya", "S/Garin Yaya", "Taura"
+    ],
+    "Yankwashi": [
+        "Achilafiya", "Belas", "Dawan-Gawo", "Gurjiya", "Gwarta", 
+        "Karkarna", "Kuda", "Ringim", "Yankwashi", "Zungumba"
+    ]
 }
 
 def seed_full_electoral_system(db: Session = None):

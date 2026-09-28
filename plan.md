@@ -1,143 +1,72 @@
+# Implementation Plan: Full-Stack Render Hosting (Frontend + Backend + PostgreSQL)
 
-# Implementation Plan: Jigawa State PDP PollWatch
+## 1. Executive Summary & User Objectives
+The user requested:
+> *"lets go on render also for the frontend tooo"*
 
-## 1. User Synchronization Between Side A and Side B
+Along with two screenshots from the Render dashboard showing:
+1. **`pdp-pollwatch-db`**: Database created successfully (green checkmark).
+2. **`pdp-pollwatch-backend`**: Exited with status 1 on initial startup.
 
-### Problem Diagnosis
+The objectives of this phase:
+1. **Diagnose and Resolve Backend Startup Failure**:
+   - Add database connection wait/retry logic (`init_db` and `seed_database`) with exponential backoff so the FastAPI app gracefully waits for Render's newly provisioned PostgreSQL container to finish initial boot.
+   - Ensure the start command (`sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"`) handles Render dynamic port binding.
+2. **Add Next.js Frontend (`pdp-pollwatch-web`) to Render Blueprint (`render.yaml`)**:
+   - Add the web frontend as a web service running Node.js 20.
+   - Configure build command (`npm install && npm run build`) and start command (`npx next start -p $PORT`).
+   - Automatically inject `NEXT_PUBLIC_API_URL: https://pdp-pollwatch-backend.onrender.com/api`.
+3. **Synchronize & Re-Deploy**:
+   - Push updates to `main` so clicking **Manual Sync** or **Deploy Latest Commit** on Render automatically deploys all three components together.
 
-The user reported that adding a user in Side A did not make the user appear in Side B.
+---
 
-The identified causes include:
+## 2. Technical Architecture & Blueprint Additions
 
-1. **Missing JWT token on Side A:** Unlocking Side A with the admin passcode did not necessarily provide a JWT token for protected backend API requests.
-2. **Hardcoded fallback users:** Side B could display static fallback users when the backend request failed, hiding actual users.
-3. **User ordering and large datasets:** Thousands of seeded agents could make newly created users difficult to find.
-4. **Cross-tab synchronization:** Side A and Side B needed a way to reflect newly created users without requiring manual refreshes.
-5. **Serverless database limitations:** Temporary serverless storage may not reliably share newly created users across separate instances.
+### 2.1 Complete Render Infrastructure Blueprint (`render.yaml`)
+1. **Database (`pdp-pollwatch-db`)**:
+   - Engine: PostgreSQL (Already Created & Healthy)
+2. **Backend Service (`pdp-pollwatch-backend`)**:
+   - Runtime: Python 3.11
+   - Root Directory: `backend`
+   - Start Command: `sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"`
+   - Connected to `pdp-pollwatch-db` via `DATABASE_URL`
+   - Added database readiness retry loop (10 attempts, 5s delay)
+3. **Frontend Service (`pdp-pollwatch-web`)**:
+   - Runtime: Node.js 20
+   - Root Directory: `web`
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npx next start -p $PORT`
+   - Public URL: `https://pdp-pollwatch-web.onrender.com`
+   - Environment Variable: `NEXT_PUBLIC_API_URL=https://pdp-pollwatch-backend.onrender.com/api`
 
-### Proposed Changes
+---
 
-#### Backend: Agent Listing
+## 3. Implementation Steps
 
-- Sort agents with the newest users first.
-- Add an optional limit to prevent excessive data loading.
-- Ensure that the API returns the appropriate user information.
+### Step 1: Database Connection Retry Resilience (`backend/app/database.py` & `seed.py`)
+- In `backend/app/database.py`, update `init_db()` with a retry loop (10 retries, 5s delay) catching `OperationalError` while Render PostgreSQL completes boot.
+- In `backend/app/seed.py`, wrap database session acquisition in connection retry.
 
-#### Side A: User Management
+### Step 2: Add Web Frontend to `render.yaml`
+- Add `pdp-pollwatch-web` web service definition to `render.yaml`.
+- Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_API_BASE_URL` to point to the backend service URL.
+- In `web/package.json`, ensure `next start` respects dynamic `$PORT`.
 
-- Ensure that administrative API requests have valid authorization.
-- When a user is saved, update the local custom-user list where appropriate.
-- Dispatch a `pdp_users_updated` event to notify other pages.
+### Step 3: Local Verification & Test
+- Run `npm run build` in `web/` to confirm clean production compilation.
+- Verify `backend/venv/bin/python` executes startup and seeding cleanly.
 
-#### Side B: User Management and Agent Directory
+### Step 4: Commit, Push, and Deploy
+- Commit and push to `origin main`.
+- In Render Dashboard, click **Manual Sync** on the Blueprint to redeploy the backend and provision the frontend.
 
-- Listen for the `pdp_users_updated` and browser `storage` events.
-- Display newly created users promptly.
-- Merge locally stored custom users with backend users without creating duplicates.
-- Show new users at the top of the list and identify them with a NEW badge.
-- Add search and pagination to make large user lists easier to manage.
-- Ensure custom users are reflected in the agent directory and status controls.
+---
 
-#### Login and Permissions
+## 4. Verification Checklist
+- [ ] Database retry loop prevents exit status 1 during initial PostgreSQL container boot.
+- [ ] `render.yaml` includes all 3 services: Database, FastAPI Backend, and Next.js Frontend.
+- [ ] Next.js build passes cleanly with zero errors.
+- [ ] Render Blueprint sync deploys backend and frontend to live `.onrender.com` domains.
 
-- Ensure that user login uses the backend as the source of truth.
-- Respect the user's assigned role and `allowed_pages`.
-- Avoid relying on browser storage alone for authentication or authorization.
 
-## 2. Polling Unit Agent Login and Mobile App Resilience
-
-### Problem Diagnosis
-
-The mobile app may fail to authenticate polling unit agents for several reasons:
-
-1. **Temporary serverless database:** A user created in one temporary serverless instance may not exist in another instance.
-2. **Phone number formatting:** Agents may enter phone numbers with spaces or international prefixes, while the backend expects a different format.
-3. **Short network timeout:** Slow cellular connections or server cold starts may exceed the mobile app's previous timeout.
-4. **Chained request failures:** Additional requests for user or polling unit details may fail even after successful authentication.
-
-### Proposed Changes
-
-#### Backend Authentication
-
-- Normalize phone numbers to support common Nigerian formats.
-- Support case-insensitive username matching.
-- Return the user's profile information directly in the login response, including their role, polling unit, LGA, ward, and allowed pages.
-- Maintain appropriate authentication and account-status checks.
-
-#### Mobile App
-
-- Increase the API timeout to accommodate slower network connections.
-- Parse user details directly from the login response.
-- Handle missing polling unit details gracefully without incorrectly treating an unassigned agent as assigned.
-- Provide clear error messages when credentials or server settings are incorrect.
-- Add server presets for Render, Neotech Hosting, Vercel, and local development.
-
-## 3. Database and Production Hosting
-
-### Database Requirements
-
-The application requires persistent storage so that users, polling units, assignments, incidents, and results remain available across web and mobile clients.
-
-### Proposed Changes
-
-- Support PostgreSQL connection URLs.
-- Normalize PostgreSQL URL formats where required by SQLAlchemy.
-- Configure database access for production hosting.
-- Ensure that production data is not dependent on temporary serverless storage.
-
-### Render Deployment
-
-- Provide a `render.yaml` deployment configuration.
-- Configure the FastAPI web service.
-- Configure a managed PostgreSQL database.
-- Link the database URL to the backend service.
-- Configure production startup and database initialization safely.
-
-### Neotech Hosting Deployment
-
-- Provide a `passenger_wsgi.py` entry point for supported cPanel hosting.
-- Provide a deployment script for Linux environments.
-- Configure a systemd service where supported.
-- Provide an Nginx reverse proxy configuration where supported.
-- Provide a production Docker Compose configuration.
-
-## 4. Verification Plan
-
-### User Synchronization
-
-1. Create a test user in Side A.
-2. Confirm that the user appears in Side B.
-3. Confirm that the user is displayed with the correct role and permissions.
-4. Test synchronization between browser tabs.
-5. Confirm that search and pagination work correctly.
-
-### Authentication and Mobile Login
-
-1. Test login using usernames in different letter cases.
-2. Test phone numbers with and without spaces and country prefixes.
-3. Verify that successful login returns the correct user profile and access token.
-4. Test login for users with and without polling unit assignments.
-5. Confirm that inactive accounts cannot log in.
-
-### Database and Deployment
-
-1. Verify that SQLite and PostgreSQL connection configurations work as intended.
-2. Confirm that production data persists after service restarts.
-3. Test the configured deployment process.
-4. Verify that the web dashboard and mobile application can access the production backend.
-
-### Automated Tests
-
-- Run the backend test suite.
-- Test authentication, agent management, and results endpoints.
-- Run Flutter static analysis.
-- Verify that frontend builds successfully.
-
-## 5. Implementation Order
-
-1. Complete the frontend user synchronization changes.
-2. Review and update the backend user and agent APIs.
-3. Complete authentication and mobile login improvements.
-4. Verify database persistence and deployment configurations.
-5. Run automated and manual tests.
-6. Deploy only after the required checks pass.

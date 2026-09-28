@@ -130,6 +130,15 @@ class PollingUnit(Base):
 
     lga = relationship("LGA", back_populates="polling_units")
     ward = relationship("Ward", back_populates="polling_units")
+
+    @property
+    def lga_name(self):
+        return self.lga.name if self.lga else None
+
+    @property
+    def ward_name(self):
+        return self.ward.name if self.ward else None
+
     users = relationship("User", back_populates="polling_unit")
     activities = relationship("ElectionActivity", back_populates="polling_unit", cascade="all, delete-orphan")
     incidents = relationship("Incident", back_populates="polling_unit", cascade="all, delete-orphan")

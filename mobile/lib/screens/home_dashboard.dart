@@ -10,6 +10,7 @@ class HomeDashboard extends StatefulWidget {
   final String lgaName;
   final String puCode;
   final int pollingUnitId;
+  final int registeredVoters;
 
   const HomeDashboard({
     super.key,
@@ -18,6 +19,7 @@ class HomeDashboard extends StatefulWidget {
     required this.lgaName,
     required this.puCode,
     this.pollingUnitId = 1,
+    this.registeredVoters = 650,
   });
 
   @override
@@ -109,6 +111,42 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     Text(widget.agentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
                     const SizedBox(height: 4),
                     Text('Assigned: ${widget.assignedPu}', style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.location_on, size: 11, color: Color(0xFF10B981)),
+                              SizedBox(width: 4),
+                              Text('GPS Geofenced & Active', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.camera_alt, size: 11, color: Color(0xFF10B981)),
+                              SizedBox(width: 4),
+                              Text('Camera Ready', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -174,6 +212,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           pollingUnitId: widget.pollingUnitId,
                           puName: widget.assignedPu,
                           puCode: widget.puCode,
+                          registeredVoters: widget.registeredVoters,
                         ),
                       ),
                     ),

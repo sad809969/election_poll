@@ -1,14 +1,23 @@
-
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import {
-  Vote,
-  Landmark,
-  Download,
-  Layers,
-  Building2,
+import { 
+  Vote, 
+  Landmark, 
+  Download, 
+  FileSpreadsheet, 
+  Layers, 
+  Building2, 
+  CheckCircle2, 
+  Clock, 
+  Users, 
+  TrendingUp, 
+  ChevronRight,
+  Search,
+  Filter,
+  FolderArchive
 } from 'lucide-react'
 
 const ELECTION_OFFICES = [
@@ -160,10 +169,18 @@ export default function ElectionResultsPage() {
                 </span>
               </div>
 
-              <h2
-                className={`text-lg sm:text-xl font-black mt-1 ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
+            {/* Export & Actions */}
+            <div className="flex items-center gap-3">
+              <Link
+                href="/system-admin?section=exports"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition"
+              >
+                <FolderArchive className="w-4 h-4 text-emerald-400" />
+                <span>Super Admin Media & Data Vault</span>
+              </Link>
+              <button
+                onClick={exportToCsv}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pdp hover:bg-pdp-dark text-white font-bold text-xs shadow-lg shadow-pdp/20 transition active:scale-95"
               >
                 {currentOffice.title}
               </h2>

@@ -27,7 +27,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "https://jigawa-pdp-pollwatch.vercel.app",
         "https://jigawa-pdp-pollwatch-backend.vercel.app",
+        "https://pdp-pollwatch-backend.onrender.com",
+        "https://pdp-pollwatch-web.onrender.com",
         "https://jigawa-pdp-pollwatch.onrender.com",
+        "https://pdp-pollwatch.onrender.com",
     ]
 
     model_config = SettingsConfigDict(

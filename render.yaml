@@ -10,7 +10,7 @@ services:
     region: oregon
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /docs
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
@@ -26,8 +26,27 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.9"
 
+  # 2. Next.js Web Frontend Service
+  - type: web
+    name: pdp-pollwatch-web
+    runtime: node
+    rootDir: web
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://pdp-pollwatch-backend.onrender.com/api
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://pdp-pollwatch-backend.onrender.com/api
+      - key: NODE_VERSION
+        value: 20.12.2
+
 databases:
-  # 2. Managed Persistent PostgreSQL Database
+  # 3. Managed Persistent PostgreSQL Database
   - name: pdp-pollwatch-db
     databaseName: pollwatch
     user: pollwatch_user
