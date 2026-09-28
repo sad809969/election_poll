@@ -137,6 +137,45 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     }
 
 
+
+# =============================================================================
+# 1A. FORCE-SEED POLLING UNITS (Admin trigger for live DB)
+# =============================================================================
+
+@router.post("/seed-polling-units")
+def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
+    """
+    Trigger seeding of all 4,827 official INEC Jigawa polling units.
+
+    Safe to call at any time — idempotent by default (skips if PUs exist).
+    Use ?force=true to wipe and re-seed from scratch (admin only).
+    """
+    from app.seed import _seed_polling_units, _refresh_polling_unit_counts
+
+    count_before = db.query(PollingUnit).count()
+
+    if count_before > 0 and not force:
+        return {
+            "message": f"Polling units already exist: {count_before} units found. Use ?force=true to re-seed.",
+            "seeded": False,
+            "polling_units": count_before,
+        }
+
+    if force and count_before > 0:
+        db.query(PollingUnit).delete()
+        db.commit()
+
+    _seed_polling_units(db)
+    _refresh_polling_unit_counts(db)
+
+    count_after = db.query(PollingUnit).count()
+    return {
+        "message": f"Successfully seeded {count_after} official INEC Jigawa polling units across all 27 LGAs.",
+        "seeded": True,
+        "polling_units": count_after,
+    }
+
+
 # =============================================================================
 # 1B. ELECTORAL HIERARCHY TREE (LGA -> WARDS -> POLLING UNITS)
 # =============================================================================

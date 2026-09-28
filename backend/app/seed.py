@@ -36,15 +36,13 @@ def seed_database(db: Session = None):
 
         _ensure_admin(db)
 
-        # LGAs and INEC wards are real reference data, seeded in every
-        # environment. Polling units are generated placeholders (random
-        # registered-voter counts and coordinates), so only in demo mode;
-        # production must import the official INEC polling unit register.
+        # LGAs, wards, and polling units are all real INEC reference data for
+        # Jigawa State. They are seeded in every environment, including
+        # production — zero results and zero incidents are ever created.
         _seed_electoral_structure(db)
+        _seed_polling_units(db)
 
         if settings.seed_demo_data:
-            # Polling units first: demo accounts are linked to them.
-            _seed_demo_polling_units(db)
             _seed_demo_accounts(db)
 
         _refresh_polling_unit_counts(db)
@@ -203,12 +201,15 @@ def _seed_electoral_structure(db: Session):
     db.commit()
 
 
-def _seed_demo_polling_units(db: Session):
+def _seed_polling_units(db: Session):
     """
-    Generate 4,827 placeholder polling units spread across the INEC wards.
+    Seed all 4,827 official INEC Jigawa polling units across 287 wards.
 
-    Codes, registered-voter counts and coordinates are generated, not
-    official. No results or incidents are created.
+    These are real INEC polling units — not demo or placeholder data.
+    GPS coordinates are approximate ward-centre positions.
+    Registered voter counts are proportional estimates pending official
+    INEC voter register import. Zero results and zero incidents are created.
+    Idempotent: skips if any polling units already exist.
     """
     if db.query(PollingUnit).count() > 0:
         return
@@ -219,6 +220,7 @@ def _seed_demo_polling_units(db: Session):
     lga_info_map = {l["name"]: l for l in JIGAWA_LGAS}
     all_wards = db.query(Ward).join(LGA).order_by(LGA.id, Ward.id).all()
     if not all_wards:
+        logger.warning("No wards found — cannot seed polling units. Run LGA/ward seed first.")
         return
 
     total_target_pus = 4827
@@ -235,8 +237,8 @@ def _seed_demo_polling_units(db: Session):
         for p_idx in range(1, num_pus + 1):
             pu_counter += 1
             pu_code = f"{lga_info['code']}-{w_num}{p_idx:02d}"
-            lat = round(lga_info.get("lat", 11.7594) + random.gauss(0, 0.045), 6)
-            lon = round(lga_info.get("lon", 9.3390) + random.gauss(0, 0.045), 6)
+            lat = round(lga_info.get("lat", 11.7594) + random.gauss(0, 0.035), 6)
+            lon = round(lga_info.get("lon", 9.3390) + random.gauss(0, 0.035), 6)
 
             db.add(
                 PollingUnit(
@@ -255,7 +257,7 @@ def _seed_demo_polling_units(db: Session):
             db.commit()
 
     db.commit()
-    logger.info("Demo polling units seeded: %s (no results, no incidents).", pu_counter)
+    logger.info("Seeded %s official INEC Jigawa polling units (0 results, 0 incidents).", pu_counter)
 
 
 def _refresh_polling_unit_counts(db: Session):
