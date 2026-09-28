@@ -9,7 +9,7 @@ from app.schemas import (
     IncidentStatusUpdate,
     MessageResponse,
 )
-from app.core.permissions import require_admin, require_agent
+from app.core.permissions import require_admin, require_agent, require_viewer
 from app.core.audit import write_audit_log
 
 router = APIRouter(
@@ -53,7 +53,7 @@ def get_incidents(
     status: str | None = None,
     severity: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_agent),
+    current_user: User = Depends(require_viewer),
 ):
 
     query = db.query(Incident)
@@ -91,7 +91,7 @@ def get_incidents(
 def get_incident(
     incident_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_agent),
+    current_user: User = Depends(require_viewer),
 ):
     
 

@@ -51,11 +51,11 @@ class VoteResultCreate(BaseModel):
     lp_votes: int = 0
     others_votes: int = 0
     rejected_votes: int = 0
-    ec8a_photo_url: Optional[str] = None
     notes: Optional[str] = None
 
 class VoteResultResponse(VoteResultCreate):
     id: int
+    ec8a_photo_url: Optional[str] = None
     agent_id: int
     total_valid_votes: int
     total_votes_cast: int

@@ -205,7 +205,6 @@ class ApiService {
     required int lp,
     int others = 0,
     int rejected = 0,
-    String? photoUrl,
     String? notes,
   }) async {
     final uri = Uri.parse('$baseUrl/results/submit');
@@ -218,7 +217,6 @@ class ApiService {
       'lp_votes': lp,
       'others_votes': others,
       'rejected_votes': rejected,
-      'ec8a_photo_url': photoUrl,
       'notes': notes,
     });
 
@@ -228,6 +226,27 @@ class ApiService {
     } else {
       final errorData = json.decode(response.body);
       throw Exception(errorData['detail'] ?? 'Failed to submit result');
+    }
+  }
+
+  /// Upload the photographed Form EC8A sheet for a submitted result.
+  static Future<Map<String, dynamic>> uploadEc8aPhoto({
+    required int resultId,
+    required String filePath,
+  }) async {
+    final uri = Uri.parse('$baseUrl/results/$resultId/ec8a-photo');
+    final request = http.MultipartRequest('POST', uri);
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final response = await http.Response.fromStream(
+      await request.send().timeout(const Duration(seconds: 60)),
+    );
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      final errorData = json.decode(response.body);
+      throw Exception(errorData['detail'] ?? 'Failed to upload EC8A photo');
     }
   }
 

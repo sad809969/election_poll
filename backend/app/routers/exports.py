@@ -24,10 +24,14 @@ from app.models import (
     AuditLog,
 )
 from app.core.config import settings
+from app.core.permissions import require_admin
 
+# Full data exports (results, agents, audit logs, database backup, evidence
+# media) are restricted to admin roles.
 router = APIRouter(
     prefix="/exports",
     tags=["Exports & Media Vault"],
+    dependencies=[Depends(require_admin)],
 )
 
 def get_upload_dir() -> Path:
@@ -35,6 +39,25 @@ def get_upload_dir() -> Path:
     p = Path(dir_name)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def resolve_upload_file(upload_dir: Path, url: Optional[str]) -> Optional[Path]:
+    """
+    Map a stored media URL ("/api/uploads/results/x.jpg", "/uploads/results/x.jpg"
+    or "results/x.jpg") to the file on disk, if it exists inside upload_dir.
+    """
+    if not url:
+        return None
+    rel = url
+    for prefix in (f"{settings.API_V1_STR}/uploads/", "/uploads/", "uploads/"):
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    root = upload_dir.resolve()
+    candidate = (root / rel.lstrip("/")).resolve()
+    if root not in candidate.parents or not candidate.is_file():
+        return None
+    return candidate
 
 
 # =============================================================================
@@ -115,8 +138,8 @@ def get_media_list(
         
         for res, pu, w, lga in query.limit(limit).all():
             filename = os.path.basename(res.ec8a_photo_url)
-            file_path = upload_dir / filename
-            exists_on_disk = file_path.exists()
+            file_path = resolve_upload_file(upload_dir, res.ec8a_photo_url)
+            exists_on_disk = file_path is not None
             file_size = file_path.stat().st_size if exists_on_disk else 0
 
             media_items.append({
@@ -158,8 +181,8 @@ def get_media_list(
 
         for inc, pu, w, lga in inc_query.limit(limit).all():
             filename = os.path.basename(inc.media_url)
-            file_path = upload_dir / filename
-            exists_on_disk = file_path.exists()
+            file_path = resolve_upload_file(upload_dir, inc.media_url)
+            exists_on_disk = file_path is not None
             file_size = file_path.stat().st_size if exists_on_disk else 0
 
             media_items.append({
@@ -547,11 +570,7 @@ def export_ec8a_photos_zip(
             zip_path = f"Form_EC8A_Photos/{clean_lga}/{clean_ward}/{target_filename}"
 
             # Check if actual image exists on disk
-            actual_file = None
-            if res.ec8a_photo_url:
-                candidate = upload_dir / os.path.basename(res.ec8a_photo_url)
-                if candidate.exists():
-                    actual_file = candidate
+            actual_file = resolve_upload_file(upload_dir, res.ec8a_photo_url)
 
             if actual_file:
                 zip_file.write(actual_file, arcname=zip_path)
@@ -634,11 +653,7 @@ def export_incident_media_zip(
             target_file = f"incident_{inc.id}_{inc.incident_type.lower()[:15]}.jpg"
             zip_path = f"Incident_Evidence/{clean_sev}/{clean_lga}/{target_file}"
 
-            actual_file = None
-            if inc.media_url:
-                candidate = upload_dir / os.path.basename(inc.media_url)
-                if candidate.exists():
-                    actual_file = candidate
+            actual_file = resolve_upload_file(upload_dir, inc.media_url)
 
             if actual_file:
                 zip_file.write(actual_file, arcname=zip_path)
@@ -763,11 +778,7 @@ def export_tribunal_evidence_pack(
             clean_pu = "".join(c for c in pu.code if c.isalnum() or c in ("-", "_")).strip()
             target_name = f"04_Form_EC8A_Photo_Proofs/{clean_lga}/{clean_pu}_{r.election_type.lower()}_ec8a.jpg"
 
-            actual_file = None
-            if r.ec8a_photo_url:
-                candidate = upload_dir / os.path.basename(r.ec8a_photo_url)
-                if candidate.exists():
-                    actual_file = candidate
+            actual_file = resolve_upload_file(upload_dir, r.ec8a_photo_url)
 
             if actual_file:
                 zip_file.write(actual_file, arcname=target_name)

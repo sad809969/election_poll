@@ -96,23 +96,11 @@ def login_for_access_token(
                 user = cand
                 break
 
-    # 3. Check master admin credentials
-    is_master_admin = (
-        user is not None
-        and user.username == "admin"
-        and form_data.password in (
-            "PDP-ADMIN-2027",
-            "admin1283",
-            "admin",
-        )
-    )
-
-    if not user or (
-        not is_master_admin
-        and not security.verify_password(
-            form_data.password,
-            user.hashed_password,
-        )
+    # 3. Verify the password against the stored hash. There are no master or
+    # fallback passwords: every account, including admin, uses its own.
+    if not user or not security.verify_password(
+        form_data.password,
+        user.hashed_password,
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

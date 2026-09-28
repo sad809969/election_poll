@@ -87,7 +87,7 @@ export default function AgentsPage() {
     agent.is_active === 1 ||
     agent.is_active === 'true'
 
-  const getOnline = (agent) => {
+    const getOnline = (agent) => {
     const value =
       agent.is_online ??
       agent.online ??

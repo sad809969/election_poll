@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { apiFetch, loginUser } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -78,11 +78,6 @@ export default function IncidentTrackerPage() {
     setUpdatingStatus(true)
     setStatusMsg(null)
     try {
-      let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      if (!token) {
-        await loginUser('admin', 'password')
-      }
-
       await apiFetch(`/incidents/${incidentId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus })
