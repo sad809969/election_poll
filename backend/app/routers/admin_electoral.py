@@ -147,22 +147,36 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
     """
     Trigger seeding of all 4,827 official INEC Jigawa polling units.
 
-    Safe to call at any time — idempotent by default (skips if PUs exist).
-    Use ?force=true to wipe and re-seed from scratch (admin only).
+    - Default (force=false): adds polling units only if count is 0.
+    - force=true: nulls FK refs on all dependent tables, wipes, and re-seeds.
     """
     from app.seed import _seed_polling_units, _refresh_polling_unit_counts
+    from app.models import (
+        ElectionResult, ElectionResultVote, Incident,
+        ElectionActivity, VoteResult, ElectionAgentAssignment, User
+    )
 
     count_before = db.query(PollingUnit).count()
 
     if count_before > 0 and not force:
         return {
-            "message": f"Polling units already exist: {count_before} units found. Use ?force=true to re-seed.",
+            "message": f"Polling units already exist: {count_before} units. Use ?force=true to wipe and re-seed.",
             "seeded": False,
             "polling_units": count_before,
         }
 
     if force and count_before > 0:
-        db.query(PollingUnit).delete()
+        # Null FK references on all tables that point to polling_unit_id
+        # so we don't hit FK constraint violations on delete.
+        db.query(ElectionResultVote).delete(synchronize_session=False)
+        db.query(ElectionResult).update({"polling_unit_id": None}, synchronize_session=False)
+        db.query(VoteResult).delete(synchronize_session=False)
+        db.query(Incident).update({"polling_unit_id": None}, synchronize_session=False)
+        db.query(ElectionActivity).update({"polling_unit_id": None}, synchronize_session=False)
+        db.query(ElectionAgentAssignment).update({"polling_unit_id": None}, synchronize_session=False)
+        db.query(User).update({"polling_unit_id": None}, synchronize_session=False)
+        db.commit()
+        db.query(PollingUnit).delete(synchronize_session=False)
         db.commit()
 
     _seed_polling_units(db)
@@ -174,6 +188,7 @@ def seed_polling_units(force: bool = False, db: Session = Depends(get_db)):
         "seeded": True,
         "polling_units": count_after,
     }
+
 
 
 # =============================================================================
