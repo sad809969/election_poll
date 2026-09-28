@@ -168,6 +168,7 @@ export default function ElectionResultsPage() {
                   • {currentOffice.date}
                 </span>
               </div>
+            </div>
 
               <h2
                 className={`text-lg sm:text-xl font-black mt-1 ${
@@ -189,7 +190,7 @@ export default function ElectionResultsPage() {
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition"
               >
                 <FolderArchive className="w-4 h-4 text-emerald-400" />
-                <span>Super Admin Media & Data Vault</span>
+                <span>Super Admin Media &amp; Data Vault</span>
               </Link>
               <button
                 onClick={exportToCsv}
@@ -200,6 +201,7 @@ export default function ElectionResultsPage() {
               </button>
             </div>
           </div>
+
 
           <div
             className={`${cardClass} border rounded-2xl p-8 text-center`}
