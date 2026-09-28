@@ -1,23 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { 
-  Vote, 
-  Landmark, 
-  Download, 
-  FileSpreadsheet, 
-  Layers, 
-  Building2, 
-  CheckCircle2, 
-  Clock, 
-  Users, 
-  TrendingUp, 
-  ChevronRight,
-  Search,
-  Filter,
-  FolderArchive
+import {
+  Vote,
+  Landmark,
+  Download,
+  Layers,
+  Building2,
+  FolderArchive,
 } from 'lucide-react'
 
 const ELECTION_OFFICES = [
@@ -27,15 +19,13 @@ const ELECTION_OFFICES = [
     subtitle: 'Executive Governor and Deputy Governor (Statewide)',
     icon: Landmark,
     category: 'State',
-    date: 'Election date to be confirmed',
   },
   {
     id: 'senate',
     title: 'Senatorial Election',
-    subtitle: 'Senate of the Federal Republic (3 Senatorial Districts)',
+    subtitle: 'Senate of the Federal Republic',
     icon: Vote,
     category: 'Federal',
-    date: 'Election date to be confirmed',
   },
   {
     id: 'reps',
@@ -43,7 +33,6 @@ const ELECTION_OFFICES = [
     subtitle: 'National Assembly Federal Constituencies',
     icon: Building2,
     category: 'Federal',
-    date: 'Election date to be confirmed',
   },
   {
     id: 'assembly',
@@ -51,7 +40,6 @@ const ELECTION_OFFICES = [
     subtitle: 'Jigawa State House of Assembly',
     icon: Layers,
     category: 'State',
-    date: 'Election date to be confirmed',
   },
 ]
 
@@ -69,26 +57,7 @@ export default function ElectionResultsPage() {
     : 'bg-white border-slate-200 shadow-sm'
 
   const exportToCsv = () => {
-    const csvContent = [
-      'Jigawa PDP PollWatch 2027 - Results Export',
-      `Election Office,${currentOffice.title}`,
-      `Election Date,${currentOffice.date}`,
-      '',
-      'No election results are currently available.',
-    ].join('\n')
-
-    const blob = new Blob([csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-
-    link.href = url
-    link.download = `Jigawa_${currentOffice.id}_results_2027.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    alert('Live results export will be available after connecting the results API.')
   }
 
   return (
@@ -108,7 +77,7 @@ export default function ElectionResultsPage() {
         />
 
         <main className="p-4 sm:p-6 space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {ELECTION_OFFICES.map((office) => {
               const Icon = office.icon
               const isSelected = selectedOfficeId === office.id
@@ -147,7 +116,7 @@ export default function ElectionResultsPage() {
                         isSelected ? 'text-emerald-100' : 'text-slate-400'
                       }`}
                     >
-                      Results pending
+                      Select to view results
                     </p>
                   </div>
                 </button>
@@ -164,14 +133,22 @@ export default function ElectionResultsPage() {
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-pdp">
                   {currentOffice.category} Election
                 </span>
-                <span className="text-xs text-slate-400">
-                  • {currentOffice.date}
-                </span>
               </div>
+
+              <h2
+                className={`text-lg sm:text-xl font-black mt-1 ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}
+              >
+                {currentOffice.title}
+              </h2>
+
+              <p className="text-xs text-slate-400 mt-1">
+                {currentOffice.subtitle}
+              </p>
             </div>
 
-            {/* Export & Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Link
                 href="/system-admin?section=exports"
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition"
@@ -179,6 +156,7 @@ export default function ElectionResultsPage() {
                 <FolderArchive className="w-4 h-4 text-emerald-400" />
                 <span>Super Admin Media &amp; Data Vault</span>
               </Link>
+
               <button
                 onClick={exportToCsv}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pdp hover:bg-pdp-dark text-white font-bold text-xs shadow-lg shadow-pdp/20 transition active:scale-95"
@@ -189,19 +167,18 @@ export default function ElectionResultsPage() {
             </div>
           </div>
 
-
           <div
             className={`${cardClass} border rounded-2xl p-8 text-center`}
           >
             <Vote className="w-10 h-10 mx-auto mb-3 text-slate-400" />
 
             <h3 className="text-lg font-bold">
-              No Election Results Available
+              Results API connection required
             </h3>
 
             <p className="text-sm text-slate-400 mt-2">
-              Results for this election have not yet been submitted.
-              They will appear here when data becomes available.
+              Results will appear here when they are available from the
+              backend. No sample votes or candidate results are displayed.
             </p>
           </div>
         </main>
