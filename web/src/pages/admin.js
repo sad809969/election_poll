@@ -536,7 +536,6 @@ export default function AdminPage() {
                     role: payload.role,
                     phone: payload.phone_number,
                     phone_number: payload.phone_number,
-                    password: payload.password,
                     lga_id: payload.lga_id,
                     ward_id: payload.ward_id,
                     polling_unit_id: payload.polling_unit_id,
@@ -589,6 +588,11 @@ export default function AdminPage() {
                     <option value="LGA Coordinator">LGA Coordinator</option>
                     <option value="Situation Room Officer">Situation Room Officer</option>
                     <option value="Director General">Director General</option>
+                    <option value="Governorship Candidate">Governorship Candidate</option>
+                    <option value="Deputy Governorship Candidate">Deputy Governorship Candidate</option>
+                    <option value="Senatorial Candidate">Senatorial Candidate</option>
+                    <option value="House of Reps Candidate">House of Reps Candidate</option>
+                    <option value="State Assembly Candidate">State Assembly Candidate</option>
                     <option value="Super Admin">Super Admin</option>
                   </select>
                 </div>

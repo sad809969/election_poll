@@ -47,6 +47,21 @@ AGENT_ROLES: Set[str] = SUPERVISOR_ROLES | {
 }
 
 
+# Election candidates for contests other than governorship. They get
+# read-only access to results and situation data for their dashboards.
+# (Governorship and deputy governorship candidates are admin roles above.)
+CANDIDATE_ROLES: Set[str] = {
+    "senatorial candidate",
+    "house of reps candidate",
+    "house of representatives candidate",
+    "state assembly candidate",
+}
+
+# Roles that may read situation-room data (dashboards, results, collation,
+# incidents, announcements). Candidates can read but not submit or approve.
+VIEWER_ROLES: Set[str] = AGENT_ROLES | CANDIDATE_ROLES
+
+
 class RoleChecker:
     def __init__(self, allowed_roles: Union[List[Union[UserRole, str]], Set[str]]):
         self.allowed_roles = {
@@ -80,3 +95,42 @@ class RoleChecker:
 require_admin = RoleChecker(ADMIN_ROLES)
 require_supervisor = RoleChecker(SUPERVISOR_ROLES)
 require_agent = RoleChecker(AGENT_ROLES)
+require_viewer = RoleChecker(VIEWER_ROLES)
+
+# ===========================================================
+# Jurisdiction Guards
+# ===========================================================
+
+WARD_ROLES: Set[str] = {"ward coordinator", "ward supervisor"}
+LGA_ROLES: Set[str] = {"lga coordinator", "lga collator"}
+
+
+def ensure_polling_unit_jurisdiction(user: User, polling_unit) -> None:
+    """
+    Restrict field staff to their own area of responsibility.
+
+    - Polling unit agents: only their assigned polling unit.
+    - Ward coordinators: only polling units in their ward.
+    - LGA coordinators: only polling units in their LGA.
+    - Situation room / admin roles: any polling unit.
+    """
+    role = normalize_role(user.role)
+
+    if "super admin" in role or role in ADMIN_ROLES:
+        return
+
+    if role in LGA_ROLES:
+        allowed = user.lga_id is not None and polling_unit.lga_id == user.lga_id
+    elif role in WARD_ROLES:
+        allowed = user.ward_id is not None and polling_unit.ward_id == user.ward_id
+    else:
+        allowed = (
+            user.polling_unit_id is not None
+            and polling_unit.id == user.polling_unit_id
+        )
+
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This polling unit is outside your assigned area.",
+        )

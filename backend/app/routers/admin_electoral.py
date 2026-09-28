@@ -8,8 +8,14 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models import LGA, Ward, PollingUnit, User, Party, ElectionResult, Incident
 from app.core.config import settings
+from app.core.permissions import require_admin
 
-router = APIRouter(prefix="/admin", tags=["Super Admin Electoral Management"])
+# Electoral infrastructure and permission management is admin-only.
+router = APIRouter(
+    prefix="/admin",
+    tags=["Super Admin Electoral Management"],
+    dependencies=[Depends(require_admin)],
+)
 
 # =============================================================================
 # SCHEMAS

@@ -21,10 +21,19 @@ import {
   Radio,
   FileSpreadsheet,
   Lock,
+  LogOut,
   X
 } from 'lucide-react'
 import { useTheme } from '../pages/_app'
-import { getCurrentUser } from '../lib/api'
+import { getCurrentUser, logoutUser } from '../lib/api'
+import {
+  accessibleContests,
+  canAccessPage,
+  canAccessSideA as userCanAccessSideA,
+  canonicalRole,
+  dashboardPath,
+  isSuperAdmin as userIsSuperAdmin,
+} from '../lib/access'
 
 export default function Sidebar() {
   const router = useRouter()
@@ -33,57 +42,20 @@ export default function Sidebar() {
   const [currentUser, setCurrentUser] = useState(null)
 
   useEffect(() => {
-    if (router.query?.demo_pages) {
-      setCurrentUser({
-        username: 'custom_agent',
-        role: router.query.demo_role || 'Custom Agent',
-        allowed_pages: router.query.demo_pages.split(',')
-      })
-      return
-    }
-    const u = getCurrentUser()
-    setCurrentUser(u)
-  }, [router.query])
+    setCurrentUser(getCurrentUser())
+  }, [router.asPath])
 
-  const role = (currentUser?.role || '').toLowerCase()
-  const isSuperAdmin = role.includes('super admin') || role.includes('master') || role === 'admin'
+  const isSuperAdmin = userIsSuperAdmin(currentUser)
+  const canAccess = (path) => canAccessPage(currentUser, path)
+  const canAccessSideA = userCanAccessSideA(currentUser)
 
-  // Access Permission Checker
-  const canAccess = (path) => {
-    // 1. Super Admin has unrestricted access to everything
-    if (isSuperAdmin) return true
-
-    // 2. If user has explicit custom allowed_pages list, honor it strictly
-    if (currentUser?.allowed_pages && Array.isArray(currentUser.allowed_pages) && currentUser.allowed_pages.length > 0) {
-      return currentUser.allowed_pages.includes(path)
-    }
-
-    // 3. Fallback to standard role defaults for accounts without explicit overrides
-    if (role.includes('agent')) {
-      return ['/results', '/incidents', '/notifications'].includes(path)
-    }
-    if (role.includes('ward')) {
-      return ['/polling-units', '/results', '/incidents', '/communication', '/notifications'].includes(path)
-    }
-    if (role.includes('lga')) {
-      return ['/collation', '/polling-units', '/results', '/incidents', '/communication', '/broadcast', '/notifications'].includes(path)
-    }
-    if (role.includes('officer') || role.includes('analyst') || role.includes('chairman') || role.includes('director')) {
-      return ['/', '/map', '/incidents', '/agents', '/polling-units', '/results', '/collation', '/election-results', '/communication', '/broadcast', '/notifications'].includes(path)
-    }
-
-    // Default open access if unauthenticated or general view
-    return true
+  const handleSignOut = () => {
+    logoutUser()
+    closeMobile()
+    router.replace('/login')
   }
 
-  // Can access Side A Master Control Panel
-  const canAccessSideA = isSuperAdmin || (
-    currentUser?.allowed_pages && 
-    Array.isArray(currentUser.allowed_pages) && 
-    currentUser.allowed_pages.some(p => p.startsWith('side-a') || p === '/system-admin')
-  )
-
-  const isActive = (path) => router.pathname === path
+  const isActive = (path) => router.asPath.split('?')[0] === path
 
   const navItemClass = (path) => `
     flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-150
@@ -107,6 +79,12 @@ export default function Sidebar() {
     { label: 'Agents', path: '/agents', icon: Users },
     { label: 'Polling Units', path: '/polling-units', icon: Building2 },
   ].filter(item => canAccess(item.path))
+
+  const dashboardItems = accessibleContests(currentUser).map(c => ({
+    label: c.title.replace(' Dashboard', ''),
+    path: dashboardPath(c),
+    icon: c.icon,
+  }))
 
   const resultsItems = [
     { label: 'Results Dashboard', path: '/results', icon: BarChart3 },
@@ -173,6 +151,22 @@ export default function Sidebar() {
             <>
               <div className={sectionLabelClass}>MAIN</div>
               {mainItems.map(item => {
+                const Icon = item.icon
+                return (
+                  <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </>
+          )}
+
+          {/* ELECTION DASHBOARDS SECTION */}
+          {dashboardItems.length > 0 && (
+            <>
+              <div className={sectionLabelClass}>ELECTION DASHBOARDS</div>
+              {dashboardItems.map(item => {
                 const Icon = item.icon
                 return (
                   <Link key={item.path} href={item.path} onClick={closeMobile} className={navItemClass(item.path)}>
@@ -277,6 +271,30 @@ export default function Sidebar() {
             </div>
           )}
         </div>
+
+        {/* Signed-in user */}
+        {currentUser && (
+          <div className={`px-3 pt-3 border-t ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className={`text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                  {currentUser.full_name || currentUser.username}
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">{canonicalRole(currentUser)}</p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                title="Sign out"
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                  isDark ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800/60' : 'text-slate-500 hover:text-rose-600 hover:bg-slate-100'
+                }`}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign out</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Footer System Version & Discreet Master Admin Link */}
         <div className={`p-3 border-t text-[10px] text-center flex justify-between items-center ${

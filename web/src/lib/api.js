@@ -1,3 +1,5 @@
+import { parseAllowedPages } from './access';
+
 export const getApiBase = () => {
   if (process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -33,12 +35,41 @@ export async function apiFetch(endpoint, options = {}) {
     headers,
   });
 
+  return handleResponse(response);
+}
+
+async function handleResponse(response) {
+  if (response.status === 401 && typeof window !== 'undefined') {
+    // Session missing or expired: send the user back to sign in.
+    logoutUser();
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  }
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Request failed with status ${response.status}`);
   }
 
   return response.json();
+}
+
+/**
+ * Upload the photographed Form EC8A sheet for a submitted result.
+ */
+export async function uploadEc8aPhoto(resultId, file) {
+  const token = getToken();
+  const body = new FormData();
+  body.append('file', file);
+
+  const response = await fetch(`${API_BASE}/results/${resultId}/ec8a-photo`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+
+  return handleResponse(response);
 }
 
 /**
@@ -58,55 +89,6 @@ export async function loginUser(username, password) {
   });
 
   if (!response.ok) {
-    // Check local custom users fallback
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('pdp_custom_users');
-        if (stored) {
-          const customUsers = JSON.parse(stored);
-          const found = customUsers.find(
-            (u) =>
-              (u.username === username || u.phone === username || u.phone_number === username) &&
-              (!u.password || u.password === password)
-          );
-          if (found) {
-            let parsedPages = found.allowedPages || [];
-            if (!parsedPages || parsedPages.length === 0) {
-              if (found.allowed_pages) {
-                try {
-                  parsedPages =
-                    typeof found.allowed_pages === 'string'
-                      ? JSON.parse(found.allowed_pages)
-                      : found.allowed_pages;
-                } catch (e) {
-                  parsedPages = found.allowed_pages.split(',').map((s) => s.trim());
-                }
-              }
-            }
-            const fallbackToken = 'custom_session_' + Date.now();
-            localStorage.setItem('token', fallbackToken);
-            const userObj = {
-              username: found.username,
-              role: found.role,
-              full_name: found.full_name || found.name || found.username,
-              allowed_pages: parsedPages,
-            };
-            localStorage.setItem('user', JSON.stringify(userObj));
-            return {
-              access_token: fallbackToken,
-              token_type: 'bearer',
-              role: found.role,
-              username: found.username,
-              full_name: found.full_name || found.name || found.username,
-              allowed_pages: parsedPages,
-            };
-          }
-        }
-      } catch (err) {
-        console.warn('Custom user fallback check failed:', err);
-      }
-    }
-
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || 'Login failed. Please check your credentials.');
   }
@@ -115,28 +97,43 @@ export async function loginUser(username, password) {
 
   // Save JWT token and user info to localStorage
   if (typeof window !== 'undefined' && data.access_token) {
-    let parsedPages = null;
-    if (data.allowed_pages) {
-      try {
-        parsedPages = typeof data.allowed_pages === 'string' ? JSON.parse(data.allowed_pages) : data.allowed_pages;
-      } catch (e) {
-        parsedPages = data.allowed_pages.split(',').map(s => s.trim());
-      }
-    }
-
     localStorage.setItem('token', data.access_token);
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        username: data.username,
-        role: data.role,
-        full_name: data.full_name || data.username,
-        allowed_pages: parsedPages,
-      })
-    );
+    storeUser(data);
   }
 
-  return data;
+  return getCurrentUser() || data;
+}
+
+function storeUser(data) {
+  localStorage.setItem(
+    'user',
+    JSON.stringify({
+      id: data.id,
+      username: data.username,
+      role: data.role,
+      full_name: data.full_name || data.username,
+      allowed_pages: parseAllowedPages(data.allowed_pages),
+      lga_id: data.lga_id ?? null,
+      ward_id: data.ward_id ?? null,
+      polling_unit_id: data.polling_unit_id ?? null,
+    })
+  );
+}
+
+/**
+ * Reload the signed-in user's role and page permissions from the server, so
+ * permission changes made by an administrator apply without signing out.
+ * Returns the refreshed user, or null when the session is no longer valid.
+ */
+export async function refreshCurrentUser() {
+  if (typeof window === 'undefined' || !getToken()) return null;
+  try {
+    const me = await apiFetch('/auth/me');
+    storeUser(me);
+    return getCurrentUser();
+  } catch {
+    return getToken() ? getCurrentUser() : null;
+  }
 }
 
 /**

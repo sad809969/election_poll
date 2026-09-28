@@ -24,11 +24,11 @@ class ResultSubmissionScreen extends StatefulWidget {
 
 class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
   String _selectedElectionType = 'GOVERNORSHIP';
-  final _pdpController = TextEditingController(text: '245');
-  final _apcController = TextEditingController(text: '198');
-  final _nnppController = TextEditingController(text: '42');
-  final _lpController = TextEditingController(text: '12');
-  final _rejectedController = TextEditingController(text: '5');
+  final _pdpController = TextEditingController();
+  final _apcController = TextEditingController();
+  final _nnppController = TextEditingController();
+  final _lpController = TextEditingController();
+  final _rejectedController = TextEditingController();
   
   bool _isSubmitting = false;
 
@@ -115,13 +115,11 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
         _isLocating = false;
       });
     } catch (_) {
-      // Graceful fallback to Jigawa PU coordinates for emulator / slow GPS
+      // No fix obtained: report it honestly rather than inventing coordinates.
       setState(() {
         _isLocating = false;
-        _locationStatus = 'LOCKED';
-        _latitude = 11.7583;
-        _longitude = 9.3381;
-        _accuracy = 4.2;
+        _locationStatus = 'UNAVAILABLE';
+        _accuracy = null;
       });
     }
   }
@@ -183,16 +181,10 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      String? photoUrl;
-      if (_capturedImage != null) {
-        try {
-          photoUrl = await ApiService.uploadFile(_capturedImage!, subfolder: 'results');
-        } catch (_) {
-          photoUrl = 'uploads/results/ec8a_${widget.puCode}_${_selectedElectionType.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        }
-      }
-
-      final gpsNotes = '[GPS Geotag: ${_latitude.toStringAsFixed(6)}, ${_longitude.toStringAsFixed(6)} | Accuracy: ±${_accuracy?.toStringAsFixed(1) ?? '3.5'}m | Status: $_locationStatus]';
+      // Only a real GPS fix is recorded as a geotag.
+      final gpsNotes = _locationStatus == 'LOCKED'
+          ? '[GPS Geotag: ${_latitude.toStringAsFixed(6)}, ${_longitude.toStringAsFixed(6)} | Accuracy: ±${_accuracy?.toStringAsFixed(1) ?? '?'}m]'
+          : '[GPS unavailable: $_locationStatus]';
 
       final res = await ApiService.submitResult(
         pollingUnitId: widget.pollingUnitId,
@@ -202,15 +194,24 @@ class _ResultSubmissionScreenState extends State<ResultSubmissionScreen> {
         nnpp: nnpp,
         lp: lp,
         rejected: rejected,
-        photoUrl: photoUrl,
         notes: gpsNotes,
       );
+
+      // The EC8A photo is attached to the stored result; the server moves it
+      // to PENDING_REVIEW for Situation Room verification.
+      String status = res['verification_status'] ?? 'SUBMITTED';
+      if (_capturedImage != null) {
+        final upload = await ApiService.uploadEc8aPhoto(
+          resultId: res['id'],
+          filePath: _capturedImage!.path,
+        );
+        status = upload['verification_status'] ?? status;
+      }
 
       setState(() => _isSubmitting = false);
 
       if (mounted) {
         final bool isOvervoting = res['is_overvoting'] == true;
-        final String status = res['verification_status'] ?? 'SUBMITTED';
 
         if (isOvervoting) {
           showDialog(

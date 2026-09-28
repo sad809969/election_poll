@@ -1,5 +1,8 @@
 import { Search, Bell, Mail, Sun, Moon, Shield, Menu } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTheme } from '../pages/_app'
+import { getCurrentUser } from '../lib/api'
+import { canonicalRole } from '../lib/access'
 
 export default function Header({ 
   title = "Dashboard", 
@@ -7,6 +10,19 @@ export default function Header({
 }) {
   const { theme, toggleTheme, toggleMobile } = useTheme()
   const isDark = theme === 'dark'
+
+  // Signed-in user shown in the profile badge.
+  const [user, setUser] = useState(null)
+  useEffect(() => {
+    setUser(getCurrentUser())
+  }, [])
+  const displayName = user?.full_name || user?.username || ''
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('')
 
   return (
     <header className={`h-16 border-b px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200 ${
@@ -93,14 +109,14 @@ export default function Header({
             <div className={`w-full h-full rounded-full flex items-center justify-center text-xs font-bold text-white ${
               isDark ? 'bg-slate-900' : 'bg-pdp-dark'
             }`}>
-              AU
+              {initials}
             </div>
           </div>
           <div className="hidden xl:block leading-tight">
-            <p className="text-xs font-bold">Abdullahi Usman</p>
+            <p className="text-xs font-bold">{displayName}</p>
             <p className="text-pdp font-semibold text-[10px] flex items-center gap-1">
               <Shield className="w-2.5 h-2.5" />
-              <span>Situation Room Director</span>
+              <span>{canonicalRole(user)}</span>
             </p>
           </div>
         </div>

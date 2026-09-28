@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { apiFetch, loginUser } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import { 
   Building2, 
   Award, 
@@ -229,16 +229,6 @@ export default function CollationCenterPage() {
     setSignoffSuccessMsg('')
 
     try {
-      // Ensure we have a valid auth token; if missing, auto-authenticate with admin
-      let token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      if (!token) {
-        try {
-          await loginUser('admin', 'password')
-        } catch (authErr) {
-          console.warn('Auto-login failed:', authErr)
-        }
-      }
-
       const res = await apiFetch('/collation/signoff', {
         method: 'POST',
         body: JSON.stringify({

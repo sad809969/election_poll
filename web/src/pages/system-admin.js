@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useTheme } from './_app'
-import { apiFetch, loginUser, getApiBase } from '../lib/api'
+import { apiFetch, getApiBase, getCurrentUser, logoutUser } from '../lib/api'
+import { ALL_SIDE_A_MODULES, ALL_SIDE_B_PAGES, ROLE_PRESETS, canAccessSideA } from '../lib/access'
 import { 
   ShieldCheck, 
   Lock, 
@@ -52,76 +53,9 @@ import {
   ChevronLeft
 } from 'lucide-react'
 
-// Default Master Passcode for Data Manager / Operator
-const MASTER_ACCESS_CODE = 'PDP-ADMIN-2027'
-
-// Complete Side B Navigation Elements
-export const ALL_SIDE_B_PAGES = [
-  { id: '/', label: 'Dashboard', group: 'Main', icon: LayoutDashboard, desc: 'Situation room live overview' },
-  { id: '/map', label: 'Interactive Map', group: 'Main', icon: Map, desc: 'Geospatial results & PU pins' },
-  { id: '/incidents', label: 'Incident Tracker', group: 'Main', icon: AlertTriangle, desc: 'Real-time field incident alerts' },
-  { id: '/agents', label: 'Agents Directory', group: 'Main', icon: Users, desc: 'Field personnel & contact roster' },
-  { id: '/polling-units', label: 'Polling Units Directory', group: 'Main', icon: Building2, desc: '4,827 Polling Unit directory' },
-  { id: '/results', label: 'Results Dashboard', group: 'Results', icon: BarChart3, desc: 'PU results submission & telemetry' },
-  { id: '/collation', label: 'Collation Center', group: 'Results', icon: PieChart, desc: 'Ward, LGA & State vote collation' },
-  { id: '/election-results', label: 'Results by Office & Export', group: 'Results', icon: FileSpreadsheet, desc: 'Gov, Senate, Reps, Assembly breakdown' },
-  { id: '/communication', label: 'Communication Center', group: 'Communication', icon: MessageSquare, desc: 'Two-way dispatch messaging' },
-  { id: '/broadcast', label: 'Broadcast Messages', group: 'Communication', icon: Radio, desc: 'Direct broadcast alerts' },
-  { id: '/notifications', label: 'Notifications', group: 'Communication', icon: Bell, desc: 'Live alerts & system events' },
-  { id: '/admin', label: 'User Management', group: 'Admin', icon: UserCheck, desc: 'Staff & agent authorization' },
-  { id: '/settings', label: 'System Settings', group: 'Admin', icon: Settings, desc: 'Platform configuration parameters' },
-  { id: '/audit-logs', label: 'Audit Logs', group: 'Admin', icon: FileText, desc: 'System security audit trail' },
-]
-
-// Complete Side A Navigation Modules
-export const ALL_SIDE_A_MODULES = [
-  { id: 'side-a:dashboard', label: 'Master Overview Dashboard', group: 'Overview', desc: 'Core server & electoral database stats' },
-  { id: 'side-a:lgas', label: 'Manage LGAs (27 LGAs)', group: 'Setup', desc: 'Local Government boundary config' },
-  { id: 'side-a:wards', label: 'Manage Wards (287 Wards)', group: 'Setup', desc: 'Electoral Ward registry & mapping' },
-  { id: 'side-a:polling-units', label: 'Manage Polling Units (4,827 PUs)', group: 'Setup', desc: 'Registered voter quotas & coordinates' },
-  { id: 'side-a:parties', label: 'Manage Political Parties', group: 'Setup', desc: 'PDP, APC, NNPP, LP ballots' },
-  { id: 'side-a:users', label: 'User Hierarchy & Roster', group: 'Access', desc: 'Administrative staff directory' },
-  { id: 'side-a:permissions', label: 'Role & Page Permissions Matrix', group: 'Access', desc: 'Side A & B unified permission controls' },
-  { id: 'side-a:audit', label: 'Immutable Audit Logs', group: 'Security', desc: 'Cryptographic tamper-proof logs' },
-  { id: 'side-a:activity', label: 'User Activity Stream', group: 'Security', desc: 'Live agent actions & telemetry' },
-  { id: 'side-a:logins', label: 'Login History & Telemetry', group: 'Security', desc: 'Authentication timestamps & IP tracks' },
-  { id: 'side-a:exports', label: 'Data & Media Vault / Downloads', group: 'Maintenance', desc: 'Batch ZIP media, EC8A photo sheets, CSV datasets, Tribunal packs' },
-  { id: 'side-a:settings', label: 'Parameters & Database Vault', group: 'Maintenance', desc: 'Backup snapshots & master passcodes' },
-]
-
-// Default Role Presets
-export const ROLE_PRESETS = {
-  'Super Admin': [
-    ...ALL_SIDE_B_PAGES.map(p => p.id),
-    ...ALL_SIDE_A_MODULES.map(m => m.id)
-  ],
-  'Situation Room Officer': [
-    '/', '/map', '/incidents', '/agents', '/polling-units', 
-    '/results', '/collation', '/election-results', 
-    '/communication', '/broadcast', '/notifications'
-  ],
-  'LGA Coordinator': [
-    '/collation', '/polling-units', '/results', '/incidents', 
-    '/communication', '/broadcast', '/notifications'
-  ],
-  'Ward Coordinator': [
-    '/polling-units', '/results', '/incidents', 
-    '/communication', '/notifications'
-  ],
-  'Polling Unit Agent': [
-    '/results', '/incidents', '/notifications'
-  ],
-  'Director General': [
-    '/', '/map', '/incidents', '/agents', '/polling-units', 
-    '/results', '/collation', '/election-results', 
-    '/communication', '/broadcast', '/notifications'
-  ],
-  'State Chairman': [
-    '/', '/map', '/incidents', '/agents', '/polling-units', 
-    '/results', '/collation', '/election-results', 
-    '/communication', '/broadcast', '/notifications'
-  ]
-}
+// Page catalog and role presets live in lib/access.js (shared with the
+// route guard, login routing and sidebar). Re-exported for existing imports.
+export { ALL_SIDE_B_PAGES, ALL_SIDE_A_MODULES, ROLE_PRESETS } from '../lib/access'
 
 export default function SystemAdminControlPanel() {
   const { theme } = useTheme()
@@ -130,8 +64,6 @@ export default function SystemAdminControlPanel() {
 
   // Security Gate State
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [passcodeInput, setPasscodeInput] = useState('')
-  const [authError, setAuthError] = useState('')
 
   // Active Panel Section: 'dashboard' | 'setup' | 'users' | 'permissions' | 'security' | 'settings'
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -286,16 +218,11 @@ export default function SystemAdminControlPanel() {
     }
   }
 
-  // Check Session Storage or Query Key for authenticated operator session
+  // Side A is open to the signed-in Super Admin and to users granted Side A
+  // modules; everyone else is routed away by the guard in _app.js.
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedAuth = sessionStorage.getItem('pdp_master_admin_auth')
-      if (savedAuth === 'true' || router.query.key === MASTER_ACCESS_CODE || router.query.unlocked === 'true') {
-        setIsAuthenticated(true)
-        if (!localStorage.getItem('token')) {
-          loginUser('admin', 'PDP-ADMIN-2027').catch(() => {})
-        }
-      }
+      setIsAuthenticated(canAccessSideA(getCurrentUser()))
       if (router.query.section) {
         setActiveSection(router.query.section)
       }
@@ -330,10 +257,6 @@ export default function SystemAdminControlPanel() {
   const loadData = async () => {
     setLoading(true)
     try {
-      if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
-        await loginUser('admin', 'PDP-ADMIN-2027').catch(() => {})
-      }
-
       const [statsRes, lgaRes, wardRes, partyRes, permRes, auditRes, hierRes] = await Promise.allSettled([
         apiFetch('/admin/dashboard-stats'),
         apiFetch('/admin/lgas'),
@@ -767,29 +690,10 @@ export default function SystemAdminControlPanel() {
     }
   }, [isAuthenticated, activeSection, mediaCategory, mediaSearch])
 
-  const handleUnlock = async (e) => {
-    e.preventDefault()
-    if (passcodeInput.trim() === MASTER_ACCESS_CODE || passcodeInput.trim().toLowerCase() === 'admin') {
-      setIsAuthenticated(true)
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('pdp_master_admin_auth', 'true')
-        try {
-          await loginUser('admin', 'PDP-ADMIN-2027')
-        } catch (loginErr) {
-          console.warn('Auto-login on unlock notice:', loginErr)
-        }
-      }
-      setAuthError('')
-    } else {
-      setAuthError('Invalid Master Access Code. Authorization required.')
-    }
-  }
-
   const handleLogout = () => {
     setIsAuthenticated(false)
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('pdp_master_admin_auth')
-    }
+    logoutUser()
+    router.replace('/login')
   }
 
   // Location Cascading for Modal
@@ -887,10 +791,6 @@ export default function SystemAdminControlPanel() {
     setModalError('')
 
     try {
-      if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
-        await loginUser('admin', 'PDP-ADMIN-2027').catch(() => {})
-      }
-
       const payload = {
         full_name: modalFullName,
         username: modalUsername,
@@ -937,7 +837,6 @@ export default function SystemAdminControlPanel() {
             role: modalRole,
             phone: modalPhone,
             phone_number: modalPhone,
-            password: modalPassword || undefined,
             lga_id: modalLgaId ? parseInt(modalLgaId) : null,
             ward_id: modalWardId ? parseInt(modalWardId) : null,
             polling_unit_id: modalPuId ? parseInt(modalPuId) : null,
@@ -1011,42 +910,14 @@ export default function SystemAdminControlPanel() {
               System Admin Control Panel
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Internal data management & system configuration portal. Enter operator master access code to proceed.
+              Internal data management & system configuration portal.
             </p>
           </div>
 
-          <form onSubmit={handleUnlock} className="space-y-4 text-left">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-emerald-400" /> Master Access Key
-              </label>
-              <input
-                type="password"
-                placeholder="Enter master passcode (e.g. PDP-ADMIN-2027)"
-                value={passcodeInput}
-                onChange={(e) => setPasscodeInput(e.target.value)}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs outline-none transition font-mono ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-white focus:border-emerald-500' : 'bg-white border-slate-300 text-slate-900 focus:border-emerald-500'
-                }`}
-                autoFocus
-              />
-            </div>
-
-            {authError && (
-              <p className="text-xs text-rose-400 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {authError}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
-            >
-              <span>Unlock Side A Control Panel</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </form>
+          <p className="text-xs text-slate-400">
+            Side A is available to the Super Admin and to accounts granted Side A modules.
+            Sign in with an authorised account to continue.
+          </p>
 
           <div className="pt-2 border-t border-slate-800/60">
             <Link
@@ -2867,10 +2738,10 @@ export default function SystemAdminControlPanel() {
               <div className="space-y-4 text-xs">
                 <div className="flex justify-between items-center p-3 bg-slate-900 rounded-xl border border-slate-800">
                   <div>
-                    <h4 className="font-bold text-white">Master Operator Passcode</h4>
-                    <p className="text-[11px] text-slate-400">Secret key required to unlock Side A Control Panel</p>
+                    <h4 className="font-bold text-white">Side A Access</h4>
+                    <p className="text-[11px] text-slate-400">Granted by role: Super Admin, or accounts assigned Side A modules</p>
                   </div>
-                  <span className="font-mono text-emerald-400 bg-black/40 px-2 py-1 rounded">PDP-ADMIN-2027</span>
+                  <span className="font-mono text-emerald-400 bg-black/40 px-2 py-1 rounded">Role-based</span>
                 </div>
 
                 <div className="flex justify-between items-center p-3 bg-slate-900 rounded-xl border border-slate-800">
@@ -3494,6 +3365,11 @@ export default function SystemAdminControlPanel() {
                   <option value="Situation Room Officer">Situation Room Officer</option>
                   <option value="Director General">Director General</option>
                   <option value="State Chairman">State Chairman</option>
+                  <option value="Governorship Candidate">Governorship Candidate</option>
+                  <option value="Deputy Governorship Candidate">Deputy Governorship Candidate</option>
+                  <option value="Senatorial Candidate">Senatorial Candidate</option>
+                  <option value="House of Reps Candidate">House of Reps Candidate</option>
+                  <option value="State Assembly Candidate">State Assembly Candidate</option>
                   <option value="Super Admin">Super Admin</option>
                 </select>
               </div>
