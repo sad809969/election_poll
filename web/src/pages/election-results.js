@@ -7,7 +7,6 @@ import {
   Vote,
   Landmark,
   Download,
-  FileSpreadsheet,
   Layers,
   Building2,
   FolderArchive,
