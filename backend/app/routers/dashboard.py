@@ -9,7 +9,7 @@ from app.models import (
     User,
     PollingUnit,
 )
-from app.core.permissions import require_agent
+from app.core.permissions import require_agent, require_viewer
 
 router = APIRouter(
     prefix="/dashboard",
@@ -20,7 +20,7 @@ router = APIRouter(
 @router.get("")
 def dashboard(
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
 
     total_polling_units = db.query(PollingUnit).count()

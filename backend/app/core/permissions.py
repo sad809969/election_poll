@@ -47,6 +47,21 @@ AGENT_ROLES: Set[str] = SUPERVISOR_ROLES | {
 }
 
 
+# Election candidates for contests other than governorship. They get
+# read-only access to results and situation data for their dashboards.
+# (Governorship and deputy governorship candidates are admin roles above.)
+CANDIDATE_ROLES: Set[str] = {
+    "senatorial candidate",
+    "house of reps candidate",
+    "house of representatives candidate",
+    "state assembly candidate",
+}
+
+# Roles that may read situation-room data (dashboards, results, collation,
+# incidents, announcements). Candidates can read but not submit or approve.
+VIEWER_ROLES: Set[str] = AGENT_ROLES | CANDIDATE_ROLES
+
+
 class RoleChecker:
     def __init__(self, allowed_roles: Union[List[Union[UserRole, str]], Set[str]]):
         self.allowed_roles = {
@@ -80,6 +95,7 @@ class RoleChecker:
 require_admin = RoleChecker(ADMIN_ROLES)
 require_supervisor = RoleChecker(SUPERVISOR_ROLES)
 require_agent = RoleChecker(AGENT_ROLES)
+require_viewer = RoleChecker(VIEWER_ROLES)
 
 # ===========================================================
 # Jurisdiction Guards

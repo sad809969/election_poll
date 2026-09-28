@@ -12,6 +12,7 @@ from app.core.permissions import (
     ensure_polling_unit_jurisdiction,
     require_admin,
     require_agent,
+    require_viewer,
 )
 from app.services.upload_service import upload_service
 
@@ -33,7 +34,7 @@ def get_results_dashboard(
     limit: int = 100,
     skip: int = 0,
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
     agg_query = db.query(
         func.sum(VoteResult.pdp_votes),

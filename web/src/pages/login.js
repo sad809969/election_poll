@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { loginUser } from "../lib/api";
+import { getCurrentUser, getToken, loginUser, logoutUser } from "../lib/api";
+import { canAccessPage, homePathFor } from "../lib/access";
 import { useTheme } from "./_app";
 import {
   ShieldCheck,
@@ -24,15 +25,25 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Where to go after sign-in: the originally requested page when this user
+  // may open it, otherwise the user's own landing page.
+  const destinationFor = (user) => {
+    const next = typeof router.query.next === "string" ? router.query.next : "";
+    if (next.startsWith("/") && !next.startsWith("//") && canAccessPage(user, next)) {
+      return next;
+    }
+    return homePathFor(user);
+  };
+
   // Redirect if already authenticated
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("token");
-      if (token) {
-        router.replace("/");
-      }
+    if (!router.isReady) return;
+    const user = getCurrentUser();
+    if (getToken() && user) {
+      const destination = destinationFor(user);
+      if (destination) router.replace(destination);
     }
-  }, [router]);
+  }, [router.isReady]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,30 +53,13 @@ export default function LoginPage() {
 
     try {
       const user = await loginUser(username.trim(), password);
-      const userRole = (user.role || "").toUpperCase();
-
-      // Intelligent Role-based Redirection based on user details and custom permissions
-      if (Array.isArray(user.allowed_pages) && user.allowed_pages.length > 0) {
-        const firstSideB = user.allowed_pages.find((p) => typeof p === 'string' && !p.startsWith('side-a'));
-        if (firstSideB) {
-          router.replace(firstSideB);
-          return;
-        }
+      const destination = destinationFor(user);
+      if (!destination) {
+        logoutUser();
+        setError("Your account has no dashboard pages assigned. Please contact the administrator.");
+        return;
       }
-
-      if (userRole.includes("SUPER") || userRole.includes("ADMIN") || userRole.includes("STATE")) {
-        router.replace("/");
-      } else if (userRole.includes("LGA")) {
-        router.replace("/collation");
-      } else if (userRole.includes("WARD")) {
-        router.replace("/polling-units");
-      } else if (userRole.includes("ANALYST") || userRole.includes("OFFICER")) {
-        router.replace("/election-results");
-      } else if (userRole.includes("AGENT")) {
-        router.replace("/results");
-      } else {
-        router.replace("/");
-      }
+      router.replace(destination);
     } catch (err) {
       setError(err.message || "Invalid credentials or unauthorized role. Please check username and password.");
     } finally {

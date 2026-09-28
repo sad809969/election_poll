@@ -174,7 +174,6 @@ export default function AgentsPage() {
           id: (savedRes && savedRes.id) || Date.now(),
           full_name: payload.full_name,
           username: payload.username,
-          password: payload.password,
           role: payload.role,
           phone_number: payload.phone_number,
           lga_id: payload.lga_id,

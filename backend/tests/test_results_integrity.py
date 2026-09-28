@@ -185,3 +185,32 @@ def test_admin_and_export_endpoints_require_admin():
     admin = get_admin_headers()
     assert client.get("/api/admin/lgas", headers=admin).status_code == 200
     assert client.get("/api/exports/stats", headers=admin).status_code == 200
+
+
+def test_contest_candidate_can_read_but_not_submit():
+    admin = get_admin_headers()
+    created = client.post(
+        "/api/agents",
+        headers=admin,
+        json={
+            "full_name": "Reps Candidate",
+            "username": "reps_candidate_test",
+            "password": "candidatepass123",
+            "role": "House of Reps Candidate",
+        },
+    )
+    assert created.status_code == 201
+
+    candidate = login("reps_candidate_test", "candidatepass123")
+    assert client.get("/api/results?election_type=HOUSE_OF_REPS", headers=candidate).status_code == 200
+    assert client.get("/api/dashboard", headers=candidate).status_code == 200
+
+    # Read-only: no result submission, collation sign-off or admin data.
+    pu_id = client.get("/api/electoral/polling-units", headers=admin).json()[0]["id"]
+    assert submit(candidate, pu_id, "HOUSE_OF_REPS").status_code == 403
+    assert client.post(
+        "/api/collation/signoff",
+        headers=candidate,
+        json={"level": "LGA", "entity_id": 1, "status": "SIGNED"},
+    ).status_code == 403
+    assert client.get("/api/exports/stats", headers=candidate).status_code == 403

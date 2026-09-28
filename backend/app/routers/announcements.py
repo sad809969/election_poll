@@ -9,7 +9,7 @@ from app.schemas import (
     AnnouncementResponse,
     MessageResponse,
 )
-from app.core.permissions import require_admin, require_agent
+from app.core.permissions import require_admin, require_agent, require_viewer
 from app.core.audit import write_audit_log
 
 router = APIRouter(
@@ -21,7 +21,7 @@ router = APIRouter(
 @router.get("", response_model=list[AnnouncementResponse])
 def get_announcements(
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
     return (
         db.query(Announcement)

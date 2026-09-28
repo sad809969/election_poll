@@ -170,19 +170,6 @@ export default function ElectionResultsPage() {
               </div>
             </div>
 
-              <h2
-                className={`text-lg sm:text-xl font-black mt-1 ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
-                {currentOffice.title}
-              </h2>
-
-              <p className="text-xs text-slate-400 mt-1">
-                {currentOffice.subtitle}
-              </p>
-            </div>
-
             {/* Export & Actions */}
             <div className="flex items-center gap-3">
               <Link

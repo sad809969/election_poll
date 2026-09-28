@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import CollationSignoff, LGA, Ward, PollingUnit, VoteResult, User
-from app.core.permissions import require_admin, require_agent
+from app.core.permissions import require_admin, require_agent, require_viewer
 from app.core.audit import write_audit_log
 
 router = APIRouter(
@@ -175,7 +175,7 @@ def signoff_collation(
 def get_signoffs(
     level: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
     query = db.query(CollationSignoff)
     if level:
@@ -225,7 +225,7 @@ def get_signoffs(
 def get_lga_drilldown(
     lga_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
     lga = db.query(LGA).filter(LGA.id == lga_id).first()
     if not lga:

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import ElectionActivity, PollingUnit, User
-from app.core.permissions import require_agent
+from app.core.permissions import require_agent, require_viewer
 from app.core.audit import write_audit_log
 
 router = APIRouter(
@@ -62,7 +62,7 @@ def record_activity(
 def get_activities(
     polling_unit_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_agent),
+    _: User = Depends(require_viewer),
 ):
     query = db.query(ElectionActivity)
     if polling_unit_id:

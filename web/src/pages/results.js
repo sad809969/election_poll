@@ -32,7 +32,14 @@ import {
   Cell 
 } from 'recharts'
 
-export default function ResultsDashboardPage() {
+/**
+ * Results dashboard. Rendered directly at /results (all contests) and by the
+ * per-contest dashboards at /dashboard/<contest>, which pass:
+ *   - contest: the contest shown by default (e.g. 'GOVERNORSHIP')
+ *   - lockedContest: restrict the view to that one contest (candidates)
+ *   - title: dashboard heading
+ */
+export default function ResultsDashboardPage({ contest = null, lockedContest = false, title = null }) {
   const router = useRouter()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -41,7 +48,7 @@ export default function ResultsDashboardPage() {
   const [activeTab, setActiveTab] = useState('units')
 
   // Filters & Search
-  const [electionType, setElectionType] = useState('GOVERNORSHIP')
+  const [electionType, setElectionType] = useState(contest || 'GOVERNORSHIP')
   const [selectedLgaId, setSelectedLgaId] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -50,7 +57,7 @@ export default function ResultsDashboardPage() {
 
   useEffect(() => {
     if (router.isReady) {
-      if (router.query.election_type) {
+      if (router.query.election_type && !lockedContest) {
         setElectionType(router.query.election_type.toString().toUpperCase())
       }
       if (router.query.modal === 'entry') {
@@ -241,7 +248,7 @@ export default function ResultsDashboardPage() {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Header 
-          title="Results Dashboard & Verification Inspector" 
+          title={title || "Results Dashboard & Verification Inspector"} 
           subtitle="Real-time vote collation, EC8A proof verification, and candidate vote share analytics" 
         />
 
@@ -391,7 +398,7 @@ export default function ResultsDashboardPage() {
                 { id: 'PRESIDENTIAL', label: 'Presidential', icon: '🇳🇬' },
                 { id: 'STATE_ASSEMBLY', label: 'State Assembly', icon: '📜' },
                 { id: 'ALL', label: 'All Contests', icon: '🌐' },
-              ].map((contest) => (
+              ].filter((c) => !lockedContest || c.id === contest).map((contest) => (
                 <button
                   key={contest.id}
                   onClick={() => {
