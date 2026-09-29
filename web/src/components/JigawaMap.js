@@ -64,9 +64,27 @@ const STATUS_STYLES = {
   },
 }
 
-export default function JigawaMap() {
+export default function JigawaMap({
+  selectedElection = "governorship",
+  selectedArea = null,
+  selectedLgaNames = [],
+}) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const electionLabels = {
+  governorship: "Governorship",
+  senate: "Senate",
+  "house-of-representatives": "House of Representatives",
+  "house-of-assembly": "House of Assembly",
+}
+
+const isLgaInSelectedArea = (lga) => {
+  if (!selectedArea || selectedElection === "governorship") {
+    return true
+  }
+
+  return selectedLgaNames.includes(lga.name)
+}
 
   const [activeFilter, setActiveFilter] = useState('All')
   const [selectedLga, setSelectedLga] = useState(null)
