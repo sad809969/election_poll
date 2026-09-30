@@ -1,362 +1,457 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import JigawaMap from '../components/JigawaMap'
-import { useTheme } from './_app'
 import { apiFetch } from '../lib/api'
-import { 
-  MapPin, 
-  Filter, 
-  Building2, 
-  Users, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  Search, 
-  X, 
-  Phone, 
-  ShieldAlert, 
-  ChevronRight,
-  Eye,
-  Loader2
-} from 'lucide-react'
 
-export default function InteractiveMapPage() {
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
+const STATUS_OPTIONS = ['All', 'Normal', 'Attention', 'Critical']
+
+function getStatus(pollingUnit, incidents = []) {
+  const relatedIncidents = incidents.filter(
+    (incident) =>
+      String(incident.polling_unit_id) === String(pollingUnit.id)
+  )
+
+  if (
+    relatedIncidents.some(
+      (incident) =>
+        String(incident.severity || '').toUpperCase() === 'CRITICAL'
+    )
+  ) {
+    return 'Critical'
+  }
+
+  if (
+    relatedIncidents.length > 0 ||
+    pollingUnit.status === 'Attention' ||
+    pollingUnit.status === 'Critical' ||
+    pollingUnit.flagged === true
+  ) {
+    return 'Attention'
+  }
+
+  return 'Normal'
+}
+
+export default function MapPage() {
+  const [pollingUnits, setPollingUnits] = useState([])
+  const [lgas, setLgas] = useState([])
+  const [results, setResults] = useState([])
+  const [incidents, setIncidents] = useState([])
 
   const [statusFilter, setStatusFilter] = useState('All')
   const [selectedLga, setSelectedLga] = useState('All LGAs')
-  const [selectedPu, setSelectedPu] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [selectedUnit, setSelectedUnit] = useState(null)
 
-  const [pollingUnits, setPollingUnits] = useState([])
-  const [lgas, setLgas] = useState(['All LGAs'])
-  const [incidentsSummary, setIncidentsSummary] = useState({ critical: 0, high: 0, normal: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    async function fetchMapData() {
-      try {
-        setLoading(true)
-        const [puRes, lgaRes, resultsRes, incidentsRes] = await Promise.allSettled([
-          apiFetch('/electoral/polling-units?limit=300'),
-          apiFetch('/electoral/lgas'),
-          apiFetch('/results?limit=300'),
-          apiFetch('/incidents')
-        ])
+    let active = true
 
-        const lgaList = lgaRes.status === 'fulfilled' && Array.isArray(lgaRes.value) ? lgaRes.value : []
-        const lgaMap = {}
-        lgaList.forEach(l => { lgaMap[l.id] = l.name })
-        setLgas(['All LGAs', ...lgaList.map(l => l.name)])
+    async function loadMapData() {
+      setLoading(true)
+      setError('')
 
-        // Index results by polling_unit_id
-        const resultsMap = {}
-        if (resultsRes.status === 'fulfilled' && resultsRes.value?.results) {
-          resultsRes.value.results.forEach(r => {
-            resultsMap[r.polling_unit_id] = r
-          })
-        }
+      const responses = await Promise.allSettled([
+        apiFetch('/electoral/polling-units?limit=300'),
+        apiFetch('/electoral/lgas'),
+        apiFetch('/results?limit=300'),
+        apiFetch('/incidents'),
+      ])
 
-        // Index incidents by polling_unit_id
-        const incidentMap = {}
-        let critCount = 0
-        let highCount = 0
-        if (incidentsRes.status === 'fulfilled' && Array.isArray(incidentsRes.value)) {
-          incidentsRes.value.forEach(inc => {
-            incidentMap[inc.polling_unit_id] = inc
-            if (inc.severity === 'CRITICAL') critCount++
-            else if (inc.severity === 'HIGH') highCount++
-          })
-        }
+      if (!active) return
 
-        const puData = puRes.status === 'fulfilled' && Array.isArray(puRes.value) ? puRes.value : []
-        
-        if (puData.length > 0) {
-          const formatted = puData.map(p => {
-            const res = resultsMap[p.id]
-            const inc = incidentMap[p.id]
-            
-            let status = 'Normal'
-            if (inc) {
-              status = inc.severity === 'CRITICAL' ? 'Critical' : 'Attention'
-            } else if (res?.is_overvote || res?.verification_status === 'FLAGGED') {
-              status = 'Attention'
-            }
+      const [unitsResponse, lgasResponse, resultsResponse, incidentsResponse] =
+        responses
 
-            return {
-              id: p.code,
-              dbId: p.id,
-              name: p.name,
-              lga: lgaMap[p.lga_id] || 'Jigawa',
-              ward: `Ward ${p.ward_id}`,
-              status: status,
-              agent: res?.agent_name || 'Assigned Polling Agent',
-              phone: '0800-PDP-VERIFY',
-              registered: p.registered_voters || 500,
-              incident: inc ? inc.description : (res?.is_overvote ? 'Over-voting detected: Exceeds voter quota' : 'Normal Operations'),
-              time: res?.created_at ? new Date(res.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
-              pdp: res?.pdp_votes ?? 0,
-              apc: res?.apc_votes ?? 0,
-              total_cast: res?.total_votes_cast ?? 0,
-              verification: res?.verification_status || 'NOT_SUBMITTED',
-              is_overvote: res?.is_overvote || false,
-              ec8a_photo_url: res?.ec8a_photo_url || null,
-            }
-          })
-          setPollingUnits(formatted)
-          setIncidentsSummary({
-            critical: critCount,
-            high: highCount,
-            normal: Math.max(0, formatted.length - critCount - highCount)
-          })
-        }
-      } catch (e) {
-        console.error('Failed to fetch map polling units:', e)
-      } finally {
-        setLoading(false)
+      if (unitsResponse.status === 'fulfilled') {
+        const data = unitsResponse.value
+        setPollingUnits(Array.isArray(data) ? data : data?.polling_units || [])
+      } else {
+        setError('Could not load polling units. Please check the connection.')
       }
+
+      if (lgasResponse.status === 'fulfilled') {
+        const data = lgasResponse.value
+        setLgas(Array.isArray(data) ? data : data?.lgas || [])
+      }
+
+      if (resultsResponse.status === 'fulfilled') {
+        const data = resultsResponse.value
+        setResults(Array.isArray(data) ? data : data?.results || [])
+      }
+
+      if (incidentsResponse.status === 'fulfilled') {
+        const data = incidentsResponse.value
+        setIncidents(Array.isArray(data) ? data : data?.incidents || [])
+      }
+
+      setLoading(false)
     }
-    fetchMapData()
+
+    loadMapData()
+
+    return () => {
+      active = false
+    }
   }, [])
 
-  const filteredPus = useMemo(() => {
-    return pollingUnits.filter(pu => {
-      const matchesStatus = statusFilter === 'All' || pu.status === statusFilter
-      const matchesLga = selectedLga === 'All LGAs' || pu.lga === selectedLga
-      const matchesSearch = pu.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            pu.agent.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            pu.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const lgaMap = useMemo(() => {
+    const map = {}
+
+    lgas.forEach((lga) => {
+      map[String(lga.id)] = lga.name
+    })
+
+    return map
+  }, [lgas])
+
+  const enrichedUnits = useMemo(() => {
+    return pollingUnits.map((unit) => {
+      const lgaName =
+        unit.lga?.name ||
+        lgaMap[String(unit.lga_id)] ||
+        'Unknown LGA'
+
+      const unitIncidents = incidents.filter(
+        (incident) =>
+          String(incident.polling_unit_id) === String(unit.id)
+      )
+
+      const unitResults = results.filter(
+        (result) =>
+          String(result.polling_unit_id) === String(unit.id)
+      )
+
+      return {
+        ...unit,
+        lga: lgaName,
+        mapStatus: getStatus(unit, incidents),
+        unitIncidents,
+        unitResults,
+      }
+    })
+  }, [pollingUnits, lgaMap, incidents, results])
+
+  const filteredUnits = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
+    return enrichedUnits.filter((unit) => {
+      const matchesStatus =
+        statusFilter === 'All' || unit.mapStatus === statusFilter
+
+      const matchesLga =
+        selectedLga === 'All LGAs' || unit.lga === selectedLga
+
+      const matchesSearch =
+        !query ||
+        [
+          unit.name,
+          unit.code,
+          unit.polling_unit_code,
+          unit.lga,
+          unit.ward?.name,
+          unit.ward_name,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query))
+
       return matchesStatus && matchesLga && matchesSearch
     })
-  }, [pollingUnits, statusFilter, selectedLga, searchQuery])
+  }, [enrichedUnits, statusFilter, selectedLga, searchQuery])
 
-  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
-  const subcardClass = isDark ? 'bg-slate-900 border border-slate-800' : 'bg-slate-50 border border-slate-200'
+  const summary = useMemo(() => {
+    return {
+      total: enrichedUnits.length,
+      normal: enrichedUnits.filter((unit) => unit.mapStatus === 'Normal').length,
+      attention: enrichedUnits.filter((unit) => unit.mapStatus === 'Attention').length,
+      critical: enrichedUnits.filter((unit) => unit.mapStatus === 'Critical').length,
+      incidents: incidents.length,
+    }
+  }, [enrichedUnits, incidents])
+
+  function openUnit(unit) {
+    setSelectedUnit(unit)
+  }
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
-      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
-    }`}>
+    <div className="flex min-h-screen bg-slate-100 dark:bg-slate-950">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Header 
-          title="Spatial Intelligence & Geographic Command" 
-          subtitle="Real-time geo-spatial distribution across all 4,827 Polling Units in Jigawa State" 
-        />
+      <main className="min-w-0 flex-1">
+        <Header />
 
-        <main className="p-6 space-y-6">
-          {/* Top Controls & Filter Bar */}
-          <div className={`${cardClass} rounded-xl p-4 flex flex-wrap items-center justify-between gap-4`}>
-            {/* Status Pills */}
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold mr-1 flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                <Filter className="w-3.5 h-3.5" /> Status Filter:
-              </span>
-              {['All', 'Normal', 'Attention', 'Critical'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    statusFilter === status 
-                      ? status === 'Critical' ? 'bg-red-500 text-white shadow-md shadow-red-500/20'
-                        : status === 'Attention' ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
-                        : status === 'Normal' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                        : 'bg-emerald-600 text-white'
-                      : isDark ? 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white' : 'bg-slate-100 text-slate-600 border border-slate-200 hover:text-black'
-                  }`}
-                >
-                  {status === 'Normal' && <span className="w-2 h-2 rounded-full bg-emerald-400"></span>}
-                  {status === 'Attention' && <span className="w-2 h-2 rounded-full bg-amber-400"></span>}
-                  {status === 'Critical' && <span className="w-2 h-2 rounded-full bg-red-400"></span>}
-                  {status}
-                </button>
-              ))}
+        <div className="space-y-6 p-4 md:p-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+              Interactive Election Map
+            </h1>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Monitor polling units, incidents, and operational status across
+              Jigawa State.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            {[
+              { label: 'Polling Units', value: summary.total },
+              { label: 'Normal', value: summary.normal },
+              { label: 'Attention', value: summary.attention },
+              { label: 'Critical', value: summary.critical },
+              { label: 'Incidents', value: summary.incidents },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              >
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+                  {item.value}
+                </p>
+              </div>
+            ))}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Map Overview
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Select an LGA on the map to filter the polling-unit list.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                      statusFilter === status
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* LGA Selector & Search Input */}
-            <div className="flex items-center gap-3">
-              <select 
-                value={selectedLga}
-                onChange={(e) => setSelectedLga(e.target.value)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border transition ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
-              >
-                {lgas.map(lga => (
-                  <option key={lga} value={lga}>{lga}</option>
-                ))}
-              </select>
+            <JigawaMap
+              pollingUnits={enrichedUnits}
+              statusFilter={statusFilter}
+              selectedLga={selectedLga}
+              searchQuery={searchQuery}
+              onSelectLga={(name) => {
+                setSelectedLga(name || 'All LGAs')
+                setSelectedUnit(null)
+              }}
+            />
+          </section>
 
-              <div className="relative w-56">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search PU code or name..."
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Polling Units
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Showing {filteredUnits.length} of {enrichedUnits.length} units
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={selectedLga}
+                  onChange={(event) => setSelectedLga(event.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                >
+                  <option value="All LGAs">All LGAs</option>
+                  {lgas.map((lga) => (
+                    <option key={lga.id} value={lga.name}>
+                      {lga.name}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="search"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border transition ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
-                  }`}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search polling units..."
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Main Map & List Split View */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Map Canvas (2 Columns) */}
-            <div className="lg:col-span-2 space-y-4">
-              <JigawaMap statusFilter={statusFilter} />
-
-              {/* Map Footer Metrics */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className={`${cardClass} rounded-lg p-2.5`}>
-                  <span className="text-[10px] text-slate-500 font-semibold block">Total Monitored Units</span>
-                  <span className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {filteredPus.length} Units
-                  </span>
-                </div>
-                <div className={`${cardClass} rounded-lg p-2.5`}>
-                  <span className="text-[10px] text-emerald-500 font-semibold block">Normal Operations</span>
-                  <span className="text-sm font-extrabold text-emerald-500">
-                    {filteredPus.filter(p => p.status === 'Normal').length}
-                  </span>
-                </div>
-                <div className={`${cardClass} rounded-lg p-2.5`}>
-                  <span className="text-[10px] text-amber-500 font-semibold block">Attention / Critical</span>
-                  <span className="text-sm font-extrabold text-amber-500">
-                    {filteredPus.filter(p => p.status !== 'Normal').length}
-                  </span>
-                </div>
+            {loading ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                Loading map data...
+              </p>
+            ) : filteredUnits.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No polling units match the selected filters.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[650px] text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <tr>
+                      <th className="px-3 py-3">Polling Unit</th>
+                      <th className="px-3 py-3">LGA</th>
+                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Incidents</th>
+                      <th className="px-3 py-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUnits.map((unit) => (
+                      <tr
+                        key={unit.id}
+                        className="border-t border-slate-200 dark:border-slate-800"
+                      >
+                        <td className="px-3 py-3 font-medium text-slate-900 dark:text-white">
+                          {unit.name || unit.polling_unit_code || unit.code || `Unit ${unit.id}`}
+                        </td>
+                        <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                          {unit.lga}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              unit.mapStatus === 'Critical'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                : unit.mapStatus === 'Attention'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
+                            }`}
+                          >
+                            {unit.mapStatus}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                          {unit.unitIncidents.length}
+                        </td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => openUnit(unit)}
+                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                          >
+                            View details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            )}
+          </section>
 
-            {/* Polling Units Live Stream List (1 Column) */}
-            <div className={`${cardClass} rounded-xl p-4 flex flex-col h-[440px]`}>
-              <div className={`flex justify-between items-center pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                <div>
-                  <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Filtered Polling Units</h3>
-                  <p className="text-[10px] text-slate-500">Click unit to view field inspector</p>
+          {selectedUnit && (
+            <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+              <div className="h-full w-full max-w-md overflow-y-auto bg-white p-5 shadow-xl dark:bg-slate-900">
+                <div className="mb-5 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                    Polling Unit Details
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUnit(null)}
+                    className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    aria-label="Close details"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-emerald-400' : 'bg-slate-100 border-slate-300 text-emerald-600'
-                }`}>
-                  {filteredPus.length} Units
-                </span>
-              </div>
 
-              {loading ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
-                  <span className="text-xs">Loading geo coordinates...</span>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto mt-3 space-y-2.5 pr-1">
-                  {filteredPus.map((pu, idx) => (
-                    <div 
-                      key={idx}
-                      onClick={() => setSelectedPu(pu)}
-                      className={`p-3 rounded-lg border transition cursor-pointer flex items-center justify-between ${
-                        selectedPu?.id === pu.id 
-                          ? 'bg-emerald-500/20 border-emerald-500' 
-                          : isDark ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700' : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${
-                            pu.status === 'Critical' ? 'bg-red-500 animate-pulse' 
-                              : pu.status === 'Attention' ? 'bg-amber-500' 
-                              : 'bg-emerald-500'
-                          }`}></span>
-                          <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{pu.name}</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500">LGA: {pu.lga} • Code: {pu.id}</p>
-                        <div className="flex items-center gap-3 text-[10px]">
-                          <span className="text-emerald-400 font-bold">PDP: {pu.pdp}</span>
-                          <span className="text-blue-400 font-bold">APC: {pu.apc}</span>
-                          <span className="text-slate-400 font-mono">Total: {pu.total_cast}</span>
-                        </div>
-                        {pu.status !== 'Normal' && (
-                          <p className="text-[10px] font-semibold text-amber-400">{pu.incident}</p>
-                        )}
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">Polling unit</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {selectedUnit.name ||
+                        selectedUnit.polling_unit_code ||
+                        selectedUnit.code ||
+                        `Unit ${selectedUnit.id}`}
+                    </p>
+                  </div>
 
-          {/* Selected PU Detail Drawer */}
-          {selectedPu && (
-            <div className={`${cardClass} border-emerald-500/50 rounded-xl p-5 shadow-lg space-y-4 animate-in fade-in duration-200`}>
-              <div className={`flex justify-between items-start pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                      selectedPu.status === 'Critical' ? 'bg-red-500/20 text-red-500 border border-red-500/40'
-                        : selectedPu.status === 'Attention' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
-                        : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/40'
-                    }`}>
-                      STATUS: {selectedPu.status.toUpperCase()}
-                    </span>
-                    <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                      {selectedPu.id}
-                    </span>
-                    {selectedPu.is_overvote && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 inline-flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Over-voting Breach
-                      </span>
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">LGA</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {selectedUnit.lga}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">Status</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {selectedUnit.mapStatus}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">Registered voters</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {selectedUnit.registered_voters ?? 'Not available'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">Incidents</p>
+                    {selectedUnit.unitIncidents.length === 0 ? (
+                      <p className="text-slate-700 dark:text-slate-300">
+                        No incidents recorded.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-2">
+                        {selectedUnit.unitIncidents.map((incident) => (
+                          <li
+                            key={incident.id}
+                            className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+                          >
+                            <p className="font-medium text-slate-900 dark:text-white">
+                              {incident.title || incident.incident_type || 'Incident'}
+                            </p>
+                            <p className="mt-1 text-slate-600 dark:text-slate-300">
+                              {incident.description || 'No description provided.'}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Severity: {incident.severity || 'Not available'}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
-                  <h3 className={`text-base font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedPu.name}</h3>
-                  <p className="text-xs text-slate-500">Ward: {selectedPu.ward} • LGA: {selectedPu.lga} LGA</p>
-                </div>
-                <button onClick={() => setSelectedPu(null)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-400">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                <div className={`${subcardClass} p-3 rounded-lg`}>
-                  <span className="text-[10px] text-slate-500 font-bold block">ASSIGNED AGENT</span>
-                  <span className={`font-extrabold text-sm block mt-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedPu.agent}</span>
-                  <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1 mt-1">
-                    <Phone className="w-3 h-3" /> {selectedPu.phone}
-                  </span>
-                </div>
-
-                <div className={`${subcardClass} p-3 rounded-lg`}>
-                  <span className="text-[10px] text-slate-500 font-bold block">REGISTERED CAPACITY</span>
-                  <span className={`font-extrabold text-sm block mt-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedPu.registered} Registered</span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Total Cast: {selectedPu.total_cast}</span>
-                </div>
-
-                <div className={`${subcardClass} p-3 rounded-lg`}>
-                  <span className="text-[10px] text-slate-500 font-bold block">LIVE VOTE TALLY</span>
-                  <span className="font-extrabold text-emerald-500 text-sm block mt-0.5">PDP: {selectedPu.pdp} votes</span>
-                  <span className="text-[10px] text-blue-400 font-bold block mt-1">APC: {selectedPu.apc} votes</span>
-                </div>
-
-                <div className={`${subcardClass} p-3 rounded-lg`}>
-                  <span className="text-[10px] text-slate-500 font-bold block">EC8A PROOF VERIFICATION</span>
-                  <span className={`font-extrabold text-xs block mt-0.5 ${
-                    selectedPu.verification === 'VERIFIED' ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>
-                    {selectedPu.verification}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block mt-1">Time: {selectedPu.time}</span>
+                  <div>
+                    <p className="text-slate-500 dark:text-slate-400">Results records</p>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      {selectedUnit.unitResults.length}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           )}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

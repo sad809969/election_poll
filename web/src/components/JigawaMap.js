@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useTheme } from '../pages/_app'
 import {
@@ -7,14 +6,11 @@ import {
   ChevronRight,
   Activity,
   AlertTriangle,
-  ShieldAlert,
   CheckCircle2,
   Clock,
 } from 'lucide-react'
 
-// Jigawa State's 27 LGAs.
-// These positions are illustrative SVG layout coordinates,
-// not surveyed GPS coordinates.
+// Illustrative SVG positions, not surveyed geographic coordinates.
 const JIGAWA_27_LGAS = [
   { id: 'kz', name: 'Kazaure', zone: 'Kazaure Emirate', x: 88, y: 124 },
   { id: 'rn', name: 'Roni', zone: 'Kazaure Emirate', x: 62, y: 142 },
@@ -64,66 +60,96 @@ const STATUS_STYLES = {
   },
 }
 
+const ELECTION_LABELS = {
+  governorship: 'Governorship',
+  senate: 'Senate',
+  'house-of-representatives': 'House of Representatives',
+  'house-of-assembly': 'House of Assembly',
+}
+
 export default function JigawaMap({
-  selectedElection = "governorship",
+  selectedElection = 'governorship',
   selectedArea = null,
   selectedLgaNames = [],
+  statusFilter = 'All',
+  selectedLga: selectedLgaName = 'All LGAs',
+  pollingUnits = [],
+  onSelectLga,
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  const electionLabels = {
-  governorship: "Governorship",
-  senate: "Senate",
-  "house-of-representatives": "House of Representatives",
-  "house-of-assembly": "House of Assembly",
-}
 
-const isLgaInSelectedArea = (lga) => {
-  if (!selectedArea || selectedElection === "governorship") {
-    return true
-  }
-
-  return selectedLgaNames.includes(lga.name)
-}
-
-  const [activeFilter, setActiveFilter] = useState('All')
   const [selectedLga, setSelectedLga] = useState(null)
   const [hoveredLga, setHoveredLga] = useState(null)
 
-  // Until real operational reports are connected,
-  // all LGAs correctly remain in the unknown state.
-  const lgaTelemetry = useMemo(
-    () =>
-      JIGAWA_27_LGAS.map((lga) => ({
+  const lgaTelemetry = useMemo(() => {
+    return JIGAWA_27_LGAS.map((lga) => {
+      const units = pollingUnits.filter(
+        (pu) => pu.lga?.toLowerCase() === lga.name.toLowerCase()
+      )
+
+      const critical = units.filter((pu) => pu.status === 'Critical').length
+      const attention = units.filter((pu) => pu.status === 'Attention').length
+      const normal = units.filter((pu) => pu.status === 'Normal').length
+
+      let status = 'Unknown'
+
+      if (critical > 0) {
+        status = 'Critical'
+      } else if (attention > 0) {
+        status = 'Attention'
+      } else if (normal > 0) {
+        status = 'Normal'
+      }
+
+      return {
         ...lga,
-        status: 'Unknown',
+        status,
+        pollingUnitsCount: units.length,
+        critical,
+        attention,
+        normal,
         incidentsCount: null,
         agentsCheckedIn: null,
-        pollingUnitsReady: null,
         lastUpdated: null,
-      })),
-    []
-  )
-
-  const counts = useMemo(() => {
-    const result = {
-      Normal: 0,
-      Attention: 0,
-      Critical: 0,
-      Unknown: 0,
-    }
-
-    lgaTelemetry.forEach((lga) => {
-      result[lga.status] += 1
+      }
     })
-
-    return result
-  }, [lgaTelemetry])
+  }, [pollingUnits])
 
   const filteredLgas = useMemo(() => {
-    if (activeFilter === 'All') return lgaTelemetry
-    return lgaTelemetry.filter((lga) => lga.status === activeFilter)
-  }, [activeFilter, lgaTelemetry])
+    return lgaTelemetry.filter((lga) => {
+      const matchesStatus =
+        statusFilter === 'All' || lga.status === statusFilter
+
+      const matchesLga =
+        selectedLgaName === 'All LGAs' ||
+        lga.name === selectedLgaName
+
+      const matchesArea =
+        !selectedArea ||
+        selectedElection === 'governorship' ||
+        selectedLgaNames.includes(lga.name)
+
+      return matchesStatus && matchesLga && matchesArea
+    })
+  }, [
+    lgaTelemetry,
+    statusFilter,
+    selectedLgaName,
+    selectedArea,
+    selectedElection,
+    selectedLgaNames,
+  ])
+
+  const counts = useMemo(() => {
+    return lgaTelemetry.reduce(
+      (result, lga) => {
+        result[lga.status] += 1
+        return result
+      },
+      { Normal: 0, Attention: 0, Critical: 0, Unknown: 0 }
+    )
+  }, [lgaTelemetry])
 
   const currentDisplay =
     hoveredLga ||
@@ -136,29 +162,35 @@ const isLgaInSelectedArea = (lga) => {
 
   const borderClass = isDark ? 'border-slate-800' : 'border-slate-200'
 
+  const handleSelectLga = (lga) => {
+    setSelectedLga(lga)
+    if (onSelectLga) {
+      onSelectLga(lga.name)
+    }
+  }
+
+  const title = selectedArea
+    ? `${selectedArea} ${ELECTION_LABELS[selectedElection] || ''} Map`
+    : `${ELECTION_LABELS[selectedElection] || 'Election'} Monitoring Map`
+
   return (
     <div
-      className={`relative w-full rounded-2xl border flex flex-col overflow-hidden transition-colors duration-200 ${cardClass}`}
+      className={`relative flex w-full flex-col overflow-hidden rounded-2xl border transition-colors duration-200 ${cardClass}`}
     >
       <div
-        className={`p-4 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 ${borderClass}`}
+        className={`flex flex-col justify-between gap-3 border-b p-4 md:flex-row md:items-center ${borderClass}`}
       >
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3
-              className={`text-sm font-black tracking-tight ${
-                isDark ? 'text-white' : 'text-slate-900'
-              }`}
-            >
-              Jigawa State Operational Map
-            </h3>
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-400 border border-slate-500/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              Pre-election monitoring
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Operational readiness and reported concerns across the 27 LGAs
+          <h3
+            className={`text-sm font-black tracking-tight ${
+              isDark ? 'text-white' : 'text-slate-900'
+            }`}
+          >
+            {title}
+          </h3>
+
+          <p className="mt-1 text-[11px] text-slate-400">
+            Operational readiness across Jigawa State's 27 LGAs
           </p>
         </div>
 
@@ -167,27 +199,37 @@ const isLgaInSelectedArea = (lga) => {
             (filter) => (
               <button
                 key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={`px-2.5 py-1.5 rounded-lg font-bold border transition ${
-                  activeFilter === filter
-                    ? 'bg-slate-700 text-white border-slate-600'
-                    : 'bg-transparent text-slate-400 border-transparent hover:border-slate-600'
+                type="button"
+                onClick={() => {
+                  // The page owns the filter. This component displays it.
+                  if (filter === 'All' && onSelectLga) {
+                    onSelectLga('All LGAs')
+                  }
+                }}
+                className={`rounded-lg border px-2.5 py-1.5 font-bold transition ${
+                  statusFilter === filter
+                    ? 'border-slate-600 bg-slate-700 text-white'
+                    : 'border-transparent bg-transparent text-slate-400 hover:border-slate-600'
                 }`}
+                title={`${filter}: ${
+                  filter === 'All' ? lgaTelemetry.length : counts[filter]
+                } LGAs`}
               >
-                {filter} ({filter === 'All' ? lgaTelemetry.length : counts[filter]})
+                {filter} (
+                {filter === 'All' ? lgaTelemetry.length : counts[filter]})
               </button>
             )
           )}
         </div>
       </div>
 
-      <div className="relative w-full h-[400px] flex items-center justify-center overflow-hidden bg-[#0A1128]">
+      <div className="relative flex h-[400px] w-full items-center justify-center overflow-hidden bg-[#0A1128] sm:h-[460px]">
         <svg
           viewBox="0 0 650 440"
-          className="w-full h-full select-none"
+          className="h-full w-full select-none"
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label="Illustrative operational map of Jigawa State showing its 27 local government areas"
+          aria-label="Illustrative map of Jigawa State showing its local government areas"
         >
           <defs>
             <pattern
@@ -204,7 +246,13 @@ const isLgaInSelectedArea = (lga) => {
               />
             </pattern>
 
-            <linearGradient id="state-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient
+              id="state-grad"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
               <stop offset="0%" stopColor="#0B3C26" stopOpacity="0.55" />
               <stop offset="50%" stopColor="#062817" stopOpacity="0.45" />
               <stop offset="100%" stopColor="#041B10" stopOpacity="0.65" />
@@ -257,7 +305,7 @@ const isLgaInSelectedArea = (lga) => {
             y="235"
             textAnchor="middle"
             fill="rgba(16, 185, 129, 0.08)"
-            className="font-black text-4xl tracking-[0.25em] select-none pointer-events-none"
+            className="pointer-events-none select-none text-4xl font-black tracking-[0.25em]"
           >
             JIGAWA STATE
           </text>
@@ -273,11 +321,11 @@ const isLgaInSelectedArea = (lga) => {
                 className="cursor-pointer"
                 onMouseEnter={() => setHoveredLga(lga)}
                 onMouseLeave={() => setHoveredLga(null)}
-                onClick={() => setSelectedLga(lga)}
+                onClick={() => handleSelectLga(lga)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
-                    setSelectedLga(lga)
+                    handleSelectLga(lga)
                   }
                 }}
                 role="button"
@@ -301,7 +349,7 @@ const isLgaInSelectedArea = (lga) => {
                   cy={lga.y}
                   r={isHovered || isSelected ? 8 : 6}
                   fill={color}
-                  stroke={isDark ? '#070D1E' : '#FFFFFF'}
+                  stroke="#070D1E"
                   strokeWidth="2"
                 />
 
@@ -309,10 +357,10 @@ const isLgaInSelectedArea = (lga) => {
                   x={lga.x}
                   y={lga.y - 10}
                   textAnchor="middle"
-                  className={`text-[9px] font-black tracking-tight select-none pointer-events-none ${
+                  className={`pointer-events-none select-none font-black tracking-tight ${
                     isHovered || isSelected
                       ? 'fill-white text-[11px]'
-                      : 'fill-slate-300 opacity-85'
+                      : 'fill-slate-300 text-[9px] opacity-85'
                   }`}
                 >
                   {lga.name}
@@ -323,27 +371,29 @@ const isLgaInSelectedArea = (lga) => {
         </svg>
 
         {currentDisplay && (
-          <div className="absolute bottom-3 left-3 z-20 max-w-xs bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-3.5 shadow-2xl text-slate-100">
-            <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-800">
+          <div className="absolute bottom-3 left-3 z-20 max-w-xs rounded-xl border border-slate-700/80 bg-slate-900/95 p-3.5 text-slate-100 shadow-2xl backdrop-blur-md">
+            <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2">
               <div>
                 <div className="flex items-center gap-1.5">
                   <span
-                    className="w-2 h-2 rounded-full"
+                    className="h-2 w-2 rounded-full"
                     style={{
                       backgroundColor:
                         STATUS_STYLES[currentDisplay.status].dot,
                     }}
                   />
-                  <h4 className="font-extrabold text-sm text-white">
+                  <h4 className="text-sm font-extrabold text-white">
                     {currentDisplay.name} LGA
                   </h4>
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium">
+
+                <span className="text-[10px] font-medium text-slate-400">
                   {currentDisplay.zone}
                 </span>
               </div>
+
               <span
-                className={`px-2 py-0.5 rounded border text-[9px] font-extrabold ${
+                className={`rounded border px-2 py-0.5 text-[9px] font-extrabold ${
                   STATUS_STYLES[currentDisplay.status].badge
                 }`}
               >
@@ -353,43 +403,57 @@ const isLgaInSelectedArea = (lga) => {
 
             <div className="mt-2.5 space-y-2 text-[11px]">
               <div className="flex items-center gap-1.5 text-slate-300">
-                <Activity className="w-3 h-3 text-slate-400" />
+                <Activity className="h-3 w-3 text-slate-400" />
                 <span>Operational status: {currentDisplay.status}</span>
               </div>
+
               <div className="flex items-center gap-1.5 text-slate-300">
-                <AlertTriangle className="w-3 h-3 text-slate-400" />
-                <span>Reported incidents: Not available</span>
+                <MapPin className="h-3 w-3 text-slate-400" />
+                <span>
+                  Polling units: {currentDisplay.pollingUnitsCount}
+                </span>
               </div>
+
               <div className="flex items-center gap-1.5 text-slate-300">
-                <CheckCircle2 className="w-3 h-3 text-slate-400" />
+                <AlertTriangle className="h-3 w-3 text-slate-400" />
+                <span>
+                  Critical: {currentDisplay.critical} · Attention:{' '}
+                  {currentDisplay.attention}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <CheckCircle2 className="h-3 w-3 text-slate-400" />
                 <span>Agent check-ins: Not available</span>
               </div>
+
               <div className="flex items-center gap-1.5 text-slate-300">
-                <Clock className="w-3 h-3 text-slate-400" />
-                <span>Last update: No recent data</span>
+                <Clock className="h-3 w-3 text-slate-400" />
+                <span>Last update: Not available</span>
               </div>
             </div>
           </div>
         )}
 
-        <div className="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-sm border border-slate-800 px-2.5 py-1 rounded-lg text-[10px] text-slate-400">
-          <MapPin className="w-3 h-3 text-emerald-400" />
+        <div className="absolute right-3 top-3 z-10 hidden items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-[10px] text-slate-400 backdrop-blur-sm sm:flex">
+          <MapPin className="h-3 w-3 text-emerald-400" />
           <span>Click any LGA dot to inspect</span>
         </div>
       </div>
 
       <div
-        className={`p-3 border-t flex flex-wrap items-center justify-between gap-2 text-xs ${borderClass}`}
+        className={`flex flex-wrap items-center justify-between gap-2 border-t p-3 text-xs ${borderClass}`}
       >
-        <span className="text-[10px] font-mono text-slate-400">
+        <span className="font-mono text-[10px] text-slate-400">
           27 LGAs · Illustrative map coordinates · Operational data pending
         </span>
+
         <Link
           href="/map"
-          className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-400 hover:text-emerald-300 transition"
+          className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-500 transition hover:text-emerald-400"
         >
           View Full Interactive Map
-          <ChevronRight className="w-3.5 h-3.5" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
     </div>
