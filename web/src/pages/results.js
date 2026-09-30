@@ -1,53 +1,133 @@
-import { useState, useEffect, useMemo } from 'react'
+
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
-import { apiFetch, uploadEc8aPhoto } from '../lib/api'
-import { 
-  BarChart3, 
-  CheckCircle2, 
-  FileText, 
-  Download, 
-  Building2, 
-  Search, 
-  Filter, 
-  ShieldAlert, 
+import { apiFetch } from '../lib/api'
+import {
+  BarChart3,
+  CheckCircle2,
+  FileText,
+  Download,
+  Search,
+  ShieldAlert,
   Eye,
-  Check,
   AlertTriangle,
   X,
   ChevronLeft,
   ChevronRight,
   Loader2,
   ShieldCheck,
-  Layers,
   TableProperties,
-  Vote
+  Vote,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  Filter,
 } from 'lucide-react'
-import { 
-  ResponsiveContainer, 
-  PieChart as RePieChart, 
-  Pie, 
-  Cell 
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from 'recharts'
 
-/**
- * Results dashboard. Rendered directly at /results (all contests) and by the
- * per-contest dashboards at /dashboard/<contest>, which pass:
- *   - contest: the contest shown by default (e.g. 'GOVERNORSHIP')
- *   - lockedContest: restrict the view to that one contest (candidates)
- *   - title: dashboard heading
- */
-export default function ResultsDashboardPage({ contest = null, lockedContest = false, title = null }) {
+const CONTESTS = [
+  { id: 'GOVERNORSHIP', label: 'Governorship' },
+  { id: 'SENATORIAL', label: 'Senatorial' },
+  { id: 'HOUSE_OF_REPS', label: 'House of Representatives' },
+  { id: 'STATE_ASSEMBLY', label: 'State House of Assembly' },
+]
+
+const PALETTE = [
+  '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B',
+  '#EC4899', '#06B6D4', '#F97316', '#84CC16',
+  '#A855F7', '#64748B',
+]
+
+const numberValue = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+const formatNumber = (value) => numberValue(value).toLocaleString()
+
+const getStatus = (result) =>
+  String(result?.verification_status || 'PENDING_REVIEW').toUpperCase()
+
+const getCandidateEntries = (result) => {
+  if (Array.isArray(result?.candidates)) {
+    return result.candidates.map((candidate, index) => ({
+      candidate_id: candidate.candidate_id ?? candidate.id ?? index,
+      candidate_name:
+        candidate.candidate_name ??
+        candidate.name ??
+        candidate.full_name ??
+        'Unnamed candidate',
+      party_name:
+        candidate.party_name ??
+        candidate.party ??
+        candidate.party_abbreviation ??
+        'Unknown party',
+      votes: numberValue(candidate.votes ?? candidate.vote_count),
+    }))
+  }
+
+  const voteObject =
+    result?.candidate_votes ??
+    result?.votes_by_candidate ??
+    result?.candidate_results
+
+  if (voteObject && !Array.isArray(voteObject) && typeof voteObject === 'object') {
+    return Object.entries(voteObject).map(([key, value], index) => {
+      if (typeof value === 'number' || typeof value === 'string') {
+        return {
+          candidate_id: key,
+          candidate_name: key,
+          party_name: 'Unknown party',
+          votes: numberValue(value),
+        }
+      }
+
+      return {
+        candidate_id: value?.candidate_id ?? value?.id ?? key ?? index,
+        candidate_name:
+          value?.candidate_name ?? value?.name ?? value?.full_name ?? key,
+        party_name:
+          value?.party_name ??
+          value?.party ??
+          value?.party_abbreviation ??
+          'Unknown party',
+        votes: numberValue(value?.votes ?? value?.vote_count),
+      }
+    })
+  }
+
+  return []
+}
+
+const getContestLabel = (value) =>
+  CONTESTS.find((item) => item.id === value)?.label ||
+  String(value || 'Unspecified contest').replaceAll('_', ' ')
+
+export default function ResultsDashboardPage({
+  contest = null,
+  lockedContest = false,
+  title = null,
+}) {
   const router = useRouter()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  // View Mode: 'units' (Polling Unit Roster & EC8A Audit) or 'lgas' (LGA Collation Breakdown)
-  const [activeTab, setActiveTab] = useState('units')
-
-  // Filters & Search
+  const [activeTab, setActiveTab] = useState('analysis')
   const [electionType, setElectionType] = useState(contest || 'GOVERNORSHIP')
   const [selectedLgaId, setSelectedLgaId] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -55,602 +135,753 @@ export default function ResultsDashboardPage({ contest = null, lockedContest = f
   const [page, setPage] = useState(0)
   const pageSize = 50
 
-  useEffect(() => {
-    if (router.isReady) {
-      if (router.query.election_type && !lockedContest) {
-        setElectionType(router.query.election_type.toString().toUpperCase())
-      }
-      if (router.query.modal === 'entry') {
-        setShowManualEntryModal(true)
-      }
-    }
-  }, [router.isReady, router.query])
-
-  // Backend Data
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lgas, setLgas] = useState([])
   const [summaryData, setSummaryData] = useState(null)
   const [partyVoteShare, setPartyVoteShare] = useState([])
-  const [lgaCollationTable, setLgaCollationTable] = useState([])
-  const [pollingUnitResults, setPollingUnitResults] = useState([])
-  const [totalMatchingResults, setTotalMatchingResults] = useState(0)
+  const [lgaBreakdown, setLgaBreakdown] = useState([])
+  const [results, setResults] = useState([])
+  const [totalResults, setTotalResults] = useState(0)
 
-  // Modals
-  const [showManualEntryModal, setShowManualEntryModal] = useState(false)
   const [inspectResult, setInspectResult] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
-  const [flagReasonModal, setFlagReasonModal] = useState(false)
+  const [flagModalOpen, setFlagModalOpen] = useState(false)
   const [flagNotes, setFlagNotes] = useState('')
   const [actionMessage, setActionMessage] = useState(null)
 
-  const partyColors = {
-    PDP: '#10B981',
-    APC: '#3B82F6',
-    NNPP: '#8B5CF6',
-    LP: '#F59E0B'
-  }
-
-  // Load LGA list once
   useEffect(() => {
-    async function loadLgas() {
-      try {
-        const lgaList = await apiFetch('/electoral/lgas')
-        if (Array.isArray(lgaList)) setLgas(lgaList)
-      } catch (err) {
-        console.warn('Failed to load LGAs:', err)
-      }
+    if (!router.isReady) return
+
+    if (lockedContest && contest) {
+      setElectionType(contest.toUpperCase())
+    } else if (router.query.election_type) {
+      setElectionType(String(router.query.election_type).toUpperCase())
     }
-    loadLgas()
+  }, [router.isReady, router.query.election_type, lockedContest, contest])
+
+  useEffect(() => {
+    let mounted = true
+
+    apiFetch('/electoral/lgas')
+      .then((data) => {
+        if (!mounted) return
+        const list = Array.isArray(data)
+          ? data
+          : data?.lgas || data?.items || []
+        setLgas(Array.isArray(list) ? list : [])
+      })
+      .catch((err) => console.warn('Unable to load LGAs:', err))
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  // Fetch Results Data from FastAPI
-  const loadResults = async () => {
+  const loadResults = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
     try {
-      setLoading(true)
-      setError(null)
-      
       const params = new URLSearchParams()
-      params.append('limit', pageSize.toString())
-      params.append('skip', (page * pageSize).toString())
-      if (selectedLgaId) params.append('lga_id', selectedLgaId)
-      if (electionType && electionType !== 'ALL') params.append('election_type', electionType)
-      if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter)
-      if (searchQuery.trim()) params.append('search', searchQuery.trim())
+      params.set('limit', String(pageSize))
+      params.set('skip', String(page * pageSize))
+
+      if (selectedLgaId) params.set('lga_id', selectedLgaId)
+      if (electionType && electionType !== 'ALL') {
+        params.set('election_type', electionType)
+      }
+      if (statusFilter !== 'ALL') params.set('status', statusFilter)
+      if (searchQuery.trim()) params.set('search', searchQuery.trim())
 
       const data = await apiFetch(`/results?${params.toString()}`)
+      const rows = Array.isArray(data)
+        ? data
+        : data?.results || data?.items || []
 
-      if (data) {
-        if (data.party_vote_share) {
-          setPartyVoteShare(data.party_vote_share.map(p => ({
-            ...p,
-            color: p.color || partyColors[p.party] || '#64748B'
-          })))
-        }
-        if (data.lga_breakdown) {
-          setLgaCollationTable(data.lga_breakdown)
-        }
-        if (data.summary) {
-          setSummaryData(data.summary)
-        }
-        if (data.results) {
-          setPollingUnitResults(data.results)
-          setTotalMatchingResults(data.total_results || data.results.length)
-        }
-      }
+      setResults(Array.isArray(rows) ? rows : [])
+      setTotalResults(
+        numberValue(
+          data?.total_results ??
+          data?.total ??
+          (Array.isArray(rows) ? rows.length : 0)
+        )
+      )
+      setSummaryData(data?.summary || null)
+      setPartyVoteShare(
+        Array.isArray(data?.party_vote_share) ? data.party_vote_share : []
+      )
+      setLgaBreakdown(
+        Array.isArray(data?.lga_breakdown) ? data.lga_breakdown : []
+      )
     } catch (err) {
-      console.error('Failed to load live results:', err)
-      setError(err.message)
+      setError(err?.message || 'Unable to load results.')
+      setResults([])
+      setTotalResults(0)
+      setSummaryData(null)
+      setPartyVoteShare([])
+      setLgaBreakdown([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, pageSize, selectedLgaId, electionType, statusFilter, searchQuery])
 
   useEffect(() => {
     loadResults()
-  }, [selectedLgaId, statusFilter, searchQuery, page, electionType])
+  }, [loadResults])
 
-  // Count flagged in currently displayed list
-  const flaggedInViewCount = useMemo(() => {
-    return pollingUnitResults.filter(r => r.verification_status === 'FLAGGED' || r.is_overvote).length
-  }, [pollingUnitResults])
+  const allCandidates = useMemo(() => {
+    const totals = new Map()
 
-  // 1. One-Click Verify Result (POST /api/results/approve/{id})
-  const handleApproveResult = async (resultId) => {
+    results.forEach((result) => {
+      getCandidateEntries(result).forEach((candidate) => {
+        const key = `${candidate.candidate_id}|${candidate.candidate_name}|${candidate.party_name}`
+        const current = totals.get(key) || {
+          ...candidate,
+          votes: 0,
+        }
+        current.votes += numberValue(candidate.votes)
+        totals.set(key, current)
+      })
+    })
+
+    return [...totals.values()].sort((a, b) => b.votes - a.votes)
+  }, [results])
+
+  const candidateTotals = useMemo(() => {
+    const totals = new Map()
+
+    results.forEach((result) => {
+      getCandidateEntries(result).forEach((candidate) => {
+        const key = `${candidate.candidate_id}|${candidate.candidate_name}|${candidate.party_name}`
+        totals.set(key, (totals.get(key) || 0) + numberValue(candidate.votes))
+      })
+    })
+
+    return [...totals.entries()]
+      .map(([key, votes]) => {
+        const [candidate_id, candidate_name, party_name] = key.split('|')
+        return { candidate_id, candidate_name, party_name, votes }
+      })
+      .sort((a, b) => b.votes - a.votes)
+  }, [results])
+
+  const partyTotals = useMemo(() => {
+    const totals = new Map()
+
+    results.forEach((result) => {
+      getCandidateEntries(result).forEach((candidate) => {
+        const party = candidate.party_name || 'Unknown party'
+        totals.set(party, (totals.get(party) || 0) + numberValue(candidate.votes))
+      })
+    })
+
+    return [...totals.entries()]
+      .map(([party, votes], index) => ({
+        party,
+        votes,
+        color: PALETTE[index % PALETTE.length],
+      }))
+      .sort((a, b) => b.votes - a.votes)
+  }, [results])
+
+  const totalCandidateVotes = candidateTotals.reduce(
+    (sum, candidate) => sum + candidate.votes,
+    0
+  )
+
+  const leadingCandidate = candidateTotals[0] || null
+  const runnerUp = candidateTotals[1] || null
+  const leadMargin = leadingCandidate
+    ? leadingCandidate.votes - (runnerUp?.votes || 0)
+    : null
+
+  const statusCounts = useMemo(() => {
+    return results.reduce(
+      (counts, result) => {
+        const status = getStatus(result)
+        counts[status] = (counts[status] || 0) + 1
+        if (result.is_overvote) counts.OVER_VOTE = (counts.OVER_VOTE || 0) + 1
+        return counts
+      },
+      {}
+    )
+  }, [results])
+
+  const flaggedCount =
+    (statusCounts.FLAGGED || 0) + (statusCounts.OVER_VOTE || 0)
+
+  const cardClass = isDark
+    ? 'bg-[#141E38] border border-slate-800'
+    : 'bg-white border border-slate-200 shadow-sm'
+
+  const textMain = isDark ? 'text-white' : 'text-slate-900'
+  const muted = 'text-slate-400'
+  const totalPages = Math.max(1, Math.ceil(totalResults / pageSize))
+
+  const handleApprove = async (result) => {
+    if (!result?.id) return
     setActionLoading(true)
     setActionMessage(null)
+
     try {
-      await apiFetch(`/results/approve/${resultId}`, { method: 'POST' })
-      setActionMessage({ type: 'success', text: `Result #${resultId} approved and verified officially!` })
-      
-      // Update local state
-      setPollingUnitResults(prev => prev.map(r => r.id === resultId ? { ...r, verification_status: 'VERIFIED' } : r))
-      if (inspectResult && inspectResult.id === resultId) {
-        setInspectResult(prev => ({ ...prev, verification_status: 'VERIFIED' }))
-      }
-      loadResults()
+      await apiFetch(`/results/approve/${result.id}`, { method: 'POST' })
+      setActionMessage({
+        type: 'success',
+        text: `Approval request for result #${result.id} was accepted.`,
+      })
+      await loadResults()
     } catch (err) {
-      setActionMessage({ type: 'error', text: `Approval failed: ${err.message}` })
+      setActionMessage({
+        type: 'error',
+        text: `Approval failed: ${err?.message || 'Unknown error'}`,
+      })
     } finally {
       setActionLoading(false)
     }
   }
 
-  // CSV Export
-  const handleExportCsv = () => {
-    if (!pollingUnitResults || pollingUnitResults.length === 0) {
-      alert('No polling unit records to export.')
+  const handleFlag = async () => {
+    if (!inspectResult?.id || !flagNotes.trim()) return
+    setActionLoading(true)
+    setActionMessage(null)
+
+    try {
+      const notes = encodeURIComponent(flagNotes.trim())
+      await apiFetch(`/results/flag/${inspectResult.id}?notes=${notes}`, {
+        method: 'POST',
+      })
+      setActionMessage({
+        type: 'success',
+        text: `Flag request for result #${inspectResult.id} was accepted.`,
+      })
+      setFlagModalOpen(false)
+      setFlagNotes('')
+      await loadResults()
+    } catch (err) {
+      setActionMessage({
+        type: 'error',
+        text: `Flagging failed: ${err?.message || 'Unknown error'}`,
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const csvCell = (value) =>
+    `"${String(value ?? '').replace(/"/g, '""')}"`
+
+  const exportCsv = () => {
+    if (!results.length) {
+      alert('There are no results on this page to export.')
       return
     }
-    const headers = ['PU Code', 'PU Name', 'Registered Voters', 'PDP Votes', 'APC Votes', 'NNPP Votes', 'LP Votes', 'Total Cast', 'Status', 'Over-voting', 'Agent']
-    const rows = pollingUnitResults.map(r => [
-      `"${r.polling_unit_code}"`,
-      `"${(r.polling_unit_name || '').replace(/"/g, '""')}"`,
-      r.registered_voters,
-      r.pdp_votes,
-      r.apc_votes,
-      r.nnpp_votes,
-      r.lp_votes,
-      r.total_votes_cast,
-      `"${r.verification_status}"`,
-      r.is_overvote ? 'YES' : 'NO',
-      `"${(r.agent_name || '').replace(/"/g, '""')}"`
-    ])
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
-    const encodedUri = encodeURI(csvContent)
+
+    const headers = [
+      'Polling Unit Code',
+      'Polling Unit Name',
+      'Contest',
+      'LGA',
+      'Registered Voters',
+      'Candidate',
+      'Party',
+      'Votes',
+      'Rejected Votes',
+      'Total Votes Cast',
+      'Status',
+      'EC8A Photo URL',
+    ]
+
+    const rows = results.flatMap((result) => {
+      const candidates = getCandidateEntries(result)
+      const base = [
+        result.polling_unit_code,
+        result.polling_unit_name,
+        result.election_type,
+        result.lga_name || result.lga,
+        result.registered_voters,
+      ]
+
+      if (!candidates.length) {
+        return [[
+          ...base,
+          '',
+          '',
+          '',
+          result.rejected_votes,
+          result.total_votes_cast,
+          getStatus(result),
+          result.ec8a_photo_url,
+        ]]
+      }
+
+      return candidates.map((candidate) => [
+        ...base,
+        candidate.candidate_name,
+        candidate.party_name,
+        candidate.votes,
+        result.rejected_votes,
+        result.total_votes_cast,
+        getStatus(result),
+        result.ec8a_photo_url,
+      ])
+    })
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\r\n')
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `jigawa_pdp_pu_results_${new Date().toISOString().slice(0, 10)}.csv`)
+    link.href = url
+    link.download = `pollwatch_results_${electionType}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
+    link.remove()
+    URL.revokeObjectURL(url)
   }
 
-  // 2. Flag Result for Discrepancy (POST /api/results/flag/{id})
-  const handleFlagResult = async () => {
-    if (!inspectResult) return
-    setActionLoading(true)
-    setActionMessage(null)
-    try {
-      const notesParam = encodeURIComponent(flagNotes.trim() || 'Discrepancy flagged by Situation Room audit')
-      await apiFetch(`/results/flag/${inspectResult.id}?notes=${notesParam}`, { method: 'POST' })
-      setActionMessage({ type: 'warning', text: `Result #${inspectResult.id} quarantined as FLAGGED!` })
-      
-      // Update local state
-      setPollingUnitResults(prev => prev.map(r => r.id === inspectResult.id ? { 
-        ...r, 
-        verification_status: 'FLAGGED',
-        notes: (r.notes || '') + ` | [FLAGGED]: ${flagNotes}`
-      } : r))
-      setInspectResult(prev => ({
-        ...prev,
-        verification_status: 'FLAGGED',
-        notes: (prev.notes || '') + ` | [FLAGGED]: ${flagNotes}`
-      }))
-      setFlagReasonModal(false)
-      setFlagNotes('')
-      loadResults()
-    } catch (err) {
-      setActionMessage({ type: 'error', text: `Flagging failed: ${err.message}` })
-    } finally {
-      setActionLoading(false)
-    }
+  const resetFilters = () => {
+    setSelectedLgaId('')
+    setStatusFilter('ALL')
+    setSearchQuery('')
+    setPage(0)
   }
-
-  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
-  const totalPages = Math.ceil(totalMatchingResults / pageSize) || 1
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
+    <div className={`flex h-screen font-sans overflow-hidden ${
       isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
     }`}>
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Header 
-          title={title || "Results Dashboard & Verification Inspector"} 
-          subtitle="Real-time vote collation, EC8A proof verification, and candidate vote share analytics" 
+        <Header
+          title={title || 'Election Results Dashboard'}
+          subtitle="Candidate results, contest-level collation, and data analysis"
         />
 
-        <main className="p-6 space-y-6">
-          {/* Status Indicator Bar */}
+        <main className="p-4 md:p-6 space-y-6">
           {error && (
-            <div className="text-xs bg-amber-500/10 text-amber-500 p-3 rounded-lg border border-amber-500/20 flex justify-between items-center">
-              <span>Unable to connect to live backend API ({error}). Showing cached view.</span>
-            </div>
-          )}
-
-          {/* Top 4 KPI Banner Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className={`${cardClass} rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-slate-400">Total Collated Votes</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {summaryData?.total_votes?.toLocaleString() || "1,892,978"}
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  From {summaryData?.collated_pus?.toLocaleString() || "4,827"} of {summaryData?.total_ec8a?.toLocaleString() || "4,827"} Polling Units
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><BarChart3 className="w-6 h-6" /></div>
-            </div>
-
-            <div className={`${cardClass} border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-emerald-500">PDP Total Votes</span>
-                <h3 className="text-2xl font-extrabold text-emerald-500 mt-1">
-                  {summaryData?.pdp_votes?.toLocaleString() || "1,038,819"}{" "}
-                  <span className="text-xs font-bold">({summaryData?.pdp_pct || "55.3%"})</span>
-                </h3>
-                <p className="text-[10px] text-emerald-500 mt-0.5">
-                  Lead margin: +{summaryData?.lead_margin?.toLocaleString() || "414,630"}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><CheckCircle2 className="w-6 h-6" /></div>
-            </div>
-
-            <div className={`${cardClass} border-blue-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-blue-500">APC Total Votes</span>
-                <h3 className="text-2xl font-extrabold text-blue-500 mt-1">
-                  {summaryData?.apc_votes?.toLocaleString() || "624,189"}{" "}
-                  <span className="text-xs font-bold">({summaryData?.apc_pct || "33.2%"})</span>
-                </h3>
-                <p className="text-[10px] text-blue-500 mt-0.5">Runner-up party</p>
-              </div>
-              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-500"><Building2 className="w-6 h-6" /></div>
-            </div>
-
-            <div className={`${cardClass} border-purple-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-purple-500">EC8A Proof Verification</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {summaryData?.verified_ec8a?.toLocaleString() || "4,827"} / {summaryData?.total_ec8a?.toLocaleString() || "4,827"}
-                </h3>
-                <p className="text-[10px] text-purple-500 mt-0.5">
-                  {summaryData?.upload_pct || "100.0%"} result sheets uploaded
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-purple-500/20 text-purple-500"><FileText className="w-6 h-6" /></div>
-            </div>
-          </div>
-
-          {/* Statewide Party Vote Share Card */}
-          <div className={`${cardClass} rounded-xl p-5 shadow-sm`}>
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-1">
-                <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                  Statewide Party Vote Share & Electoral Margin
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Calculated from aggregated Polling Unit results with verified Form EC8A certificates
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-6">
-                <div className="h-[120px] w-[120px] shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RePieChart>
-                      <Pie data={partyVoteShare} innerRadius={35} outerRadius={55} paddingAngle={4} dataKey="votes">
-                        {partyVoteShare.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </RePieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {partyVoteShare.map((p, idx) => (
-                    <div key={idx} className="p-3 rounded-xl bg-slate-900/40 border border-slate-800">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }}></span>
-                        <span className="text-xs font-bold text-slate-300">{p.name}</span>
-                      </div>
-                      <div className="text-base font-extrabold text-white font-mono">
-                        {p.votes.toLocaleString()}
-                      </div>
-                      <span className="text-[11px] font-bold" style={{ color: p.color }}>
-                        {p.pct}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Over-voting Alert Banner */}
-          {flaggedInViewCount > 0 && (
-            <div className="p-4 bg-red-500/15 border border-red-500/40 rounded-xl text-red-300 text-xs flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-6 h-6 text-red-400 shrink-0" />
-                <div>
-                  <strong className="text-white font-bold text-sm block">
-                    Section 51 Electoral Act Compliance Warning
-                  </strong>
-                  <span>
-                    {flaggedInViewCount} Polling Unit(s) in current view are marked <strong>FLAGGED</strong> because total votes cast exceeds registered voters. In accordance with the 2022 Electoral Act, these results cannot be collated or certified.
-                  </span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setStatusFilter('FLAGGED')}
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs whitespace-nowrap transition"
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 flex flex-wrap items-center justify-between gap-3 text-sm text-red-400">
+              <span>Unable to load live results: {error}</span>
+              <button
+                onClick={loadResults}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-500/15 px-3 py-1.5 font-bold"
               >
-                Inspect Flagged Units
+                <RefreshCw className="w-4 h-4" /> Retry
               </button>
             </div>
           )}
 
-          {/* Multi-Category Election Contest Switcher Bar */}
-          <div className={`${cardClass} rounded-2xl p-3.5 border shadow-sm flex flex-wrap items-center justify-between gap-3`}>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-wider text-emerald-500 flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <Vote className="w-3.5 h-3.5" /> Ballot Contest:
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              {[
-                { id: 'GOVERNORSHIP', label: 'Governorship', icon: '🗳️' },
-                { id: 'SENATORIAL', label: 'Senatorial (Senate)', icon: '🏛️' },
-                { id: 'HOUSE_OF_REPS', label: 'House of Reps', icon: '🏛️' },
-                { id: 'PRESIDENTIAL', label: 'Presidential', icon: '🇳🇬' },
-                { id: 'STATE_ASSEMBLY', label: 'State Assembly', icon: '📜' },
-                { id: 'ALL', label: 'All Contests', icon: '🌐' },
-              ].filter((c) => !lockedContest || c.id === contest).map((contest) => (
-                <button
-                  key={contest.id}
-                  onClick={() => {
-                    setElectionType(contest.id)
-                    setPage(0)
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    electionType === contest.id
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
-                      : isDark
-                        ? 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
-                        : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 border border-slate-300'
-                  }`}
-                >
-                  <span>{contest.icon}</span>
-                  <span>{contest.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Main Controls & Tab Bar */}
-          <div className={`${cardClass} rounded-xl p-4 flex flex-wrap justify-between items-center gap-4`}>
-            {/* View Switcher Tabs */}
-            <div className="flex items-center gap-2 p-1 bg-slate-900 rounded-xl border border-slate-800">
-              <button
-                onClick={() => setActiveTab('units')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${
-                  activeTab === 'units'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Polling Unit EC8A Roster</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('lgas')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${
-                  activeTab === 'lgas'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <TableProperties className="w-3.5 h-3.5" />
-                <span>LGA Collation Breakdown</span>
-              </button>
-            </div>
-
-            {/* Filter Controls for Polling Units */}
-            {activeTab === 'units' && (
-              <div className="flex flex-wrap items-center gap-3">
-                {/* LGA Select */}
-                <select
-                  value={selectedLgaId}
-                  onChange={(e) => {
-                    setSelectedLgaId(e.target.value)
-                    setPage(0)
-                  }}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border transition ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}
-                >
-                  <option value="">All 27 LGAs</option>
-                  {lgas.map(l => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
-
-                {/* Status Select */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value)
-                    setPage(0)
-                  }}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border transition ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="VERIFIED">Verified</option>
-                  <option value="PENDING_REVIEW">Pending Review</option>
-                  <option value="FLAGGED">Flagged / Over-voting</option>
-                  <option value="PENDING_PHOTO">Pending Photo</option>
-                </select>
-
-                {/* Search Input */}
-                <div className="relative w-48 sm:w-56">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search PU code or name..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value)
+          <section className={`${cardClass} rounded-2xl p-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-emerald-500">
+                  <Vote className="mr-1 inline w-4 h-4" />
+                  Election contest
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(lockedContest
+                  ? CONTESTS.filter((item) => item.id === contest)
+                  : CONTESTS
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setElectionType(item.id)
                       setPage(0)
                     }}
-                    className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border transition ${
-                      isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                      electionType === item.id
+                        ? 'border-emerald-500 bg-emerald-600 text-white'
+                        : isDark
+                          ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                          : 'border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
-                  />
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                {!lockedContest && (
+                  <button
+                    onClick={() => {
+                      setElectionType('ALL')
+                      setPage(0)
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold ${
+                      electionType === 'ALL'
+                        ? 'border-emerald-500 bg-emerald-600 text-white'
+                        : isDark
+                          ? 'border-slate-700 bg-slate-900 text-slate-300'
+                          : 'border-slate-300 bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    All contests
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={`${cardClass} rounded-xl p-4`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-xs font-bold ${muted}`}>Results received</p>
+                <FileText className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className={`mt-2 text-2xl font-extrabold ${textMain}`}>
+                {loading ? '—' : formatNumber(summaryData?.collated_pus ?? totalResults)}
+              </p>
+              <p className={`mt-1 text-[11px] ${muted}`}>For the selected contest and filters</p>
+            </div>
+
+            <div className={`${cardClass} rounded-xl p-4`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-xs font-bold ${muted}`}>Votes in loaded results</p>
+                <BarChart3 className="w-5 h-5 text-blue-500" />
+              </div>
+              <p className={`mt-2 text-2xl font-extrabold ${textMain}`}>
+                {loading ? '—' : formatNumber(summaryData?.total_votes ?? totalCandidateVotes)}
+              </p>
+              <p className={`mt-1 text-[11px] ${muted}`}>Based on available backend data</p>
+            </div>
+
+            <div className={`${cardClass} rounded-xl p-4`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-xs font-bold ${muted}`}>Leading candidate</p>
+                <TrendingUp className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className={`mt-2 truncate text-lg font-extrabold ${textMain}`}>
+                {loading ? '—' : leadingCandidate?.candidate_name || 'No candidate data'}
+              </p>
+              <p className={`mt-1 text-[11px] ${muted}`}>
+                {leadingCandidate
+                  ? `${leadingCandidate.party_name} · ${formatNumber(leadingCandidate.votes)} votes`
+                  : 'Leader appears when candidate votes are available'}
+              </p>
+            </div>
+
+            <div className={`${cardClass} rounded-xl p-4`}>
+              <div className="flex items-center justify-between">
+                <p className={`text-xs font-bold ${muted}`}>Lead margin</p>
+                <Users className="w-5 h-5 text-purple-500" />
+              </div>
+              <p className={`mt-2 text-2xl font-extrabold ${textMain}`}>
+                {loading || leadMargin === null ? '—' : formatNumber(leadMargin)}
+              </p>
+              <p className={`mt-1 text-[11px] ${muted}`}>Difference from the next candidate in loaded results</p>
+            </div>
+          </section>
+
+          <section className={`${cardClass} rounded-2xl p-4 md:p-5 space-y-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-sm font-extrabold ${textMain}`}>Data analysis</h2>
+                <p className={`mt-1 text-xs ${muted}`}>
+                  Candidate and party totals from the results currently returned by the backend.
+                </p>
+              </div>
+              <button
+                onClick={loadResults}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-400 hover:text-white disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-slate-400">
+                <Loader2 className="h-7 w-7 animate-spin text-emerald-500" />
+                <span className="text-xs font-bold">Loading election analysis...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                <div className="min-w-0">
+                  <h3 className={`mb-3 text-xs font-bold ${textMain}`}>Candidate vote comparison</h3>
+                  {candidateTotals.length ? (
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={candidateTotals} margin={{ top: 8, right: 12, left: 0, bottom: 48 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} />
+                          <XAxis
+                            dataKey="candidate_name"
+                            interval={0}
+                            angle={-30}
+                            textAnchor="end"
+                            height={70}
+                            tick={{ fontSize: 10, fill: isDark ? '#cbd5e1' : '#475569' }}
+                          />
+                          <YAxis tick={{ fontSize: 10, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                          <Tooltip />
+                          <Bar dataKey="votes" name="Votes" fill="#10B981" radius={[5, 5, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className={`flex h-56 items-center justify-center rounded-xl border border-dashed ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center text-xs ${muted}`}>
+                      Candidate vote data is not available yet.
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className={`mb-3 text-xs font-bold ${textMain}`}>Party vote distribution</h3>
+                  {partyTotals.length ? (
+                    <div className="flex flex-col items-center gap-4 sm:flex-row">
+                      <div className="h-64 w-full sm:w-1/2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={partyTotals}
+                              dataKey="votes"
+                              nameKey="party"
+                              innerRadius={55}
+                              outerRadius={90}
+                              paddingAngle={2}
+                            >
+                              {partyTotals.map((party, index) => (
+                                <Cell key={`${party.party}-${index}`} fill={party.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="w-full space-y-2 sm:w-1/2">
+                        {partyTotals.map((party) => (
+                          <div key={party.party} className="flex items-center justify-between gap-3 rounded-lg border border-slate-700/50 p-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: party.color }} />
+                              <span className={`truncate text-xs font-bold ${textMain}`}>{party.party}</span>
+                            </div>
+                            <span className={`text-xs font-mono font-bold ${muted}`}>
+                              {formatNumber(party.votes)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`flex h-56 items-center justify-center rounded-xl border border-dashed ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center text-xs ${muted}`}>
+                      Party vote data is not available yet.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2">
-              <button 
-                type="button"
-                onClick={handleExportCsv}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition border border-slate-700 cursor-pointer"
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                ['Verified', statusCounts.VERIFIED || 0, 'text-emerald-500'],
+                ['Pending review', statusCounts.PENDING_REVIEW || 0, 'text-blue-500'],
+                ['Flagged', statusCounts.FLAGGED || 0, 'text-red-500'],
+                ['Over-vote marked', statusCounts.OVER_VOTE || 0, 'text-amber-500'],
+              ].map(([label, value, color]) => (
+                <div key={label} className={`rounded-xl border p-3 ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-slate-50'}`}>
+                  <p className={`text-[11px] font-bold ${muted}`}>{label}</p>
+                  <p className={`mt-1 text-xl font-extrabold ${color}`}>{formatNumber(value)}</p>
+                </div>
+              ))}
+            </div>
+            <p className={`text-[10px] ${muted}`}>
+              Status counts above describe the loaded results page. They are not statewide totals unless all relevant records are returned.
+            </p>
+          </section>
+
+          <section className={`${cardClass} rounded-xl p-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setActiveTab('analysis')}
+                  className={`rounded-lg px-3 py-2 text-xs font-bold ${activeTab === 'analysis' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                >
+                  <BarChart3 className="mr-1 inline h-4 w-4" /> Analysis
+                </button>
+                <button
+                  onClick={() => setActiveTab('units')}
+                  className={`rounded-lg px-3 py-2 text-xs font-bold ${activeTab === 'units' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                >
+                  <FileText className="mr-1 inline h-4 w-4" /> Polling unit results
+                </button>
+                <button
+                  onClick={() => setActiveTab('lgas')}
+                  className={`rounded-lg px-3 py-2 text-xs font-bold ${activeTab === 'lgas' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+                >
+                  <TableProperties className="mr-1 inline h-4 w-4" /> LGA breakdown
+                </button>
+              </div>
+
+              <button
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-700"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Export Tribunal CSV</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => setShowManualEntryModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
-              >
-                + Manual Form EC8A Entry
+                <Download className="h-4 w-4 text-emerald-400" />
+                Export current page CSV
               </button>
             </div>
-          </div>
+          </section>
 
-          {/* TAB 1: Polling Unit Results & EC8A Evidence Roster */}
+          {activeTab === 'analysis' && (
+            <section className={`${cardClass} rounded-xl p-4 space-y-3`}>
+              <h2 className={`text-sm font-extrabold ${textMain}`}>Candidate summary</h2>
+              {candidateTotals.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px] text-left text-xs">
+                    <thead>
+                      <tr className={`${isDark ? 'bg-slate-900 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                        <th className="p-3">Position</th>
+                        <th className="p-3">Candidate</th>
+                        <th className="p-3">Party</th>
+                        <th className="p-3 text-right">Votes</th>
+                        <th className="p-3 text-right">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {candidateTotals.map((candidate, index) => (
+                        <tr key={`${candidate.candidate_id}-${index}`} className="border-b border-slate-700/40">
+                          <td className="p-3">{index === 0 ? 'Leading in loaded data' : index === 1 ? 'Next candidate' : 'Candidate'}</td>
+                          <td className={`p-3 font-bold ${textMain}`}>{candidate.candidate_name}</td>
+                          <td className="p-3">{candidate.party_name}</td>
+                          <td className="p-3 text-right font-mono">{formatNumber(candidate.votes)}</td>
+                          <td className="p-3 text-right font-mono">
+                            {totalCandidateVotes
+                              ? `${((candidate.votes / totalCandidateVotes) * 100).toFixed(2)}%`
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={`py-10 text-center text-xs ${muted}`}>
+                  Candidate-level analysis will appear when candidate votes are included in the results data.
+                </p>
+              )}
+            </section>
+          )}
+
           {activeTab === 'units' && (
-            <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
-              <div className={`flex justify-between items-center pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+            <section className={`${cardClass} rounded-xl p-4 space-y-4`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                    Polling Unit EC8A Evidence Roster & Audit Vault
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Click any polling unit to inspect the primary Form EC8A photograph and verify vote tallies
+                  <h2 className={`text-sm font-extrabold ${textMain}`}>Polling unit results</h2>
+                  <p className={`mt-1 text-xs ${muted}`}>
+                    Inspect submitted results and their EC8A evidence.
                   </p>
                 </div>
-                <span className="text-xs font-mono text-slate-400">
-                  Showing {pollingUnitResults.length} of {totalMatchingResults.toLocaleString()} Polling Units
+                <span className={`text-xs ${muted}`}>
+                  Showing {results.length} of {formatNumber(totalResults)}
                 </span>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedLgaId}
+                  onChange={(event) => {
+                    setSelectedLgaId(event.target.value)
+                    setPage(0)
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-xs ${isDark ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-slate-300 bg-white text-slate-800'}`}
+                >
+                  <option value="">All LGAs</option>
+                  {lgas.map((lga) => (
+                    <option key={lga.id} value={lga.id}>{lga.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value)
+                    setPage(0)
+                  }}
+                  className={`rounded-lg border px-3 py-2 text-xs ${isDark ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-slate-300 bg-white text-slate-800'}`}
+                >
+                  <option value="ALL">All statuses</option>
+                  <option value="VERIFIED">Verified</option>
+                  <option value="PENDING_REVIEW">Pending review</option>
+                  <option value="FLAGGED">Flagged</option>
+                  <option value="PENDING_PHOTO">Pending photo</option>
+                </select>
+
+                <div className="relative min-w-[200px] flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => {
+                      setSearchQuery(event.target.value)
+                      setPage(0)
+                    }}
+                    placeholder="Search polling unit..."
+                    className={`w-full rounded-lg border py-2 pl-9 pr-3 text-xs outline-none ${isDark ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-slate-300 bg-white text-slate-800'}`}
+                  />
+                </div>
+
+                <button onClick={resetFilters} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-400 hover:text-white">
+                  <Filter className="mr-1 inline h-4 w-4" /> Clear filters
+                </button>
+              </div>
+
               {loading ? (
-                <div className="py-16 flex flex-col items-center justify-center space-y-3 text-slate-400">
-                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-                  <p className="text-xs font-bold">Querying Polling Unit records from database...</p>
+                <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-500" /> Loading results...
                 </div>
-              ) : pollingUnitResults.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 text-xs">
-                  No polling unit results found matching the selected filters.
-                </div>
-              ) : (
+              ) : results.length ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full min-w-[850px] text-left text-xs">
                     <thead>
-                      <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                        <th className="py-3 px-3">PU Code</th>
-                        <th className="py-3 px-3">Polling Unit Name</th>
-                        <th className="py-3 px-3">Contest</th>
-                        <th className="py-3 px-3">Voters</th>
-                        <th className="py-3 px-3 text-emerald-500 font-bold">PDP</th>
-                        <th className="py-3 px-3 text-blue-500 font-bold">APC</th>
-                        <th className="py-3 px-3 text-purple-500 font-bold">NNPP</th>
-                        <th className="py-3 px-3">Total Cast</th>
-                        <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-3 text-right">EC8A Inspection</th>
+                      <tr className={`${isDark ? 'bg-slate-900 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                        <th className="p-3">PU code</th>
+                        <th className="p-3">Polling unit</th>
+                        <th className="p-3">Contest</th>
+                        <th className="p-3 text-right">Registered voters</th>
+                        <th className="p-3 text-right">Total votes</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Inspect</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                      {pollingUnitResults.map((r) => {
-                        const isOvervoted = r.is_overvote || r.verification_status === 'FLAGGED'
+                    <tbody>
+                      {results.map((result) => {
+                        const status = getStatus(result)
+                        const flagged = status === 'FLAGGED' || result.is_overvote
                         return (
-                          <tr 
-                            key={r.id} 
-                            onClick={() => {
-                              setInspectResult(r)
-                              setActionMessage(null)
-                            }}
-                            className={`cursor-pointer transition group ${
-                              isOvervoted 
-                                ? (isDark ? 'bg-red-950/20 hover:bg-red-950/30' : 'bg-red-50 hover:bg-red-100/60') 
-                                : (isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50')
-                            }`}
-                          >
-                            <td className="py-3 px-3 font-mono font-bold text-slate-400">
-                              {r.polling_unit_code}
+                          <tr key={result.id} className={`border-b ${isDark ? 'border-slate-800 hover:bg-slate-800/40' : 'border-slate-100 hover:bg-slate-50'}`}>
+                            <td className="p-3 font-mono">{result.polling_unit_code || '—'}</td>
+                            <td className={`p-3 font-semibold ${textMain}`}>
+                              {result.polling_unit_name || 'Unnamed polling unit'}
+                              <div className={`mt-1 text-[10px] font-normal ${muted}`}>{result.agent_name || 'Agent not specified'}</div>
                             </td>
-                            <td className="py-3 px-3">
-                              <span className={`font-semibold block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                {r.polling_unit_name}
-                              </span>
-                              <span className="text-[10px] text-slate-500">
-                                Submitting Agent: {r.agent_name || 'Assigned Agent'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
-                                r.election_type === 'SENATORIAL' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
-                                r.election_type === 'HOUSE_OF_REPS' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
-                                r.election_type === 'PRESIDENTIAL' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                                r.election_type === 'STATE_ASSEMBLY' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
-                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            <td className="p-3">{getContestLabel(result.election_type)}</td>
+                            <td className="p-3 text-right font-mono">{formatNumber(result.registered_voters)}</td>
+                            <td className="p-3 text-right font-mono">{formatNumber(result.total_votes_cast)}</td>
+                            <td className="p-3">
+                              <span className={`rounded-md border px-2 py-1 text-[10px] font-bold ${
+                                flagged
+                                  ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                                  : status === 'VERIFIED'
+                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                                    : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
                               }`}>
-                                {r.election_type || 'GOVERNORSHIP'}
+                                {flagged ? 'FLAGGED' : status.replaceAll('_', ' ')}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-slate-400 font-mono">
-                              {r.registered_voters}
-                            </td>
-                            <td className="py-3 px-3 font-extrabold text-emerald-500 text-sm">
-                              {r.pdp_votes}
-                            </td>
-                            <td className="py-3 px-3 font-bold text-blue-500">
-                              {r.apc_votes}
-                            </td>
-                            <td className="py-3 px-3 text-purple-500">
-                              {r.nnpp_votes}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-slate-300">
-                              {r.total_votes_cast}
-                            </td>
-                            <td className="py-3 px-3">
-                              {isOvervoted ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 inline-flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3" /> FLAGGED
-                                </span>
-                              ) : r.verification_status === 'VERIFIED' ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  VERIFIED
-                                </span>
-                              ) : r.verification_status === 'PENDING_REVIEW' ? (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                  PENDING REVIEW
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                  PENDING PHOTO
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 px-3 text-right">
+                            <td className="p-3 text-right">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setInspectResult(r)
+                                onClick={() => {
+                                  setInspectResult(result)
                                   setActionMessage(null)
                                 }}
-                                className="px-3 py-1 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white font-bold text-xs rounded-lg transition inline-flex items-center gap-1.5"
+                                className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 font-bold text-slate-200 hover:bg-emerald-600"
                               >
-                                <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Inspect</span>
+                                <Eye className="h-3.5 w-3.5" /> Inspect
                               </button>
                             </td>
                           </tr>
@@ -659,457 +890,250 @@ export default function ResultsDashboardPage({ contest = null, lockedContest = f
                     </tbody>
                   </table>
                 </div>
+              ) : (
+                <div className={`py-12 text-center text-xs ${muted}`}>
+                  No results found for the selected filters.
+                </div>
               )}
 
-              {/* Pagination Controls */}
-              <div className="flex justify-between items-center pt-3 border-t border-slate-800 text-xs text-slate-400">
-                <span>Page {page + 1} of {totalPages}</span>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between border-t border-slate-700/50 pt-3 text-xs">
+                <span className={muted}>Page {page + 1} of {totalPages}</span>
+                <div className="flex gap-2">
                   <button
-                    disabled={page === 0}
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    disabled={page === 0 || loading}
+                    onClick={() => setPage((current) => Math.max(0, current - 1))}
+                    className="rounded-lg bg-slate-800 p-2 text-slate-300 disabled:opacity-30"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
-                    disabled={page >= totalPages - 1}
-                    onClick={() => setPage(p => p + 1)}
-                    className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    disabled={page >= totalPages - 1 || loading}
+                    onClick={() => setPage((current) => current + 1)}
+                    className="rounded-lg bg-slate-800 p-2 text-slate-300 disabled:opacity-30"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* TAB 2: LGA Collation Breakdown Table */}
           {activeTab === 'lgas' && (
-            <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
-              <div className={`flex justify-between items-center border-b pb-2 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                <div>
-                  <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                    27 LGA Collation Breakdown
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Real-time collation progress and candidate shares across all 27 Jigawa Local Government Areas
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                      <th className="py-2.5 px-3">LGA</th>
-                      <th className="py-2.5 px-3">Collated PUs</th>
-                      <th className="py-2.5 px-3 text-emerald-500 font-bold">PDP Votes</th>
-                      <th className="py-2.5 px-3 text-blue-500 font-bold">APC Votes</th>
-                      <th className="py-2.5 px-3 text-purple-500 font-bold">NNPP Votes</th>
-                      <th className="py-2.5 px-3">Collation %</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                    {lgaCollationTable.map((l, idx) => (
-                      <tr key={idx} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
-                        <td className={`py-3 px-3 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{l.lga}</td>
-                        <td className="py-3 px-3 text-slate-500 font-mono">{l.collatedPus} / {l.totalPus}</td>
-                        <td className="py-3 px-3 font-extrabold text-emerald-500">{l.pdp.toLocaleString()}</td>
-                        <td className="py-3 px-3 font-bold text-blue-500">{l.apc.toLocaleString()}</td>
-                        <td className="py-3 px-3 text-purple-500">{l.nnpp.toLocaleString()}</td>
-                        <td className="py-3 px-3 font-bold font-mono">{l.pct}</td>
+            <section className={`${cardClass} rounded-xl p-4 space-y-3`}>
+              <h2 className={`text-sm font-extrabold ${textMain}`}>LGA breakdown</h2>
+              {lgaBreakdown.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px] text-left text-xs">
+                    <thead>
+                      <tr className={`${isDark ? 'bg-slate-900 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                        <th className="p-3">LGA</th>
+                        <th className="p-3 text-right">Results received</th>
+                        <th className="p-3 text-right">Total votes</th>
+                        <th className="p-3">Leading candidate / party</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                    </thead>
+                    <tbody>
+                      {lgaBreakdown.map((lga, index) => (
+                        <tr key={lga.lga_id ?? lga.id ?? lga.lga ?? index} className="border-b border-slate-700/40">
+                          <td className={`p-3 font-bold ${textMain}`}>{lga.lga_name || lga.lga || lga.name || 'Unnamed LGA'}</td>
+                          <td className="p-3 text-right font-mono">{formatNumber(lga.collated_pus ?? lga.collatedPus ?? lga.results_received)}</td>
+                          <td className="p-3 text-right font-mono">{formatNumber(lga.total_votes ?? lga.totalVotes)}</td>
+                          <td className="p-3">{lga.leading_candidate || lga.leading_party || 'Not available'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={`py-12 text-center text-xs ${muted}`}>
+                  LGA breakdown is not available in the backend response yet.
+                </p>
+              )}
+            </section>
           )}
         </main>
       </div>
 
-      {/* ========================================================================= */}
-      {/* EC8A VERIFICATION INSPECTOR MODAL */}
-      {/* ========================================================================= */}
       {inspectResult && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`${cardClass} w-full max-w-4xl max-h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700`}>
-            {/* Header */}
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white flex flex-wrap items-center gap-2">
-                    <span>{inspectResult.polling_unit_name}</span>
-                    <span className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                      {inspectResult.polling_unit_code}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${
-                      inspectResult.election_type === 'SENATORIAL' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
-                      inspectResult.election_type === 'HOUSE_OF_REPS' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
-                      inspectResult.election_type === 'PRESIDENTIAL' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                      inspectResult.election_type === 'STATE_ASSEMBLY' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' :
-                      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                    }`}>
-                      {inspectResult.election_type || 'GOVERNORSHIP'}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Field Agent: <strong className="text-slate-200">{inspectResult.agent_name}</strong> | Submitted: {inspectResult.created_at ? new Date(inspectResult.created_at).toLocaleString() : 'Live Sync'}
-                  </p>
-                </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm">
+          <div className={`${cardClass} flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-2xl`}>
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900/80 p-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-extrabold text-white">
+                  {inspectResult.polling_unit_name || 'Polling unit result'}
+                </h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  {inspectResult.polling_unit_code || 'No PU code'} · {getContestLabel(inspectResult.election_type)}
+                </p>
               </div>
-              <button 
-                onClick={() => setInspectResult(null)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
-              >
-                <X className="w-5 h-5" />
+              <button onClick={() => setInspectResult(null)} className="rounded-lg bg-slate-800 p-2 text-slate-300 hover:text-white">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Body: Split View (EC8A Photo Vault on Left, Vote Breakdown on Right) */}
-            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Column: Form EC8A Photo Proof */}
+            <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto p-4 md:grid-cols-2">
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Form EC8A Primary Photo Evidence
-                  </span>
-                </div>
-
-                <div className="bg-slate-950 rounded-xl border border-slate-800 p-2 flex items-center justify-center min-h-[350px] overflow-hidden">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">EC8A evidence</h3>
+                <div className="flex min-h-[280px] items-center justify-center overflow-hidden rounded-xl border border-slate-700 bg-slate-950 p-2">
                   {inspectResult.ec8a_photo_url ? (
                     <a href={inspectResult.ec8a_photo_url} target="_blank" rel="noopener noreferrer">
                       <img
                         src={inspectResult.ec8a_photo_url}
-                        alt="Form EC8A result sheet"
-                        className="max-h-[360px] object-contain rounded-lg shadow-lg"
+                        alt="EC8A result sheet"
+                        className="max-h-[420px] rounded-lg object-contain"
                       />
                     </a>
                   ) : (
-                    <div className="text-center space-y-2 px-6">
-                      <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-                      <p className="text-sm font-bold text-amber-400">No Form EC8A photo uploaded</p>
-                      <p className="text-[11px] text-slate-500">
-                        This result cannot be verified until the polling unit agent uploads a photo of the signed result sheet.
-                      </p>
+                    <div className="px-5 text-center text-xs text-slate-400">
+                      <FileText className="mx-auto mb-2 h-9 w-9 text-slate-600" />
+                      No EC8A photo has been attached to this result.
                     </div>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500 italic text-center">
-                  Photographed and signed by PDP Party Agent & INEC Presiding Officer
-                </p>
+                <div className="rounded-xl border border-slate-700/60 p-3 text-xs text-slate-400">
+                  <p>Agent: {inspectResult.agent_name || 'Not specified'}</p>
+                  <p className="mt-1">Submitted: {inspectResult.created_at ? new Date(inspectResult.created_at).toLocaleString() : 'Not available'}</p>
+                  <p className="mt-1">Status: {getStatus(inspectResult).replaceAll('_', ' ')}</p>
+                </div>
               </div>
 
-              {/* Right Column: Vote Tallies & Section 51 Verification */}
               <div className="space-y-4">
-                {/* Action Feedback Banner */}
                 {actionMessage && (
-                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                    actionMessage.type === 'success' 
-                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                      : actionMessage.type === 'warning'
-                      ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
-                      : 'bg-red-500/20 border border-red-500/40 text-red-300'
+                  <div className={`rounded-xl border p-3 text-xs ${
+                    actionMessage.type === 'error'
+                      ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                   }`}>
-                    {actionMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                    <span>{actionMessage.text}</span>
+                    {actionMessage.text}
                   </div>
                 )}
 
-                {/* Over-Voting / Quota Status Alert */}
-                {inspectResult.is_overvote || inspectResult.verification_status === 'FLAGGED' ? (
-                  <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-300 text-xs space-y-1">
-                    <div className="flex items-center gap-2 font-bold text-red-400">
-                      <ShieldAlert className="w-4 h-4 shrink-0" />
-                      <span>SECTION 51 OVER-VOTING BREACH DETECTED</span>
+                <div className="rounded-xl border border-slate-700 p-3">
+                  <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Candidate vote tally</h3>
+                  {getCandidateEntries(inspectResult).length ? (
+                    <div className="space-y-2">
+                      {getCandidateEntries(inspectResult).map((candidate, index) => (
+                        <div key={`${candidate.candidate_id}-${index}`} className="flex items-center justify-between gap-3 border-b border-slate-700/50 pb-2 text-xs">
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-slate-200">{candidate.candidate_name}</p>
+                            <p className="text-[10px] text-slate-400">{candidate.party_name}</p>
+                          </div>
+                          <strong className="font-mono text-sm text-white">{formatNumber(candidate.votes)}</strong>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-[11px] text-slate-300">
-                      Total votes cast (<strong>{inspectResult.total_votes_cast}</strong>) exceeds registered voters (<strong>{inspectResult.registered_voters}</strong>).
-                      Under Electoral Act 2022 Section 51, this result is void and cannot be approved.
+                  ) : (
+                    <p className="py-5 text-center text-xs text-slate-400">
+                      Candidate votes are not included in this result record.
                     </p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>VOTER CAPACITY VERIFIED: Votes cast ({inspectResult.total_votes_cast}) within registered threshold ({inspectResult.registered_voters}).</span>
-                  </div>
-                )}
-
-                {/* Vote Table */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    Recorded Vote Tally
-                  </span>
-                  <div className="bg-slate-900 rounded-xl border border-slate-800 p-3 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-emerald-500 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> PDP (Peoples Democratic Party)
-                      </span>
-                      <strong className="text-base font-mono text-emerald-400 font-extrabold">{inspectResult.pdp_votes}</strong>
+                  )}
+                  <div className="mt-3 space-y-1 border-t border-slate-700 pt-3 text-xs">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Registered voters</span>
+                      <strong>{formatNumber(inspectResult.registered_voters)}</strong>
                     </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-blue-500 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> APC (All Progressives Congress)
-                      </span>
-                      <strong className="text-base font-mono text-blue-400 font-extrabold">{inspectResult.apc_votes}</strong>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Rejected votes</span>
+                      <strong>{formatNumber(inspectResult.rejected_votes)}</strong>
                     </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-purple-500 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> NNPP (New Nigeria Peoples Party)
-                      </span>
-                      <strong className="text-base font-mono text-purple-400">{inspectResult.nnpp_votes}</strong>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-amber-500 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> LP (Labour Party)
-                      </span>
-                      <strong className="text-base font-mono text-amber-400">{inspectResult.lp_votes}</strong>
-                    </div>
-
-                    <div className="border-t border-slate-800 pt-2 flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Rejected Votes:</span>
-                      <span className="font-mono text-slate-400">{inspectResult.rejected_votes || 0}</span>
-                    </div>
-
-                    <div className="border-t border-slate-800 pt-2 flex justify-between items-center text-xs">
-                      <span className="font-bold text-white">Total Votes Cast:</span>
-                      <span className="font-mono text-base font-extrabold text-white">{inspectResult.total_votes_cast}</span>
+                    <div className="flex justify-between font-bold text-white">
+                      <span>Total votes cast</span>
+                      <strong>{formatNumber(inspectResult.total_votes_cast)}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Submitting Agent Remarks */}
-                {inspectResult.notes && (
-                  <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 text-xs">
-                    <span className="text-slate-500 font-bold block mb-1">Field Observation / Remarks:</span>
-                    <p className="text-slate-300 font-mono text-[11px]">{inspectResult.notes}</p>
+                {(inspectResult.is_overvote || getStatus(inspectResult) === 'FLAGGED') && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400">
+                    <ShieldAlert className="mr-2 inline h-4 w-4" />
+                    This result is marked as flagged or over-voted. Review it before taking further action.
                   </div>
                 )}
 
-                {/* Verification Actions */}
-                <div className="pt-2 space-y-2">
-                  <div className="flex gap-2">
-                    <button
-                      disabled={actionLoading || inspectResult.is_overvote || !inspectResult.ec8a_photo_url || inspectResult.verification_status === 'VERIFIED'}
-                      onClick={() => handleApproveResult(inspectResult.id)}
-                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="w-4 h-4" />
-                      )}
-                      <span>
-                        {inspectResult.verification_status === 'VERIFIED'
-                          ? 'Already Verified'
-                          : !inspectResult.ec8a_photo_url
-                            ? 'EC8A Photo Required'
-                            : 'Verify & Approve Result'}
-                      </span>
-                    </button>
-
-                    <button
-                      disabled={actionLoading || inspectResult.verification_status === 'FLAGGED'}
-                      onClick={() => setFlagReasonModal(true)}
-                      className="px-4 py-2.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Flag Discrepancy</span>
-                    </button>
+                {inspectResult.notes && (
+                  <div className="rounded-xl border border-slate-700/60 p-3 text-xs">
+                    <p className="mb-1 font-bold text-slate-400">Agent remarks</p>
+                    <p className="whitespace-pre-wrap text-slate-300">{inspectResult.notes}</p>
                   </div>
-                  {inspectResult.is_overvote && (
-                    <p className="text-[10px] text-red-400 italic text-center">
-                      * Approval is legally disabled due to over-voting breach.
-                    </p>
-                  )}
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    disabled={
+                      actionLoading ||
+                      inspectResult.is_overvote ||
+                      getStatus(inspectResult) === 'FLAGGED' ||
+                      getStatus(inspectResult) === 'VERIFIED' ||
+                      !inspectResult.ec8a_photo_url
+                    }
+                    onClick={() => handleApprove(inspectResult)}
+                    className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {actionLoading ? (
+                      <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="mr-2 inline h-4 w-4" />
+                    )}
+                    {getStatus(inspectResult) === 'VERIFIED'
+                      ? 'Already verified'
+                      : !inspectResult.ec8a_photo_url
+                        ? 'EC8A photo required'
+                        : 'Verify result'}
+                  </button>
+                  <button
+                    disabled={actionLoading || getStatus(inspectResult) === 'FLAGGED'}
+                    onClick={() => setFlagModalOpen(true)}
+                    className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-red-600 hover:text-white disabled:opacity-40"
+                  >
+                    <AlertTriangle className="mr-1 inline h-4 w-4" /> Flag
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/80 flex justify-between items-center text-xs">
-              <span className="text-slate-400">
-                PollWatch 2027 Tribunal Evidence Vault — Section 51 Electoral Act Compliance
-              </span>
-              <button 
-                onClick={() => setInspectResult(null)}
-                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition"
-              >
-                Close Inspector
+            <div className="flex justify-end border-t border-slate-700 bg-slate-900/80 p-3">
+              <button onClick={() => setInspectResult(null)} className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white">
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* FLAG DISCREPANCY REASON MODAL */}
-      {/* ========================================================================= */}
-      {flagReasonModal && (
-        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 border border-red-500/40`}>
-            <div className="flex items-center gap-3 text-red-400">
-              <div className="p-2.5 rounded-xl bg-red-500/20">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-black text-white">Flag Result Discrepancy</h3>
-                <p className="text-xs text-slate-400">
-                  {inspectResult?.polling_unit_name} ({inspectResult?.polling_unit_code})
-                </p>
-              </div>
+      {flagModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className={`${cardClass} w-full max-w-md space-y-4 rounded-2xl p-5`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-extrabold text-white">Flag result for review</h2>
+              <button onClick={() => setFlagModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-
-            <p className="text-xs text-slate-300">
-              Flagging this result quarantines it from collation and writes an audit log event for the PDP legal tribunal team.
+            <p className="text-xs text-slate-400">
+              Enter a reason so the review team can understand why this result was flagged.
             </p>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-400">Reason for Flagging</label>
-              <textarea
-                rows={3}
-                value={flagNotes}
-                onChange={(e) => setFlagNotes(e.target.value)}
-                placeholder="e.g. EC8A figure altered, illegible presiding officer stamp, or BVAS mismatch."
-                className="w-full p-2.5 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-200 outline-none focus:border-red-500"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
+            <textarea
+              value={flagNotes}
+              onChange={(event) => setFlagNotes(event.target.value)}
+              rows={4}
+              placeholder="Describe the discrepancy..."
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-200 outline-none focus:border-red-500"
+            />
+            <div className="flex justify-end gap-2">
               <button
-                type="button"
-                onClick={() => setFlagReasonModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+                onClick={() => setFlagModalOpen(false)}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-slate-300"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                disabled={actionLoading}
-                onClick={handleFlagResult}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-2"
+                disabled={actionLoading || !flagNotes.trim()}
+                onClick={handleFlag}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-40"
               >
-                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
-                Confirm Flag
+                {actionLoading ? 'Submitting...' : 'Confirm flag'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MANUAL EC8A ENTRY MODAL */}
-      {/* ========================================================================= */}
-      {showManualEntryModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4`}>
-            <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-              <h3 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <FileText className="w-4 h-4 text-emerald-500" /> Form EC8A Manual Vote Entry
-              </h3>
-              <button onClick={() => setShowManualEntryModal(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              const f = e.target;
-              try {
-                const submitted = await apiFetch('/results/submit', {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    polling_unit_id: Number(f.polling_unit_id.value),
-                    election_type: f.election_type.value,
-                    pdp_votes: Number(f.pdp_votes.value),
-                    apc_votes: Number(f.apc_votes.value),
-                    nnpp_votes: Number(f.nnpp_votes.value),
-                    lp_votes: Number(f.lp_votes.value),
-                    rejected_votes: Number(f.rejected_votes.value || 0),
-                    notes: f.notes.value || 'Manual entry from Situation Room'
-                  })
-                });
-                const photo = f.ec8a_photo.files[0];
-                if (photo) {
-                  await uploadEc8aPhoto(submitted.id, photo);
-                }
-                alert(
-                  `Form EC8A ${f.election_type.value} result recorded` +
-                  (photo ? ' with photo; it is now awaiting review.' : '. Upload the EC8A photo before it can be verified.')
-                );
-                setShowManualEntryModal(false);
-                loadResults();
-              } catch (err) {
-                alert('Error submitting EC8A votes: ' + err.message);
-              }
-            }} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Target Polling Unit ID</label>
-                <input required name="polling_unit_id" type="number" min="1" placeholder="Enter PU ID" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Election Contest / Category</label>
-                <select 
-                  name="election_type" 
-                  defaultValue={electionType !== 'ALL' ? electionType : 'GOVERNORSHIP'}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none font-bold"
-                >
-                  <option value="GOVERNORSHIP">🗳️ Governorship Election</option>
-                  <option value="SENATORIAL">🏛️ Senatorial Election (Senate)</option>
-                  <option value="HOUSE_OF_REPS">🏛️ House of Representatives</option>
-                  <option value="PRESIDENTIAL">🇳🇬 Presidential Election</option>
-                  <option value="STATE_ASSEMBLY">📜 State House of Assembly</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold mb-1 text-emerald-500">PDP Votes</label>
-                  <input required name="pdp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1 text-blue-500">APC Votes</label>
-                  <input required name="apc_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold mb-1 text-purple-500">NNPP Votes</label>
-                  <input required name="nnpp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1 text-amber-500">LP Votes</label>
-                  <input required name="lp_votes" type="number" min="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Rejected Votes</label>
-                <input name="rejected_votes" type="number" min="0" placeholder="0" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Form EC8A Photo (required for verification)</label>
-                <input name="ec8a_photo" type="file" accept="image/jpeg,image/png,image/webp" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-300 outline-none file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-slate-700 file:text-slate-200" />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1 text-slate-400">Remarks / Hotline Notes</label>
-                <input name="notes" type="text" placeholder="e.g. Telephoned from Gumel ward collation" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none" />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowManualEntryModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-500">Submit EC8A Votes</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
