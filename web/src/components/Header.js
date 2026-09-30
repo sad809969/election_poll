@@ -1,14 +1,16 @@
 import { Search, Bell, Mail, Sun, Moon, Shield, Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/router'
 import { useTheme } from '../pages/_app'
 import { getCurrentUser } from '../lib/api'
 import { canonicalRole } from '../lib/access'
 
 export default function Header({
-  title = "Dashboard",
-  subtitle = "Overview of election activities across Jigawa State"
+  title = 'Dashboard',
+  subtitle = 'Overview of election activities across Jigawa State'
 }) {
   const { theme, toggleTheme, toggleMobile } = useTheme()
+  const router = useRouter()
   const isDark = theme === 'dark'
 
   const [user, setUser] = useState(null)
@@ -18,13 +20,9 @@ export default function Header({
       setUser(getCurrentUser())
     }
 
-    // Load the currently signed-in user.
     loadUser()
 
-    // Refresh the user when returning to the page.
     window.addEventListener('focus', loadUser)
-
-    // Refresh when another tab updates the login session.
     window.addEventListener('storage', loadUser)
 
     return () => {
@@ -48,6 +46,12 @@ export default function Header({
     .map((part) => part[0].toUpperCase())
     .join('') || 'U'
 
+  const controlClass = `p-2 rounded-lg transition ${
+    isDark
+      ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+  }`
+
   return (
     <header
       className={`h-16 border-b px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-colors duration-200 ${
@@ -57,7 +61,7 @@ export default function Header({
       }`}
     >
       {/* Title, logo and mobile menu */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={toggleMobile}
           className={`lg:hidden p-2 rounded-lg border transition ${
@@ -77,14 +81,14 @@ export default function Header({
           className="w-8 h-8 object-contain drop-shadow"
         />
 
-        <div>
-          <h1 className="text-sm sm:text-base font-bold tracking-tight">
+        <div className="min-w-0">
+          <h1 className="text-sm sm:text-base font-bold tracking-tight truncate">
             {title}
           </h1>
 
           {subtitle && (
             <p
-              className={`text-[11px] sm:text-xs font-medium hidden sm:block ${
+              className={`text-[11px] sm:text-xs font-medium hidden sm:block truncate ${
                 isDark ? 'text-slate-400' : 'text-slate-500'
               }`}
             >
@@ -103,6 +107,7 @@ export default function Header({
           <input
             type="text"
             placeholder="Search anything..."
+            aria-label="Search"
             className={`w-full pl-9 pr-4 py-1.5 rounded-lg text-xs outline-none transition border ${
               isDark
                 ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500 focus:border-pdp'
@@ -137,32 +142,24 @@ export default function Header({
 
         {/* Notifications */}
         <button
-          className={`relative p-2 rounded-lg transition ${
-            isDark
-              ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-          }`}
+          onClick={() => router.push('/notifications')}
+          className={controlClass}
           aria-label="Notifications"
+          title="View Notifications"
+          type="button"
         >
           <Bell className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center">
-            12
-          </span>
         </button>
 
         {/* Messages */}
         <button
-          className={`relative p-2 rounded-lg transition hidden sm:block ${
-            isDark
-              ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-          }`}
+          onClick={() => router.push('/communication')}
+          className={`${controlClass} hidden sm:block`}
           aria-label="Messages"
+          title="Open Communication Centre"
+          type="button"
         >
           <Mail className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center">
-            5
-          </span>
         </button>
 
         {/* Signed-in user profile */}

@@ -1,13 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
 import { apiFetch } from '../lib/api'
-import { 
-  Building2, 
-  Award, 
-  FileText, 
-  ShieldCheck, 
+import {
+  Building2,
   Search,
   ChevronDown,
   ChevronRight,
@@ -15,14 +12,88 @@ import {
   AlertTriangle,
   X,
   Eye,
-  ShieldAlert,
+  ShieldCheck,
   Loader2,
   Check,
-  Calendar,
-  User,
   ArrowRight,
-  Download
+  Download,
+  Users,
+  RefreshCw,
+  MapPin,
+  Trophy,
 } from 'lucide-react'
+
+const number = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const formatNumber = (value) => number(value).toLocaleString()
+
+const getArray = (value, keys = []) => {
+  if (Array.isArray(value)) return value
+  for (const key of keys) {
+    if (Array.isArray(value?.[key])) return value[key]
+  }
+  return []
+}
+
+const getCandidateName = (candidate) =>
+  candidate?.candidate_name ||
+  candidate?.name ||
+  candidate?.full_name ||
+  candidate?.candidate?.name ||
+  'Unnamed candidate'
+
+const getPartyName = (candidate) =>
+  candidate?.party_name ||
+  candidate?.party ||
+  candidate?.party?.name ||
+  candidate?.party?.acronym ||
+  'Party not provided'
+
+const getCandidateVotes = (candidate) =>
+  number(
+    candidate?.votes ??
+    candidate?.total_votes ??
+    candidate?.vote_count ??
+    candidate?.votes_received
+  )
+
+const getCandidates = (source) => {
+  const candidates = getArray(source, [
+    'candidates',
+    'candidate_results',
+    'candidate_votes',
+    'contestants',
+  ])
+
+  return candidates
+    .map((candidate, index) => ({
+      id: candidate?.candidate_id ?? candidate?.id ?? index,
+      name: getCandidateName(candidate),
+      party: getPartyName(candidate),
+      votes: getCandidateVotes(candidate),
+      raw: candidate,
+    }))
+    .filter((candidate) => candidate.name !== 'Unnamed candidate' || candidate.votes > 0)
+    .sort((a, b) => b.votes - a.votes)
+}
+
+const getStatus = (item, signoff) => {
+  if (signoff?.status === 'SIGNED' || signoff?.is_signed) {
+    return 'Signed Off'
+  }
+
+  const collated = number(item?.collated_pus ?? item?.collatedPus)
+  const total = number(item?.total_pus ?? item?.totalPus)
+
+  if (total > 0 && collated >= total) return 'Ready for Sign-off'
+  if (collated > 0) return 'In Progress'
+  return 'Pending'
+}
+
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
 export default function CollationCenterPage() {
   const { theme } = useTheme()
@@ -32,894 +103,972 @@ export default function CollationCenterPage() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Backend Data
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [lgas, setLgas] = useState([])
   const [lgaBreakdown, setLgaBreakdown] = useState([])
   const [signoffs, setSignoffs] = useState([])
   const [summaryData, setSummaryData] = useState(null)
 
-  // Drill-down Modal State
   const [inspectLgaId, setInspectLgaId] = useState(null)
   const [lgaDrilldownData, setLgaDrilldownData] = useState(null)
   const [loadingDrilldown, setLoadingDrilldown] = useState(false)
+  const [drilldownError, setDrilldownError] = useState('')
   const [expandedWards, setExpandedWards] = useState({})
 
-  // EC8C Sign-off Action State
   const [showSignoffConfirm, setShowSignoffConfirm] = useState(false)
   const [signoffNotes, setSignoffNotes] = useState('')
   const [signingOff, setSigningOff] = useState(false)
   const [signoffSuccessMsg, setSignoffSuccessMsg] = useState('')
-
-  // EC8A Photo Preview Modal
+  const [signoffError, setSignoffError] = useState('')
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState(null)
 
-  // 1. Initial Load of LGA Collation Data
-  const fetchAllData = async () => {
-    try {
-      setLoading(true)
-      const [resultsRes, lgasRes, signoffsRes] = await Promise.allSettled([
-        apiFetch('/results'),
-        apiFetch('/electoral/lgas'),
-        apiFetch('/collation/signoffs?level=LGA')
-      ])
+  const cardClass = isDark
+    ? 'bg-[#141E38] border border-slate-800'
+    : 'bg-white border border-slate-200 shadow-sm'
 
-      if (resultsRes.status === 'fulfilled' && resultsRes.value) {
-        if (resultsRes.value.lga_breakdown) {
-          setLgaBreakdown(resultsRes.value.lga_breakdown)
-        }
-        if (resultsRes.value.summary) {
-          setSummaryData(resultsRes.value.summary)
-        }
-      }
+  const mutedText = isDark ? 'text-slate-400' : 'text-slate-500'
+  const inputClass = `rounded-lg border px-3 py-2 text-xs outline-none ${
+    isDark
+      ? 'bg-slate-900 border-slate-700 text-slate-200'
+      : 'bg-white border-slate-300 text-slate-900'
+  }`
 
-      if (lgasRes.status === 'fulfilled' && Array.isArray(lgasRes.value)) {
-        setLgas(lgasRes.value)
-      }
+  const fetchAllData = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
 
-      if (signoffsRes.status === 'fulfilled' && Array.isArray(signoffsRes.value)) {
-        setSignoffs(signoffsRes.value)
-      }
-    } catch (e) {
-      console.error('Failed to load collation data:', e)
-    } finally {
-      setLoading(false)
+    const [resultsRes, lgasRes, signoffsRes] = await Promise.allSettled([
+      apiFetch('/results'),
+      apiFetch('/electoral/lgas'),
+      apiFetch('/collation/signoffs?level=LGA'),
+    ])
+
+    if (resultsRes.status === 'fulfilled') {
+      const response = resultsRes.value || {}
+      setLgaBreakdown(
+        getArray(response, ['lga_breakdown', 'lgas', 'items'])
+      )
+      setSummaryData(response.summary || null)
+    } else {
+      setLoadError(resultsRes.reason?.message || 'Could not load collation results.')
     }
-  }
+
+    if (lgasRes.status === 'fulfilled') {
+      setLgas(getArray(lgasRes.value, ['lgas', 'items']))
+    }
+
+    if (signoffsRes.status === 'fulfilled') {
+      setSignoffs(getArray(signoffsRes.value, ['signoffs', 'items']))
+    }
+
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     fetchAllData()
-  }, [])
+  }, [fetchAllData])
 
-  // Map signoffs by LGA ID for quick status resolution
   const signoffMap = useMemo(() => {
     const map = {}
-    signoffs.forEach(s => {
-      if (s.level === 'LGA') {
-        map[s.entity_id] = s
+    signoffs.forEach((signoff) => {
+      if (signoff?.level === 'LGA' && signoff?.entity_id != null) {
+        map[String(signoff.entity_id)] = signoff
       }
     })
     return map
   }, [signoffs])
 
-  // Merge LGA list with Results & Sign-offs
   const mergedLgaData = useMemo(() => {
-    // If backend returns breakdown, use it as baseline
-    if (lgaBreakdown.length > 0) {
-      return lgaBreakdown.map(item => {
-        const signoff = item.id ? signoffMap[item.id] : null
-        const isSigned = Boolean(signoff && signoff.status === 'SIGNED')
-        const collated = item.collatedPus || 0
-        const total = item.totalPus || 1
+    const source = lgaBreakdown.length
+      ? lgaBreakdown
+      : lgas.map((lga) => ({
+          id: lga.id,
+          lga: lga.name,
+          name: lga.name,
+          total_pus: lga.total_polling_units || 0,
+          collated_pus: 0,
+        }))
 
-        let ec8cStatus = 'Pending'
-        if (isSigned) {
-          ec8cStatus = 'Verified & Signed'
-        } else if (collated === total && total > 0) {
-          ec8cStatus = 'Ready for Sign-off'
-        } else if (collated > 0) {
-          ec8cStatus = 'In Progress'
-        }
+    return source.map((item, index) => {
+      const id = item.id ?? item.lga_id ?? null
+      const name = item.lga || item.lga_name || item.name || 'Unnamed LGA'
+      const signoff = id == null ? null : signoffMap[String(id)]
+      const totalPus = number(item.total_pus ?? item.totalPus)
+      const collatedPus = number(item.collated_pus ?? item.collatedPus)
+      const pctValue = Number(item.pct ?? item.collation_percentage)
+      const pct = Number.isFinite(pctValue)
+        ? Math.max(0, Math.min(100, pctValue))
+        : totalPus > 0
+          ? Math.round((collatedPus / totalPus) * 100)
+          : 0
 
-        return {
-          id: item.id,
-          lga: item.lga,
-          totalPus: item.totalPus,
-          collatedPus: item.collatedPus,
-          pct: parseInt(item.pct) || (item.totalPus ? Math.round((item.collatedPus / item.totalPus) * 100) : 0),
-          pdp: item.pdp || 0,
-          apc: item.apc || 0,
-          nnpp: item.nnpp || 0,
-          lp: item.lp || 0,
-          isSigned,
-          signoff,
-          ec8cStatus,
-        }
-      })
-    }
+      const candidates = getCandidates(item)
+      const totalVotes = number(item.total_votes) ||
+        candidates.reduce((sum, candidate) => sum + candidate.votes, 0)
 
-    // Fallback if results breakdown is loading
-    return lgas.map(l => {
-      const signoff = signoffMap[l.id]
       return {
-        id: l.id,
-        lga: l.name,
-        totalPus: l.total_polling_units || 0,
-        collatedPus: 0,
-        pct: 0,
-        pdp: 0,
-        apc: 0,
-        nnpp: 0,
-        lp: 0,
-        isSigned: Boolean(signoff && signoff.status === 'SIGNED'),
+        id: id ?? `lga-${index}`,
+        name,
+        totalPus,
+        collatedPus,
+        pct,
+        candidates,
+        totalVotes,
         signoff,
-        ec8cStatus: 'Pending',
+        status: getStatus(item, signoff),
+        raw: item,
       }
     })
   }, [lgaBreakdown, lgas, signoffMap])
 
-  // Computed KPIs
-  const totalLgasCount = mergedLgaData.length || 27
-  const signedOffCount = mergedLgaData.filter(d => d.isSigned).length
-  const totalPdpVotes = summaryData?.pdp_votes ?? mergedLgaData.reduce((acc, d) => acc + d.pdp, 0)
-  const totalApcVotes = summaryData?.apc_votes ?? mergedLgaData.reduce((acc, d) => acc + d.apc, 0)
-  const leadMargin = totalPdpVotes - totalApcVotes
-  const verifiedPus = summaryData?.collated_pus ?? mergedLgaData.reduce((acc, d) => acc + d.collatedPus, 0)
-  const totalPus = summaryData?.total_ec8a ?? mergedLgaData.reduce((acc, d) => acc + d.totalPus, 0)
-
-  // Filtered List
   const filteredData = useMemo(() => {
-    return mergedLgaData.filter(d => {
-      const matchesLga = selectedLgaFilter === 'All' || d.lga === selectedLgaFilter
-      const matchesSearch = d.lga.toLowerCase().includes(searchQuery.toLowerCase())
-      let matchesStatus = true
-      if (statusFilter === 'Signed') matchesStatus = d.isSigned
-      if (statusFilter === 'Pending') matchesStatus = !d.isSigned
-      if (statusFilter === 'Ready') matchesStatus = d.ec8cStatus === 'Ready for Sign-off'
+    const query = searchQuery.trim().toLowerCase()
+
+    return mergedLgaData.filter((item) => {
+      const matchesLga =
+        selectedLgaFilter === 'All' || item.name === selectedLgaFilter
+
+      const matchesSearch =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        item.candidates.some(
+          (candidate) =>
+            candidate.name.toLowerCase().includes(query) ||
+            candidate.party.toLowerCase().includes(query)
+        )
+
+      const matchesStatus =
+        statusFilter === 'All' ||
+        (statusFilter === 'Signed' && item.status === 'Signed Off') ||
+        (statusFilter === 'Ready' && item.status === 'Ready for Sign-off') ||
+        (statusFilter === 'Pending' && item.status === 'Pending') ||
+        (statusFilter === 'Progress' && item.status === 'In Progress')
+
       return matchesLga && matchesSearch && matchesStatus
     })
-  }, [mergedLgaData, selectedLgaFilter, statusFilter, searchQuery])
+  }, [mergedLgaData, selectedLgaFilter, searchQuery, statusFilter])
 
-  // 2. Open LGA Hierarchical Drill-down Modal
-  const handleOpenDrilldown = async (lgaItem) => {
-    let lgaId = lgaItem.id
-    // If ID is missing, lookup by name from lgas array
-    if (!lgaId) {
-      const matched = lgas.find(l => l.name.toLowerCase() === lgaItem.lga.toLowerCase())
-      lgaId = matched ? matched.id : null
+  const activeCount = mergedLgaData.filter((item) => item.collatedPus > 0).length
+  const signedOffCount = mergedLgaData.filter(
+    (item) => item.status === 'Signed Off'
+  ).length
+  const totalPus = number(
+    summaryData?.total_pus ?? summaryData?.total_ec8a
+  ) || mergedLgaData.reduce((sum, item) => sum + item.totalPus, 0)
+  const collatedPus = number(
+    summaryData?.collated_pus
+  ) || mergedLgaData.reduce((sum, item) => sum + item.collatedPus, 0)
+
+  const handleOpenDrilldown = async (item) => {
+    let lgaId = item.raw?.id ?? item.raw?.lga_id ?? item.id
+
+    if (String(lgaId).startsWith('lga-')) {
+      const match = lgas.find(
+        (lga) => lga.name?.toLowerCase() === item.name.toLowerCase()
+      )
+      lgaId = match?.id
     }
 
-    if (!lgaId) {
-      alert(`Could not resolve LGA ID for ${lgaItem.lga}`)
+    if (lgaId == null) {
+      setDrilldownError(`No LGA ID is available for ${item.name}.`)
+      setInspectLgaId('unavailable')
+      setLgaDrilldownData(null)
       return
     }
 
     setInspectLgaId(lgaId)
+    setLgaDrilldownData(null)
+    setDrilldownError('')
     setLoadingDrilldown(true)
-    setSignoffSuccessMsg('')
     setExpandedWards({})
+    setSignoffSuccessMsg('')
+    setSignoffError('')
 
     try {
-      const drillData = await apiFetch(`/collation/lga/${lgaId}`)
-      setLgaDrilldownData(drillData)
-      // Auto-expand the first ward for instant inspection
-      if (drillData?.wards?.length > 0) {
-        setExpandedWards({ [drillData.wards[0].id]: true })
+      const data = await apiFetch(`/collation/lga/${lgaId}`)
+      setLgaDrilldownData(data)
+
+      const wards = getArray(data, ['wards'])
+      if (wards.length > 0 && wards[0]?.id != null) {
+        setExpandedWards({ [wards[0].id]: true })
       }
-    } catch (e) {
-      console.error('Failed to load LGA drilldown:', e)
-      alert(`Failed to load LGA drilldown: ${e.message}`)
+    } catch (error) {
+      setDrilldownError(error.message || 'Failed to load this collation centre.')
     } finally {
       setLoadingDrilldown(false)
     }
   }
 
-  // 3. Toggle Ward Expansion
   const toggleWard = (wardId) => {
-    setExpandedWards(prev => ({
-      ...prev,
-      [wardId]: !prev[wardId]
+    setExpandedWards((previous) => ({
+      ...previous,
+      [wardId]: !previous[wardId],
     }))
   }
 
-  // 4. Submit Form EC8C Sign-off
   const handleSignoffSubmit = async () => {
-    if (!inspectLgaId) return
+    if (inspectLgaId == null || inspectLgaId === 'unavailable') return
+
     setSigningOff(true)
+    setSignoffError('')
     setSignoffSuccessMsg('')
 
     try {
-      const res = await apiFetch('/collation/signoff', {
+      const response = await apiFetch('/collation/signoff', {
         method: 'POST',
         body: JSON.stringify({
           level: 'LGA',
           entity_id: inspectLgaId,
-          notes: signoffNotes.trim() || 'Form EC8C verified and signed off at LGA Collation Center.',
-          status: 'SIGNED'
-        })
+          notes: signoffNotes.trim(),
+          status: 'SIGNED',
+        }),
       })
 
-      setSignoffSuccessMsg(`Form EC8C successfully signed off for ${res.entity_name}! Audit log generated.`)
+      setSignoffSuccessMsg(
+        `Sign-off recorded${response?.entity_name ? ` for ${response.entity_name}` : ''}.`
+      )
       setShowSignoffConfirm(false)
       setSignoffNotes('')
 
-      // Refresh drilldown and master collation data
-      const updatedDrill = await apiFetch(`/collation/lga/${inspectLgaId}`)
-      setLgaDrilldownData(updatedDrill)
-      fetchAllData()
-    } catch (err) {
-      alert(`Collation Sign-off failed: ${err.message}`)
+      const updated = await apiFetch(`/collation/lga/${inspectLgaId}`)
+      setLgaDrilldownData(updated)
+      await fetchAllData()
+    } catch (error) {
+      setSignoffError(error.message || 'Sign-off failed.')
     } finally {
       setSigningOff(false)
     }
   }
 
-  // Export Form EC8D State Collation Summary CSV
-  const handleExportCollationCsv = () => {
-    if (!filteredData || filteredData.length === 0) {
-      alert('No collation records to export.')
+  const handleExportCsv = () => {
+    if (!filteredData.length) {
+      alert('There are no collation records to export.')
       return
     }
-    const headers = ['LGA Name', 'Total Polling Units', 'Collated Units', 'PDP Votes', 'APC Votes', 'NNPP Votes', 'LP Votes', 'Collation %', 'Form EC8C Status', 'Certified By', 'Certified At']
-    const rows = filteredData.map(d => [
-      `"${d.lga}"`,
-      d.totalPus,
-      d.collatedPus,
-      d.pdp,
-      d.apc,
-      d.nnpp,
-      d.lp,
-      `"${d.pct}%"`,
-      `"${d.ec8cStatus}"`,
-      `"${d.signoff?.signer_name || 'N/A'}"`,
-      `"${d.signoff?.signed_at ? new Date(d.signoff.signed_at).toLocaleString() : 'N/A'}"`
-    ])
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
-    const encodedUri = encodeURI(csvContent)
+
+    const rows = [
+      [
+        'LGA',
+        'Candidate',
+        'Party',
+        'Candidate Votes',
+        'LGA Total Votes',
+        'Collated Polling Units',
+        'Total Polling Units',
+        'Collation Percentage',
+        'Collation Status',
+      ],
+    ]
+
+    filteredData.forEach((item) => {
+      if (item.candidates.length) {
+        item.candidates.forEach((candidate) => {
+          rows.push([
+            item.name,
+            candidate.name,
+            candidate.party,
+            candidate.votes,
+            item.totalVotes,
+            item.collatedPus,
+            item.totalPus,
+            `${item.pct}%`,
+            item.status,
+          ])
+        })
+      } else {
+        rows.push([
+          item.name,
+          'Candidate data unavailable',
+          '',
+          '',
+          item.totalVotes,
+          item.collatedPus,
+          item.totalPus,
+          `${item.pct}%`,
+          item.status,
+        ])
+      }
+    })
+
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `jigawa_pdp_lga_collation_summary_${new Date().toISOString().slice(0, 10)}.csv`)
+
+    link.href = url
+    link.download = `collation_centres_${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
+    link.remove()
+    URL.revokeObjectURL(url)
   }
 
-  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
+  const closeInspector = () => {
+    if (signingOff) return
+    setInspectLgaId(null)
+    setLgaDrilldownData(null)
+    setShowSignoffConfirm(false)
+    setSignoffNotes('')
+    setSignoffError('')
+  }
+
+  const renderCandidates = (candidates, compact = false) => {
+    if (!candidates?.length) {
+      return (
+        <p className="text-xs text-slate-500 italic">
+          Candidate information has not been provided by the backend.
+        </p>
+      )
+    }
+
+    const leaderVotes = candidates[0]?.votes
+
+    return (
+      <div className="space-y-2">
+        {candidates.map((candidate, index) => (
+          <div
+            key={`${candidate.id}-${index}`}
+            className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${
+              isDark
+                ? 'border-slate-800 bg-slate-950/40'
+                : 'border-slate-200 bg-slate-50'
+            }`}
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold">
+                  {candidate.name}
+                </span>
+                {index === 0 && candidate.votes > 0 && (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold text-emerald-500">
+                    Currently leading
+                  </span>
+                )}
+              </div>
+              <p className={`mt-1 text-[10px] ${mutedText}`}>
+                {candidate.party}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-extrabold">
+                {formatNumber(candidate.votes)}
+              </p>
+              {!compact && leaderVotes > 0 && (
+                <p className={`text-[10px] ${mutedText}`}>
+                  {((candidate.votes / candidates.reduce(
+                    (sum, entry) => sum + entry.votes,
+                    0
+                  )) * 100).toFixed(1)}% of listed votes
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+        <p className="text-[10px] text-slate-500">
+          Leadership is based only on the candidate totals currently supplied.
+          It is not a declaration of an official result.
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
-      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
-    }`}>
+    <div
+      className={`flex h-screen overflow-hidden font-sans transition-colors ${
+        isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
+      }`}
+    >
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Header 
-          title="Collation Center & Verification Engine" 
-          subtitle="Hierarchical result collation (State -> LGA -> Ward -> Polling Unit) and Form EC8B/EC8C audit" 
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <Header
+          title="Collation Centre"
+          subtitle="LGA collation progress, candidate identification, result review and EC8C sign-off"
         />
 
-        <main className="p-6 space-y-6">
-          {/* Top KPI Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`${cardClass} rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-slate-400">Total LGAs Collated</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {mergedLgaData.filter(d => d.collatedPus > 0).length} <span className="text-xs text-emerald-500">/ {totalLgasCount}</span>
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {((mergedLgaData.filter(d => d.collatedPus > 0).length / totalLgasCount) * 100).toFixed(1)}% LGAs actively collating
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><Building2 className="w-6 h-6" /></div>
+        <main className="space-y-6 p-4 md:p-6">
+          {loadError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-500">
+              <span>{loadError}</span>
+              <button
+                onClick={fetchAllData}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 font-bold"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Retry
+              </button>
             </div>
+          )}
 
-            <div className={`${cardClass} border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-emerald-500">PDP Statewide Lead</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${leadMargin >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                  {leadMargin >= 0 ? `+${leadMargin.toLocaleString()}` : leadMargin.toLocaleString()}
-                </h3>
-                <p className="text-[10px] text-emerald-500 mt-0.5">
-                  PDP {totalPdpVotes.toLocaleString()} vs APC {totalApcVotes.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><Award className="w-6 h-6" /></div>
-            </div>
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: 'LGAs with received results',
+                value: `${activeCount} / ${mergedLgaData.length}`,
+                note: 'Based on available collation data',
+                icon: Building2,
+                color: 'text-emerald-500',
+              },
+              {
+                label: 'Polling units collated',
+                value: `${formatNumber(collatedPus)} / ${formatNumber(totalPus)}`,
+                note: totalPus > 0
+                  ? `${((collatedPus / totalPus) * 100).toFixed(1)}% of listed units`
+                  : 'Polling-unit totals unavailable',
+                icon: MapPin,
+                color: 'text-blue-500',
+              },
+              {
+                label: 'EC8C sign-offs',
+                value: `${signedOffCount} / ${mergedLgaData.length}`,
+                note: 'Recorded LGA sign-offs',
+                icon: ShieldCheck,
+                color: 'text-amber-500',
+              },
+              {
+                label: 'Collation centres listed',
+                value: formatNumber(mergedLgaData.length),
+                note: 'LGA records returned by the backend',
+                icon: Users,
+                color: 'text-purple-500',
+              },
+            ].map((metric) => {
+              const Icon = metric.icon
+              return (
+                <div
+                  key={metric.label}
+                  className={`${cardClass} flex items-center justify-between rounded-xl p-4`}
+                >
+                  <div>
+                    <p className={`text-xs font-bold ${mutedText}`}>
+                      {metric.label}
+                    </p>
+                    <h3 className="mt-1 text-xl font-extrabold">
+                      {metric.value}
+                    </h3>
+                    <p className={`mt-1 text-[10px] ${mutedText}`}>
+                      {metric.note}
+                    </p>
+                  </div>
+                  <div className={`rounded-xl bg-slate-500/10 p-3 ${metric.color}`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                </div>
+              )
+            })}
+          </section>
 
-            <div className={`${cardClass} border-blue-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-blue-500">Verified Polling Units</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {verifiedPus.toLocaleString()} <span className="text-xs text-blue-500">/ {totalPus.toLocaleString()}</span>
-                </h3>
-                <p className="text-[10px] text-blue-500 mt-0.5">
-                  {totalPus ? ((verifiedPus / totalPus) * 100).toFixed(1) : 0}% Form EC8A returned
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-500"><FileText className="w-6 h-6" /></div>
-            </div>
-
-            <div className={`${cardClass} border-amber-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
-              <div>
-                <span className="text-xs font-bold text-amber-500">EC8C LGA Sign-offs</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {signedOffCount} <span className="text-xs text-amber-500">/ {totalLgasCount} LGAs</span>
-                </h3>
-                <p className="text-[10px] text-amber-500 mt-0.5">Form EC8C Returning Officer Sign-offs</p>
-              </div>
-              <div className="p-3 rounded-xl bg-amber-500/20 text-amber-500"><ShieldCheck className="w-6 h-6" /></div>
-            </div>
-          </div>
-
-          {/* Filter Bar */}
-          <div className={`${cardClass} rounded-xl p-4 flex flex-wrap justify-between items-center gap-3`}>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Filter LGA:</span>
-                <select 
+          <section className={`${cardClass} rounded-xl p-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <select
                   value={selectedLgaFilter}
-                  onChange={(e) => setSelectedLgaFilter(e.target.value)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border transition ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}
+                  onChange={(event) => setSelectedLgaFilter(event.target.value)}
+                  className={inputClass}
                 >
-                  <option value="All">All 27 Jigawa LGAs</option>
-                  {lgas.map(l => (
-                    <option key={l.id} value={l.name}>{l.name}</option>
+                  <option value="All">All LGAs</option>
+                  {lgas.map((lga) => (
+                    <option key={lga.id} value={lga.name}>
+                      {lga.name}
+                    </option>
                   ))}
                 </select>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Status:</span>
-                <select 
+                <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg outline-none border transition ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className={inputClass}
+                >
+                  <option value="All">All statuses</option>
+                  <option value="Signed">Signed off</option>
+                  <option value="Ready">Ready for sign-off</option>
+                  <option value="Progress">In progress</option>
+                  <option value="Pending">Pending</option>
+                </select>
+
+                <button
+                  onClick={fetchAllData}
+                  disabled={loading}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'
                   }`}
                 >
-                  <option value="All">All Statuses</option>
-                  <option value="Signed">Signed Off (EC8C)</option>
-                  <option value="Ready">Ready for Sign-off</option>
-                  <option value="Pending">Pending Sign-off</option>
-                </select>
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search LGA or candidate..."
+                    className={`${inputClass} w-64 pl-8`}
+                  />
+                </div>
+                <button
+                  onClick={handleExportCsv}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
+                >
+                  <Download className="h-3.5 w-3.5 text-emerald-400" />
+                  Export CSV
+                </button>
               </div>
             </div>
+          </section>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search LGA name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border transition ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Collation Master Table */}
-          <div className={`${cardClass} rounded-xl p-5 shadow-sm space-y-4`}>
-            <div className={`flex justify-between items-center pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+          <section className={`${cardClass} overflow-hidden rounded-xl`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/20 p-5">
               <div>
-                <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                  LGA Collation Progress & EC8C Verification Roster
+                <h3 className="text-sm font-bold">
+                  Collation Centres and Candidate Results
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Click on any LGA row to open the hierarchical Ward & Polling Unit drill-down inspector
+                <p className={`mt-1 text-[11px] ${mutedText}`}>
+                  Select a centre to inspect its wards, polling units, candidates and available results.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleExportCollationCsv}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-lg transition border border-slate-700 inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Export EC8D Summary CSV</span>
-                </button>
-                <span className="text-xs font-mono text-slate-400">Showing {filteredData.length} of {totalLgasCount} LGAs</span>
-              </div>
+              <span className={`text-xs ${mutedText}`}>
+                Showing {filteredData.length} of {mergedLgaData.length} LGAs
+              </span>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                    <th className="py-3 px-3">LGA</th>
-                    <th className="py-3 px-3">Collated Units</th>
-                    <th className="py-3 px-3 text-emerald-500 font-bold">PDP Votes</th>
-                    <th className="py-3 px-3 text-blue-500 font-bold">APC Votes</th>
-                    <th className="py-3 px-3 text-purple-500 font-bold">NNPP Votes</th>
-                    <th className="py-3 px-3">Collation %</th>
-                    <th className="py-3 px-3">Form EC8C Status</th>
-                    <th className="py-3 px-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                  {filteredData.map((d, idx) => (
-                    <tr 
-                      key={idx} 
-                      onClick={() => handleOpenDrilldown(d)}
-                      className={`cursor-pointer transition group ${isDark ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50'}`}
-                    >
-                      <td className={`py-3 px-3 font-bold text-sm flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        <span>{d.lga}</span>
-                        {d.isSigned && (
-                          <span title="EC8C Officially Signed" className="text-emerald-500">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-slate-400 font-mono">
-                        {d.collatedPus} / {d.totalPus} PUs
-                      </td>
-                      <td className="py-3 px-3 font-extrabold text-emerald-500 text-sm">
-                        {d.pdp.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 font-bold text-blue-500">
-                        {d.apc.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3 text-purple-500">
-                        {d.nnpp.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-bold text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>{d.pct}%</span>
-                          <div className={`w-20 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                            <div 
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
-                              style={{ width: `${Math.min(d.pct, 100)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2.5 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1 ${
-                          d.isSigned
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                            : d.ec8cStatus === 'Ready for Sign-off'
-                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        }`}>
-                          {d.isSigned && <Check className="w-3 h-3" />}
-                          {d.ec8cStatus}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenDrilldown(d)
-                          }}
-                          className="px-3 py-1 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white font-bold text-xs rounded-lg transition inline-flex items-center gap-1"
-                        >
-                          <span>Inspect</span>
-                          <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
-                        </button>
-                      </td>
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 p-12 text-sm text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+                Loading collation data...
+              </div>
+            ) : filteredData.length === 0 ? (
+              <div className="p-12 text-center text-sm text-slate-500">
+                No collation centres match the selected filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className={isDark ? 'bg-slate-900/80 text-slate-400' : 'bg-slate-100 text-slate-500'}>
+                      <th className="px-4 py-3">Collation centre / LGA</th>
+                      <th className="px-4 py-3">Candidates identified</th>
+                      <th className="px-4 py-3">Polling units</th>
+                      <th className="px-4 py-3">Progress</th>
+                      <th className="px-4 py-3">EC8C status</th>
+                      <th className="px-4 py-3 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}`}>
+                    {filteredData.map((item) => (
+                      <tr
+                        key={item.id}
+                        className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}
+                      >
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2 font-bold">
+                            <Building2 className="h-4 w-4 text-emerald-500" />
+                            {item.name}
+                          </div>
+                          <p className={`mt-1 pl-6 text-[10px] ${mutedText}`}>
+                            LGA collation record
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          {item.candidates.length ? (
+                            <div className="space-y-1">
+                              {item.candidates.slice(0, 3).map((candidate, index) => (
+                                <div key={`${candidate.id}-${index}`} className="flex flex-wrap items-center gap-1">
+                                  <span className="font-semibold">{candidate.name}</span>
+                                  <span className={mutedText}>({candidate.party})</span>
+                                  {index === 0 && candidate.votes > 0 && (
+                                    <Trophy className="h-3 w-3 text-emerald-500" />
+                                  )}
+                                </div>
+                              ))}
+                              {item.candidates.length > 3 && (
+                                <p className={`text-[10px] ${mutedText}`}>
+                                  +{item.candidates.length - 3} more candidates
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] italic text-slate-500">
+                              Awaiting candidate data
+                            </span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 font-mono">
+                          {formatNumber(item.collatedPus)} / {formatNumber(item.totalPus)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{item.pct}%</span>
+                            <div className={`h-1.5 w-20 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                              <div
+                                className="h-full rounded-full bg-emerald-500"
+                                style={{ width: `${item.pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-bold ${
+                            item.status === 'Signed Off'
+                              ? 'bg-emerald-500/15 text-emerald-500'
+                              : item.status === 'Ready for Sign-off'
+                                ? 'bg-blue-500/15 text-blue-500'
+                                : item.status === 'In Progress'
+                                  ? 'bg-amber-500/15 text-amber-500'
+                                  : 'bg-slate-500/15 text-slate-500'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            onClick={() => handleOpenDrilldown(item)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-2 font-bold text-white hover:bg-emerald-600"
+                          >
+                            Inspect
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </main>
       </div>
 
-      {/* ========================================================================= */}
-      {/* LGA HIERARCHICAL DRILL-DOWN INSPECTOR MODAL */}
-      {/* ========================================================================= */}
-      {inspectLgaId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className={`${cardClass} w-full max-w-5xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700`}>
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-800 flex justify-between items-start bg-slate-900/60">
+      {inspectLgaId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm md:p-6">
+          <div className={`${cardClass} flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl shadow-2xl`}>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-700/30 p-5">
               <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-black text-white flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-emerald-500" />
-                    {lgaDrilldownData?.lga?.name || 'LGA'} Collation Inspector (Form EC8C)
-                  </h2>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-xs">
-                    Code: {lgaDrilldownData?.lga?.code || 'N/A'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Hierarchical Ward-by-Ward and Polling Unit breakdown with live vote counts and Form EC8A verification
+                <h2 className="flex items-center gap-2 text-lg font-black">
+                  <Building2 className="h-5 w-5 text-emerald-500" />
+                  {lgaDrilldownData?.lga?.name || 'Collation Centre'}
+                </h2>
+                <p className={`mt-1 text-xs ${mutedText}`}>
+                  Candidate identification, ward breakdown and polling-unit results
                 </p>
               </div>
-              <button 
-                onClick={() => setInspectLgaId(null)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+              <button
+                onClick={closeInspector}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+                aria-label="Close inspector"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Content Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 space-y-6 overflow-y-auto p-4 md:p-6">
               {loadingDrilldown ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-                  <p className="text-xs font-bold">Querying hierarchical collation database for {inspectLgaId}...</p>
+                <div className="flex items-center justify-center gap-3 p-12 text-sm text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+                  Loading centre details...
+                </div>
+              ) : drilldownError ? (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500">
+                  {drilldownError}
+                  <button
+                    onClick={() => {
+                      const item = mergedLgaData.find(
+                        (entry) => String(entry.id) === String(inspectLgaId)
+                      )
+                      if (item) handleOpenDrilldown(item)
+                    }}
+                    className="ml-3 font-bold underline"
+                  >
+                    Retry
+                  </button>
                 </div>
               ) : lgaDrilldownData ? (
                 <>
-                  {/* Success Alert Banner */}
                   {signoffSuccessMsg && (
-                    <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>{signoffSuccessMsg}</span>
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-500">
+                      <CheckCircle2 className="h-4 w-4" />
+                      {signoffSuccessMsg}
                     </div>
                   )}
 
-                  {/* Over-voting / Flagged Warning Alert */}
-                  {lgaDrilldownData.lga.flagged_count > 0 && (
-                    <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-xs flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 shrink-0" />
-                        <span>
-                          <strong>{lgaDrilldownData.lga.flagged_count} Polling Unit(s) FLAGGED</strong> due to over-voting or discrepancies in this LGA. Under Electoral Act 2022 Section 51, these votes cannot be certified without tribunal review.
-                        </span>
-                      </div>
+                  {signoffError && (
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
+                      {signoffError}
                     </div>
                   )}
 
-                  {/* LGA Overview Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                      <span className="text-[10px] font-bold text-slate-400">Total Polling Units</span>
-                      <h4 className="text-lg font-extrabold text-white mt-0.5">
-                        {lgaDrilldownData.lga.collated_pus} / {lgaDrilldownData.lga.total_pus}
-                      </h4>
-                      <p className="text-[10px] text-emerald-400">{lgaDrilldownData.lga.pct} Completed</p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                      <span className="text-[10px] font-bold text-emerald-500">PDP Total Votes</span>
-                      <h4 className="text-lg font-extrabold text-emerald-500 mt-0.5">
-                        {lgaDrilldownData.lga.pdp.toLocaleString()}
-                      </h4>
-                      <p className="text-[10px] text-slate-400">
-                        {lgaDrilldownData.lga.total_votes ? ((lgaDrilldownData.lga.pdp / lgaDrilldownData.lga.total_votes) * 100).toFixed(1) : 0}% Share
+                  <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className={`${cardClass} rounded-xl p-4`}>
+                      <p className={`text-[10px] font-bold ${mutedText}`}>Polling units collated</p>
+                      <p className="mt-1 text-xl font-extrabold">
+                        {formatNumber(lgaDrilldownData.lga?.collated_pus)} / {formatNumber(lgaDrilldownData.lga?.total_pus)}
                       </p>
                     </div>
-
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                      <span className="text-[10px] font-bold text-blue-500">APC Total Votes</span>
-                      <h4 className="text-lg font-extrabold text-blue-500 mt-0.5">
-                        {lgaDrilldownData.lga.apc.toLocaleString()}
-                      </h4>
-                      <p className="text-[10px] text-slate-400">
-                        {lgaDrilldownData.lga.total_votes ? ((lgaDrilldownData.lga.apc / lgaDrilldownData.lga.total_votes) * 100).toFixed(1) : 0}% Share
+                    <div className={`${cardClass} rounded-xl p-4`}>
+                      <p className={`text-[10px] font-bold ${mutedText}`}>Total votes reported</p>
+                      <p className="mt-1 text-xl font-extrabold">
+                        {formatNumber(lgaDrilldownData.lga?.total_votes)}
                       </p>
                     </div>
-
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                      <span className="text-[10px] font-bold text-purple-500">NNPP Total Votes</span>
-                      <h4 className="text-lg font-extrabold text-purple-500 mt-0.5">
-                        {lgaDrilldownData.lga.nnpp.toLocaleString()}
-                      </h4>
-                      <p className="text-[10px] text-slate-400">Runner-up</p>
+                    <div className={`${cardClass} rounded-xl p-4`}>
+                      <p className={`text-[10px] font-bold ${mutedText}`}>Flagged polling units</p>
+                      <p className="mt-1 text-xl font-extrabold text-amber-500">
+                        {formatNumber(lgaDrilldownData.lga?.flagged_count)}
+                      </p>
                     </div>
+                  </section>
 
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                      <span className="text-[10px] font-bold text-slate-400">PDP Margin</span>
-                      <h4 className={`text-lg font-extrabold mt-0.5 ${
-                        (lgaDrilldownData.lga.pdp - lgaDrilldownData.lga.apc) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }`}>
-                        {(lgaDrilldownData.lga.pdp - lgaDrilldownData.lga.apc) >= 0 ? '+' : ''}
-                        {(lgaDrilldownData.lga.pdp - lgaDrilldownData.lga.apc).toLocaleString()}
-                      </h4>
-                      <p className="text-[10px] text-slate-400">Lead Margin</p>
+                  <section className={`${cardClass} space-y-4 rounded-xl p-4`}>
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-bold">
+                        <Users className="h-4 w-4 text-emerald-500" />
+                        Candidates assigned to this centre
+                      </h3>
+                      <p className={`mt-1 text-[11px] ${mutedText}`}>
+                        Candidate details and vote totals are shown when returned by the backend.
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Sign-off Status / Action Bar */}
-                  <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-wrap justify-between items-center gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl ${
-                        lgaDrilldownData.lga.signoff?.is_signed 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white">Form EC8C Collation Sign-off:</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                            lgaDrilldownData.lga.signoff?.is_signed
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-amber-500/20 text-amber-400'
-                          }`}>
-                            {lgaDrilldownData.lga.signoff?.status || 'PENDING'}
-                          </span>
-                        </div>
-                        {lgaDrilldownData.lga.signoff?.is_signed ? (
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Signed off by <strong className="text-white">{lgaDrilldownData.lga.signoff.signer_name || 'Returning Officer'}</strong> on {new Date(lgaDrilldownData.lga.signoff.signed_at).toLocaleString()}
-                            {lgaDrilldownData.lga.signoff.notes && ` — "${lgaDrilldownData.lga.signoff.notes}"`}
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Form EC8C ready for LGA Collation Officer certification and digital audit trail.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {!lgaDrilldownData.lga.signoff?.is_signed && (
-                      <button
-                        onClick={() => setShowSignoffConfirm(true)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Sign Off Form EC8C (LGA Collation)</span>
-                      </button>
+                    {renderCandidates(
+                      getCandidates(lgaDrilldownData)
+                        .length
+                        ? getCandidates(lgaDrilldownData)
+                        : getCandidates(lgaDrilldownData.lga)
                     )}
-                  </div>
+                  </section>
 
-                  {/* Ward-by-Ward Drill-down Accordion */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        Wards Breakdown ({lgaDrilldownData.wards.length} Wards)
-                      </h4>
-                      <span className="text-[10px] text-slate-500">Click a ward row to expand its Polling Units</span>
+                  <section className={`${cardClass} rounded-xl p-4`}>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold">Ward and polling-unit breakdown</h3>
+                        <p className={`mt-1 text-[11px] ${mutedText}`}>
+                          Expand a ward to inspect its polling units.
+                        </p>
+                      </div>
+                      <span className={`text-xs ${mutedText}`}>
+                        {getArray(lgaDrilldownData, ['wards']).length} wards
+                      </span>
                     </div>
 
-                    <div className="space-y-2">
-                      {lgaDrilldownData.wards.map((ward) => {
-                        const isExpanded = Boolean(expandedWards[ward.id])
+                    <div className="space-y-3">
+                      {getArray(lgaDrilldownData, ['wards']).map((ward) => {
+                        const expanded = Boolean(expandedWards[ward.id])
+                        const pollingUnits = getArray(ward, ['polling_units', 'pollingUnits'])
+
                         return (
-                          <div key={ward.id} className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
-                            {/* Ward Header Accordion Row */}
-                            <div 
+                          <div
+                            key={ward.id}
+                            className={`overflow-hidden rounded-xl border ${
+                              isDark ? 'border-slate-800 bg-slate-950/30' : 'border-slate-200'
+                            }`}
+                          >
+                            <button
                               onClick={() => toggleWard(ward.id)}
-                              className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-slate-800/60 transition"
+                              className="flex w-full flex-wrap items-center justify-between gap-3 p-3 text-left hover:bg-slate-500/5"
                             >
-                              <div className="flex items-center gap-3">
-                                {isExpanded ? (
-                                  <ChevronDown className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                              <span className="flex items-center gap-2">
+                                {expanded
+                                  ? <ChevronDown className="h-4 w-4 text-emerald-500" />
+                                  : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                                <span className="text-xs font-bold">{ward.name || 'Unnamed ward'}</span>
+                                {ward.code && (
+                                  <span className="text-[10px] text-slate-500">{ward.code}</span>
                                 )}
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <h5 className="font-bold text-sm text-white">{ward.name}</h5>
-                                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                                      {ward.code}
-                                    </span>
-                                    {ward.flagged_count > 0 && (
-                                      <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold border border-red-500/30">
-                                        {ward.flagged_count} Flagged
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 mt-0.5">
-                                    {ward.collated_pus} / {ward.total_pus} PUs Collated
+                              </span>
+                              <span className={`text-[10px] ${mutedText}`}>
+                                {formatNumber(ward.collated_pus)} / {formatNumber(ward.total_pus)} PUs
+                              </span>
+                            </button>
+
+                            {expanded && (
+                              <div className="overflow-x-auto border-t border-slate-700/20">
+                                {pollingUnits.length === 0 ? (
+                                  <p className="p-4 text-xs text-slate-500">
+                                    No polling-unit records are available for this ward.
                                   </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-6 text-xs">
-                                <div>
-                                  <span className="text-[10px] text-slate-500 block">PDP</span>
-                                  <strong className="text-emerald-400 font-extrabold">{ward.pdp.toLocaleString()}</strong>
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-500 block">APC</span>
-                                  <strong className="text-blue-400 font-bold">{ward.apc.toLocaleString()}</strong>
-                                </div>
-                                <div>
-                                  <span className="text-[10px] text-slate-500 block">NNPP</span>
-                                  <span className="text-purple-400">{ward.nnpp.toLocaleString()}</span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-[10px] text-slate-500 block">Total Votes</span>
-                                  <span className="text-slate-300 font-mono">{ward.total_votes.toLocaleString()}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Polling Units Inner Table */}
-                            {isExpanded && (
-                              <div className="border-t border-slate-800 bg-slate-950/60 p-3 overflow-x-auto">
-                                <table className="w-full text-left text-[11px] border-collapse">
-                                  <thead>
-                                    <tr className="border-b border-slate-800 text-slate-500 font-bold">
-                                      <th className="py-2 px-2">PU Code</th>
-                                      <th className="py-2 px-2">Polling Unit Name</th>
-                                      <th className="py-2 px-2">Registered Voters</th>
-                                      <th className="py-2 px-2 text-emerald-500">PDP</th>
-                                      <th className="py-2 px-2 text-blue-500">APC</th>
-                                      <th className="py-2 px-2 text-purple-500">NNPP</th>
-                                      <th className="py-2 px-2">Total Cast</th>
-                                      <th className="py-2 px-2">Status</th>
-                                      <th className="py-2 px-2 text-right">EC8A Proof</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-900 font-medium">
-                                    {ward.polling_units.map((pu) => (
-                                      <tr key={pu.id} className="hover:bg-slate-900/50 transition">
-                                        <td className="py-2 px-2 font-mono text-slate-400">{pu.code}</td>
-                                        <td className="py-2 px-2 font-semibold text-white">{pu.name}</td>
-                                        <td className="py-2 px-2 text-slate-400 font-mono">{pu.registered_voters}</td>
-                                        <td className="py-2 px-2 font-extrabold text-emerald-400">{pu.pdp}</td>
-                                        <td className="py-2 px-2 font-bold text-blue-400">{pu.apc}</td>
-                                        <td className="py-2 px-2 text-purple-400">{pu.nnpp}</td>
-                                        <td className="py-2 px-2 font-mono text-slate-300">{pu.total_cast}</td>
-                                        <td className="py-2 px-2">
-                                          {pu.is_overvote || pu.verification_status === 'FLAGGED' ? (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 inline-flex items-center gap-1">
-                                              <AlertTriangle className="w-3 h-3" /> Over-voting / FLAGGED
-                                            </span>
-                                          ) : pu.verification_status === 'VERIFIED' ? (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                              VERIFIED
-                                            </span>
-                                          ) : pu.verification_status === 'PENDING_PHOTO' ? (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                              PENDING EC8A
-                                            </span>
-                                          ) : (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">
-                                              {pu.verification_status}
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="py-2 px-2 text-right">
-                                          {pu.ec8a_photo_url ? (
-                                            <button 
-                                              onClick={() => setPreviewPhotoUrl(pu.ec8a_photo_url)}
-                                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[10px] font-bold inline-flex items-center gap-1 transition"
-                                            >
-                                              <Eye className="w-3 h-3 text-emerald-400" /> View EC8A
-                                            </button>
-                                          ) : (
-                                            <span className="text-[10px] text-slate-600 italic">No Upload</span>
-                                          )}
-                                        </td>
+                                ) : (
+                                  <table className="w-full text-left text-[11px]">
+                                    <thead className={isDark ? 'bg-slate-900 text-slate-400' : 'bg-slate-100 text-slate-500'}>
+                                      <tr>
+                                        <th className="px-3 py-2">Polling unit</th>
+                                        <th className="px-3 py-2">Registered voters</th>
+                                        <th className="px-3 py-2">Candidate results</th>
+                                        <th className="px-3 py-2">Status</th>
+                                        <th className="px-3 py-2 text-right">EC8A</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}`}>
+                                      {pollingUnits.map((pu) => {
+                                        const candidates = getCandidates(pu)
+                                        return (
+                                          <tr key={pu.id}>
+                                            <td className="px-3 py-3">
+                                              <p className="font-bold">{pu.name || 'Unnamed polling unit'}</p>
+                                              <p className="mt-1 font-mono text-[10px] text-slate-500">
+                                                {pu.code || pu.id}
+                                              </p>
+                                            </td>
+                                            <td className="px-3 py-3 font-mono">
+                                              {formatNumber(pu.registered_voters)}
+                                            </td>
+                                            <td className="min-w-56 px-3 py-3">
+                                              {candidates.length ? (
+                                                <div className="space-y-1">
+                                                  {candidates.map((candidate, index) => (
+                                                    <div key={`${candidate.id}-${index}`} className="flex justify-between gap-3">
+                                                      <span className="truncate">{candidate.name} <span className="text-slate-500">({candidate.party})</span></span>
+                                                      <strong className="shrink-0">{formatNumber(candidate.votes)}</strong>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <span className="text-slate-500">No candidate breakdown</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-3">
+                                              <span className={`rounded px-2 py-1 text-[10px] font-bold ${
+                                                pu.verification_status === 'VERIFIED'
+                                                  ? 'bg-emerald-500/15 text-emerald-500'
+                                                  : pu.verification_status === 'FLAGGED' || pu.is_overvote
+                                                    ? 'bg-red-500/15 text-red-500'
+                                                    : 'bg-amber-500/15 text-amber-500'
+                                              }`}>
+                                                {pu.verification_status || 'Unknown'}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-3 text-right">
+                                              {pu.ec8a_photo_url ? (
+                                                <button
+                                                  onClick={() => setPreviewPhotoUrl(pu.ec8a_photo_url)}
+                                                  className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold text-white"
+                                                >
+                                                  <Eye className="h-3 w-3" />
+                                                  View
+                                                </button>
+                                              ) : (
+                                                <span className="text-slate-500">Not uploaded</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                )}
                               </div>
                             )}
                           </div>
                         )
                       })}
                     </div>
-                  </div>
+                  </section>
+
+                  <section className={`${cardClass} flex flex-wrap items-center justify-between gap-3 rounded-xl p-4`}>
+                    <div>
+                      <p className="text-xs font-bold">EC8C sign-off</p>
+                      <p className={`mt-1 text-[11px] ${mutedText}`}>
+                        Status: {lgaDrilldownData.lga?.signoff?.status || 'PENDING'}
+                      </p>
+                      {lgaDrilldownData.lga?.signoff?.signer_name && (
+                        <p className={`mt-1 text-[10px] ${mutedText}`}>
+                          Signed by {lgaDrilldownData.lga.signoff.signer_name}
+                        </p>
+                      )}
+                    </div>
+                    {!lgaDrilldownData.lga?.signoff?.is_signed && (
+                      <button
+                        onClick={() => setShowSignoffConfirm(true)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        Sign off EC8C
+                      </button>
+                    )}
+                  </section>
                 </>
               ) : null}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/80 flex justify-between items-center text-xs">
-              <span className="text-slate-400">
-                PollWatch 2027 Tribunal Evidence Vault — Section 51 Electoral Act Compliance
-              </span>
-              <button 
-                onClick={() => setInspectLgaId(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition"
+            <div className="flex justify-end border-t border-slate-700/20 p-4">
+              <button
+                onClick={closeInspector}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
               >
-                Close Inspector
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* SIGN-OFF CONFIRMATION DIALOG */}
-      {/* ========================================================================= */}
       {showSignoffConfirm && (
-        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 border border-emerald-500/40`}>
-            <div className="flex items-center gap-3 text-emerald-400">
-              <div className="p-2.5 rounded-xl bg-emerald-500/20">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className={`${cardClass} w-full max-w-md space-y-4 rounded-2xl p-6`}>
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-6 w-6 text-emerald-500" />
               <div>
-                <h3 className="text-base font-black text-white">Sign Off Form EC8C</h3>
-                <p className="text-xs text-slate-400">
-                  {lgaDrilldownData?.lga?.name} LGA Collation Sheet
+                <h3 className="text-base font-black">Sign off EC8C</h3>
+                <p className={`text-xs ${mutedText}`}>
+                  {lgaDrilldownData?.lga?.name || 'Selected LGA'}
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              You are about to sign off and certify the collated results for <strong>{lgaDrilldownData?.lga?.name} LGA</strong> ({lgaDrilldownData?.lga?.collated_pus} of {lgaDrilldownData?.lga?.total_pus} Polling Units).
-              This action writes an immutable entry into the tribunal audit log.
+            <p className={`text-xs leading-relaxed ${mutedText}`}>
+              Confirm that you want to submit the LGA collation sign-off. This action will be sent to the backend.
             </p>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-400">Collation Officer Notes / Observations (Optional)</label>
-              <textarea 
-                rows={3}
-                value={signoffNotes}
-                onChange={(e) => setSignoffNotes(e.target.value)}
-                placeholder="e.g. All 11 Ward EC8B forms examined and tallied without incident."
-                className="w-full p-2.5 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-200 outline-none focus:border-emerald-500"
-              />
-            </div>
+            <textarea
+              rows={4}
+              value={signoffNotes}
+              onChange={(event) => setSignoffNotes(event.target.value)}
+              placeholder="Optional collation officer notes..."
+              className={`${inputClass} w-full`}
+            />
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button 
-                type="button" 
+            <div className="flex justify-end gap-2">
+              <button
                 disabled={signingOff}
                 onClick={() => setShowSignoffConfirm(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+                className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white"
               >
                 Cancel
               </button>
-              <button 
-                type="button" 
+              <button
                 disabled={signingOff}
                 onClick={handleSignoffSubmit}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-2 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
               >
-                {signingOff ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Signing EC8C...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Certify & Sign Off
-                  </>
-                )}
+                {signingOff
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Check className="h-4 w-4" />}
+                {signingOff ? 'Submitting...' : 'Confirm sign-off'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* EC8A PHOTO PREVIEW MODAL */}
-      {/* ========================================================================= */}
       {previewPhotoUrl && (
-        <div className="fixed inset-0 z-70 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative max-w-3xl w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 p-4 space-y-3">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" /> Form EC8A Result Sheet Proof
-              </h4>
-              <button 
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-4xl space-y-3 rounded-2xl border border-slate-700 bg-slate-900 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">EC8A result sheet</h3>
+              <button
                 onClick={() => setPreviewPhotoUrl(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[70vh] flex items-center justify-center overflow-auto bg-slate-950 rounded-xl p-2">
-              {/* Fallback image or authentic photo */}
-              <img 
-                src={previewPhotoUrl} 
-                alt="Form EC8A Proof" 
-                className="max-h-[65vh] object-contain rounded-lg"
-                onError={(e) => {
-                  e.target.onerror = null
-                  e.target.src = "https://placehold.co/800x1100/141e38/10b981?text=FORM+EC8A+PRIMARY+PROOF%0AOfficial+INEC+Result+Sheet"
-                }}
+            <div className="flex max-h-[75vh] justify-center overflow-auto rounded-xl bg-slate-950 p-2">
+              <img
+                src={previewPhotoUrl}
+                alt="Uploaded EC8A result sheet"
+                className="max-h-[70vh] max-w-full rounded-lg object-contain"
               />
-            </div>
-            <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
-              <span>GPS Timestamp & Hash verified</span>
-              <button 
-                onClick={() => setPreviewPhotoUrl(null)}
-                className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold transition"
-              >
-                Close Preview
-              </button>
             </div>
           </div>
         </div>
