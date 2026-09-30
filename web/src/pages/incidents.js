@@ -1,23 +1,110 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import { useTheme } from './_app'
 import { apiFetch } from '../lib/api'
-import { 
-  AlertTriangle, 
-  ShieldAlert, 
-  CheckCircle2, 
-  Clock, 
-  Filter, 
-  Search, 
-  Eye, 
-  Phone, 
-  MapPin, 
-  X, 
-  Send,
-  Loader2,
-  ShieldCheck
+import {
+  AlertTriangle,
+  ShieldAlert,
+  CheckCircle2,
+  Clock,
+  Filter,
+  Search,
+  Eye,
+  Phone,
+  MapPin,
+  X,
+  RefreshCw,
 } from 'lucide-react'
+
+const SEVERITIES = ['All', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
+const STATUSES = ['All', 'REPORTED', 'INVESTIGATING', 'RESOLVED']
+
+function normalizeIncident(incident) {
+  return {
+    ...incident,
+    id: incident.id,
+    pu:
+      incident.pu ||
+      incident.polling_unit?.name ||
+      incident.polling_unit_name ||
+      incident.polling_unit ||
+      incident.pu_code ||
+      'Not available',
+    lga:
+      incident.lga?.name ||
+      incident.lga_name ||
+      incident.lga ||
+      'Not available',
+    category:
+      incident.category ||
+      incident.incident_type ||
+      incident.type ||
+      'Not specified',
+    severity: String(incident.severity || 'UNKNOWN').toUpperCase(),
+    status: String(incident.status || 'REPORTED').toUpperCase(),
+    reporter:
+      incident.reporter?.full_name ||
+      incident.reported_by?.full_name ||
+      incident.reporter ||
+      incident.reported_by ||
+      'Not available',
+    phone:
+      incident.phone ||
+      incident.contact ||
+      incident.reporter?.phone ||
+      incident.reported_by?.phone ||
+      'Not available',
+    time:
+      incident.created_at ||
+      incident.time ||
+      incident.reported_at ||
+      null,
+    desc:
+      incident.description ||
+      incident.desc ||
+      incident.title ||
+      'No description provided.',
+  }
+}
+
+function formatDate(value) {
+  if (!value) return 'Not available'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return String(value)
+
+  return date.toLocaleString()
+}
+
+function severityStyle(severity) {
+  switch (severity) {
+    case 'CRITICAL':
+      return 'bg-red-500/20 text-red-500 border-red-500/40'
+    case 'HIGH':
+      return 'bg-amber-500/20 text-amber-500 border-amber-500/40'
+    case 'MEDIUM':
+      return 'bg-blue-500/20 text-blue-500 border-blue-500/40'
+    case 'LOW':
+      return 'bg-slate-500/20 text-slate-500 border-slate-500/40'
+    default:
+      return 'bg-slate-500/20 text-slate-500 border-slate-500/40'
+  }
+}
+
+function statusStyle(status) {
+  switch (status) {
+    case 'RESOLVED':
+      return 'bg-emerald-500/20 text-emerald-500'
+    case 'INVESTIGATING':
+      return 'bg-amber-500/20 text-amber-500'
+    case 'REPORTED':
+      return 'bg-red-500/20 text-red-500'
+    default:
+      return 'bg-slate-500/20 text-slate-500'
+  }
+}
 
 export default function IncidentTrackerPage() {
   const { theme } = useTheme()
@@ -28,43 +115,31 @@ export default function IncidentTrackerPage() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // State for Live API Data
   const [incidentsList, setIncidentsList] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [showIncidentModal, setShowIncidentModal] = useState(false)
-  const [pollingUnitsList, setPollingUnitsList] = useState([])
-  const [updatingStatus, setUpdatingStatus] = useState(false)
-  const [statusMsg, setStatusMsg] = useState(null)
+  const [error, setError] = useState('')
+  const [lastUpdated, setLastUpdated] = useState(null)
 
-  // Fetch Incidents from FastAPI Endpoint (/api/incidents)
-  const loadIncidents = async () => {
+  async function loadIncidents() {
     try {
       setLoading(true)
-      setError(null)
+      setError('')
+
       const data = await apiFetch('/incidents')
-      
-      if (Array.isArray(data) && data.length > 0) {
-        // Normalize API properties to component standard
-        const mappedData = data.map((inc, index) => ({
-          id: inc.id || index + 1,
-          pu: inc.polling_unit_name || inc.pu || (inc.polling_unit_code ? `PU ${inc.polling_unit_code}` : `PU ${inc.pu_code || '001'}`),
-          lga: inc.lga_name || inc.lga || 'Jigawa',
-          category: inc.incident_type || inc.category || inc.type || 'General',
-          severity: (inc.severity || 'MEDIUM').toUpperCase(),
-          status: (inc.status || 'REPORTED').toUpperCase(),
-          reporter: inc.reporter_name || inc.reporter || (typeof inc.reported_by === 'string' ? inc.reported_by : 'Field Agent'),
-          phone: inc.reporter_phone || inc.phone || inc.contact || 'N/A',
-          time: inc.created_at ? new Date(inc.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (inc.time || '10:00 AM'),
-          desc: inc.description || inc.desc || inc.title || 'No description provided.',
-          lat: inc.latitude || inc.lat || 11.7,
-          lng: inc.longitude || inc.lng || 9.3
-        }))
-        setIncidentsList(mappedData)
-      }
+
+      const incidents = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.incidents)
+          ? data.incidents
+          : Array.isArray(data?.items)
+            ? data.items
+            : []
+
+      setIncidentsList(incidents.map(normalizeIncident))
+      setLastUpdated(new Date())
     } catch (err) {
       console.error('Failed to load incidents:', err)
-      setError(err.message)
+      setError(err?.message || 'Unable to load incidents.')
     } finally {
       setLoading(false)
     }
@@ -74,421 +149,545 @@ export default function IncidentTrackerPage() {
     loadIncidents()
   }, [])
 
-  const handleStatusUpdate = async (incidentId, newStatus) => {
-    setUpdatingStatus(true)
-    setStatusMsg(null)
-    try {
-      await apiFetch(`/incidents/${incidentId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: newStatus })
-      })
+  const filteredIncidents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
 
-      setStatusMsg({ type: 'success', text: `Status updated to ${newStatus}` })
-      setSelectedIncident(prev => prev ? { ...prev, status: newStatus } : null)
-      loadIncidents()
-    } catch (err) {
-      setStatusMsg({ type: 'error', text: `Update failed: ${err.message}` })
-    } finally {
-      setUpdatingStatus(false)
-    }
-  }
+    return incidentsList.filter((incident) => {
+      const matchesSeverity =
+        severityFilter === 'All' ||
+        incident.severity === severityFilter
 
-  // Default Mock Data (Fallback if backend list is empty or unreachable)
-  const defaultIncidents = [
-    { id: 1, pu: 'PU 002, Jahun Ward A', lga: 'Jahun', category: 'Violence', severity: 'CRITICAL', status: 'REPORTED', reporter: 'Usman K.', phone: '0810 555 1122', time: '10:35 AM', desc: 'Violence reported near polling booth perimeter. Political thugs disrupting queue.', lat: 27.05, lng: 12.15 },
-    { id: 2, pu: 'PU 023, Guri Ward A', lga: 'Guri', category: 'Intimidation', severity: 'HIGH', status: 'INVESTIGATING', reporter: 'Murtala A.', phone: '0812 345 6789', time: '10:40 AM', desc: 'Unidentified group intimidating voters at unit entrance. Crowd gathering rapidly.', lat: 27.02, lng: 12.34 },
-    { id: 3, pu: 'PU 078, Gumel Central', lga: 'Gumel', category: 'BVAS Issues', severity: 'MEDIUM', status: 'RESOLVED', reporter: 'Aisha M.', phone: '0807 111 2233', time: '10:42 AM', desc: 'BVAS fingerprint scanner malfunction resolved by INEC technical support team.', lat: 27.12, lng: 12.45 },
-    { id: 4, pu: 'PU 105, Hadejia Ward B', lga: 'Hadejia', category: 'Late Officials', severity: 'LOW', status: 'RESOLVED', reporter: 'Sani R.', phone: '0809 876 5432', time: '09:15 AM', desc: 'INEC ad-hoc staff arrived 45 minutes late. Voting started at 09:15 AM.', lat: 27.20, lng: 12.50 },
-    { id: 5, pu: 'PU 056, Kazaure Ward C', lga: 'Kazaure', category: 'Vote Buying', severity: 'HIGH', status: 'REPORTED', reporter: 'Yusuf B.', phone: '0706 111 2233', time: '11:05 AM', desc: 'Alleged vote buying activity observed 100 meters outside polling center perimeter.', lat: 27.30, lng: 12.60 },
-    { id: 6, pu: 'PU 012, Kaugama - Arbus', lga: 'Kaugama', category: 'Ballot Shortage', severity: 'MEDIUM', status: 'INVESTIGATING', reporter: 'Musa A.', phone: '0803 123 4567', time: '11:20 AM', desc: 'Shortage of official ballot papers reported. Requesting electoral officer intervention.', lat: 27.40, lng: 12.70 },
-  ]
+      const matchesStatus =
+        statusFilter === 'All' ||
+        incident.status === statusFilter
 
-  const activeIncidents = incidentsList.length > 0 ? incidentsList : defaultIncidents
+      const searchableText = [
+        incident.pu,
+        incident.lga,
+        incident.category,
+        incident.reporter,
+        incident.phone,
+        incident.desc,
+        incident.status,
+        incident.severity,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
 
-  const filteredIncidents = activeIncidents.filter(inc => {
-    const matchesSeverity = severityFilter === 'All' || inc.severity === severityFilter
-    const matchesStatus = statusFilter === 'All' || inc.status === statusFilter
-    const matchesSearch = inc.pu.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          inc.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          inc.reporter.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesSeverity && matchesStatus && matchesSearch
-  })
+      const matchesSearch =
+        !query || searchableText.includes(query)
 
-  // KPI calculations based on active dataset
-  const criticalCount = activeIncidents.filter(i => i.severity === 'CRITICAL').length
-  const highCount = activeIncidents.filter(i => i.severity === 'HIGH').length
-  const medLowCount = activeIncidents.filter(i => i.severity === 'MEDIUM' || i.severity === 'LOW').length
-  const resolvedCount = activeIncidents.filter(i => i.status === 'RESOLVED').length
-  const resolutionRate = activeIncidents.length > 0 ? ((resolvedCount / activeIncidents.length) * 100).toFixed(1) : '0.0'
+      return matchesSeverity && matchesStatus && matchesSearch
+    })
+  }, [incidentsList, severityFilter, statusFilter, searchQuery])
 
-  const cardClass = isDark ? 'bg-[#141E38] border border-slate-800' : 'bg-white border border-slate-200 shadow-sm'
-  const subcardClass = isDark ? 'bg-slate-900 border border-slate-800' : 'bg-slate-50 border border-slate-200'
+  const criticalCount = incidentsList.filter(
+    (incident) => incident.severity === 'CRITICAL'
+  ).length
+
+  const highCount = incidentsList.filter(
+    (incident) => incident.severity === 'HIGH'
+  ).length
+
+  const medLowCount = incidentsList.filter(
+    (incident) =>
+      incident.severity === 'MEDIUM' ||
+      incident.severity === 'LOW'
+  ).length
+
+  const resolvedCount = incidentsList.filter(
+    (incident) => incident.status === 'RESOLVED'
+  ).length
+
+  const resolutionRate =
+    incidentsList.length > 0
+      ? ((resolvedCount / incidentsList.length) * 100).toFixed(1)
+      : '0.0'
+
+  const cardClass = isDark
+    ? 'bg-[#141E38] border border-slate-800'
+    : 'bg-white border border-slate-200 shadow-sm'
+
+  const subcardClass = isDark
+    ? 'bg-slate-900 border border-slate-800'
+    : 'bg-slate-50 border border-slate-200'
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
-      isDark ? 'bg-[#070D1E] text-slate-100' : 'bg-slate-50 text-slate-800'
-    }`}>
+    <div
+      className={`flex h-screen overflow-hidden font-sans transition-colors duration-200 ${
+        isDark
+          ? 'bg-[#070D1E] text-slate-100'
+          : 'bg-slate-50 text-slate-800'
+      }`}
+    >
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Header 
-          title="Incident Command Center" 
-          subtitle="Real-time field incident monitoring, severity triage, and situation room dispatch" 
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <Header
+          title="Incident Command Center"
+          subtitle="Field incident monitoring, severity triage, and situation room dispatch"
         />
 
-        <main className="p-6 space-y-6">
-          {/* Status Banners */}
+        <main className="space-y-6 p-4 md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1
+                className={`text-xl font-bold ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}
+              >
+                Incident Tracker
+              </h1>
+              <p className="mt-1 text-xs text-slate-500">
+                Monitor and review incidents reported by field agents.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadIncidents}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+              />
+              Refresh
+            </button>
+          </div>
+
           {loading && (
-            <div className="text-xs bg-blue-500/10 text-blue-500 p-3 rounded-lg border border-blue-500/20">
-              Connecting to live incident feeds...
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-500">
+              Loading incident records...
             </div>
           )}
+
           {error && (
-            <div className="text-xs bg-amber-500/10 text-amber-500 p-3 rounded-lg border border-amber-500/20">
-              Unable to reach incident server ({error}). Showing cached view.
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-500">
+              <p className="font-bold">Unable to load incidents</p>
+              <p className="mt-1">{error}</p>
+              <p className="mt-1">
+                The incident list may be incomplete. Please refresh after
+                checking the server connection.
+              </p>
             </div>
           )}
 
-          {/* Top 4 KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className={`${cardClass} border-red-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+          {!loading && !error && incidentsList.length === 0 && (
+            <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+              No incidents have been recorded in the available API response.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              className={`${cardClass} flex items-center justify-between rounded-xl border-red-500/30 p-4`}
+            >
               <div>
-                <span className="text-xs font-bold text-red-500">Critical Incidents</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{criticalCount}</h3>
-                <p className="text-[10px] text-red-400 mt-0.5">Urgent field dispatches</p>
+                <span className="text-xs font-bold text-red-500">
+                  Critical Incidents
+                </span>
+                <h3
+                  className={`mt-1 text-2xl font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {criticalCount}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-red-400">
+                  Critical severity reports
+                </p>
               </div>
-              <div className="p-3 rounded-xl bg-red-500/20 text-red-500"><ShieldAlert className="w-6 h-6" /></div>
+              <div className="rounded-xl bg-red-500/20 p-3 text-red-500">
+                <ShieldAlert className="h-6 w-6" />
+              </div>
             </div>
 
-            <div className={`${cardClass} border-amber-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+            <div
+              className={`${cardClass} flex items-center justify-between rounded-xl border-amber-500/30 p-4`}
+            >
               <div>
-                <span className="text-xs font-bold text-amber-500">High Priority</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{highCount}</h3>
-                <p className="text-[10px] text-amber-500 mt-0.5">Under investigation</p>
+                <span className="text-xs font-bold text-amber-500">
+                  High Priority
+                </span>
+                <h3
+                  className={`mt-1 text-2xl font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {highCount}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-amber-500">
+                  High severity reports
+                </p>
               </div>
-              <div className="p-3 rounded-xl bg-amber-500/20 text-amber-500"><AlertTriangle className="w-6 h-6" /></div>
+              <div className="rounded-xl bg-amber-500/20 p-3 text-amber-500">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
             </div>
 
-            <div className={`${cardClass} border-blue-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+            <div
+              className={`${cardClass} flex items-center justify-between rounded-xl border-blue-500/30 p-4`}
+            >
               <div>
-                <span className="text-xs font-bold text-blue-500">Medium / Low Priority</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{medLowCount}</h3>
-                <p className="text-[10px] text-blue-500 mt-0.5">Logistical & BVAS issues</p>
+                <span className="text-xs font-bold text-blue-500">
+                  Medium / Low Priority
+                </span>
+                <h3
+                  className={`mt-1 text-2xl font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {medLowCount}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-blue-500">
+                  Medium and low severity reports
+                </p>
               </div>
-              <div className="p-3 rounded-xl bg-blue-500/20 text-blue-500"><Clock className="w-6 h-6" /></div>
+              <div className="rounded-xl bg-blue-500/20 p-3 text-blue-500">
+                <Clock className="h-6 w-6" />
+              </div>
             </div>
 
-            <div className={`${cardClass} border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-sm`}>
+            <div
+              className={`${cardClass} flex items-center justify-between rounded-xl border-emerald-500/30 p-4`}
+            >
               <div>
-                <span className="text-xs font-bold text-emerald-500">Resolved Incidents</span>
-                <h3 className={`text-2xl font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{resolvedCount}</h3>
-                <p className="text-[10px] text-emerald-500 mt-0.5">{resolutionRate}% resolution rate</p>
+                <span className="text-xs font-bold text-emerald-500">
+                  Resolved Incidents
+                </span>
+                <h3
+                  className={`mt-1 text-2xl font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  {resolvedCount}
+                </h3>
+                <p className="mt-0.5 text-[10px] text-emerald-500">
+                  {resolutionRate}% resolution rate
+                </p>
               </div>
-              <div className="p-3 rounded-xl bg-emerald-500/20 text-emerald-500"><CheckCircle2 className="w-6 h-6" /></div>
+              <div className="rounded-xl bg-emerald-500/20 p-3 text-emerald-500">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
             </div>
           </div>
 
-          {/* Filter Bar */}
-          <div className={`${cardClass} rounded-xl p-4 flex flex-wrap items-center justify-between gap-4`}>
-            <div className="flex items-center gap-3">
-              <span className={`text-xs font-bold flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                <Filter className="w-3.5 h-3.5" /> Severity:
+          <div
+            className={`${cardClass} flex flex-col gap-4 rounded-xl p-4 xl:flex-row xl:items-center xl:justify-between`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`flex items-center gap-1 text-xs font-bold ${
+                  isDark ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Severity:
               </span>
-              {['All', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => (
+
+              {SEVERITIES.map((severity) => (
                 <button
-                  key={sev}
-                  onClick={() => setSeverityFilter(sev)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                    severityFilter === sev 
-                      ? 'bg-pdp text-white shadow-md' 
-                      : isDark ? 'bg-slate-900 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  key={severity}
+                  type="button"
+                  onClick={() => setSeverityFilter(severity)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    severityFilter === severity
+                      ? 'bg-pdp text-white shadow-md'
+                      : isDark
+                        ? 'border border-slate-800 bg-slate-900 text-slate-400'
+                        : 'border border-slate-200 bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {sev}
+                  {severity}
                 </button>
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const pus = await apiFetch('/electoral/polling-units');
-                    setPollingUnitsList(pus || []);
-                  } catch(e) {}
-                  setShowIncidentModal(true);
-                }}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition cursor-pointer relative z-10 shadow-sm"
-              >
-                + Report New Incident
-              </button>
-
+            <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border outline-none ${
-                  isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900'
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold outline-none ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-900 text-slate-200'
+                    : 'border-slate-300 bg-slate-50 text-slate-900'
                 }`}
               >
-                <option value="All">All Statuses</option>
-                <option value="REPORTED">REPORTED</option>
-                <option value="INVESTIGATING">INVESTIGATING</option>
-                <option value="RESOLVED">RESOLVED</option>
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status === 'All' ? 'All Statuses' : status}
+                  </option>
+                ))}
               </select>
 
-
-              <div className="relative w-56">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search incident, PU..."
+              <div className="relative sm:w-64">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="search"
+                  placeholder="Search incidents..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none border ${
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  className={`w-full rounded-lg border py-2 pl-8 pr-3 text-xs outline-none ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-900 text-slate-200 placeholder:text-slate-500'
+                      : 'border-slate-300 bg-slate-50 text-slate-900 placeholder:text-slate-400'
                   }`}
                 />
               </div>
             </div>
           </div>
 
-          {/* Incidents Table */}
-          <div className={`${cardClass} rounded-xl p-5 space-y-4`}>
-            <div className={`flex justify-between items-center pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-              <h3 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>Field Incidents Queue</h3>
-              <span className="text-xs font-mono text-slate-400">Showing {filteredIncidents.length} items</span>
+          <div className={`${cardClass} space-y-4 rounded-xl p-4 md:p-5`}>
+            <div
+              className={`flex flex-wrap items-center justify-between gap-2 border-b pb-3 ${
+                isDark ? 'border-slate-800' : 'border-slate-100'
+              }`}
+            >
+              <h2
+                className={`text-sm font-bold ${
+                  isDark ? 'text-slate-200' : 'text-slate-900'
+                }`}
+              >
+                Field Incidents Queue
+              </h2>
+
+              <div className="text-right text-xs text-slate-400">
+                <p>Showing {filteredIncidents.length} of {incidentsList.length}</p>
+                {lastUpdated && (
+                  <p className="mt-1">
+                    Last refreshed: {lastUpdated.toLocaleTimeString()}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full min-w-[850px] border-collapse text-left text-xs">
                 <thead>
-                  <tr className={`border-y text-slate-500 font-bold ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                    <th className="py-3 px-3">Polling Unit</th>
-                    <th className="py-3 px-3">Category</th>
-                    <th className="py-3 px-3">Severity</th>
-                    <th className="py-3 px-3">Description</th>
-                    <th className="py-3 px-3">Reporter</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3 text-right">Time</th>
-                    <th className="py-3 px-3 text-right">Action</th>
+                  <tr
+                    className={`border-y font-bold text-slate-500 ${
+                      isDark
+                        ? 'border-slate-800 bg-slate-900'
+                        : 'border-slate-200 bg-slate-100'
+                    }`}
+                  >
+                    <th className="px-3 py-3">Polling Unit</th>
+                    <th className="px-3 py-3">LGA</th>
+                    <th className="px-3 py-3">Category</th>
+                    <th className="px-3 py-3">Severity</th>
+                    <th className="px-3 py-3">Description</th>
+                    <th className="px-3 py-3">Reporter</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3">Time</th>
+                    <th className="px-3 py-3 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y font-medium ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                  {filteredIncidents.map((inc) => (
-                    <tr key={inc.id} className={`transition ${isDark ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50'}`}>
-                      <td className={`py-3 px-3 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{inc.pu}</td>
-                      <td className="py-3 px-3 text-slate-500">{inc.category}</td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${
-                          inc.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-500 border-red-500/40 animate-pulse'
-                            : inc.severity === 'HIGH' ? 'bg-amber-500/20 text-amber-500 border-amber-500/40'
-                            : 'bg-blue-500/20 text-blue-500 border-blue-500/40'
-                        }`}>
-                          {inc.severity}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-slate-500 max-w-xs truncate">{inc.desc}</td>
-                      <td className="py-3 px-3 text-slate-600">
-                        <span>{inc.reporter}</span>
-                        <span className="block text-[10px] text-slate-400 font-mono">{inc.phone}</span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          inc.status === 'RESOLVED' ? 'bg-emerald-500/20 text-emerald-500'
-                            : inc.status === 'INVESTIGATING' ? 'bg-amber-500/20 text-amber-500'
-                            : 'bg-red-500/20 text-red-500'
-                        }`}>
-                          {inc.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right text-slate-400 font-mono">{inc.time}</td>
-                      <td className="py-3 px-3 text-right">
-                        <button 
-                          onClick={() => setSelectedIncident(inc)}
-                          className={`text-[11px] font-bold px-2.5 py-1 rounded border transition flex items-center gap-1 ml-auto ${
-                            isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
-                          }`}
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Inspect
-                        </button>
+
+                <tbody
+                  className={`divide-y font-medium ${
+                    isDark ? 'divide-slate-800/80' : 'divide-slate-100'
+                  }`}
+                >
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="py-10 text-center text-slate-500"
+                      >
+                        Loading incidents...
                       </td>
                     </tr>
-                  ))}
+                  ) : filteredIncidents.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="py-10 text-center text-slate-500"
+                      >
+                        No incidents match your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredIncidents.map((incident, index) => (
+                      <tr
+                        key={incident.id ?? index}
+                        className={`transition ${
+                          isDark
+                            ? 'hover:bg-slate-900/50'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td
+                          className={`px-3 py-3 font-bold ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}
+                        >
+                          {incident.pu}
+                        </td>
+                        <td className="px-3 py-3 text-slate-500">
+                          {incident.lga}
+                        </td>
+                        <td className="px-3 py-3 text-slate-500">
+                          {incident.category}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`rounded border px-2.5 py-0.5 text-[10px] font-extrabold ${severityStyle(
+                              incident.severity
+                            )}`}
+                          >
+                            {incident.severity}
+                          </span>
+                        </td>
+                        <td className="max-w-xs truncate px-3 py-3 text-slate-500">
+                          {incident.desc}
+                        </td>
+                        <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                          <span>{incident.reporter}</span>
+                          <span className="block font-mono text-[10px] text-slate-400">
+                            {incident.phone}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${statusStyle(
+                              incident.status
+                            )}`}
+                          >
+                            {incident.status}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-slate-400">
+                          {formatDate(incident.time)}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedIncident(incident)}
+                            className={`ml-auto flex items-center gap-1 rounded border px-2.5 py-1 text-[11px] font-bold transition ${
+                              isDark
+                                ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                                : 'border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200'
+                            }`}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            Inspect
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Inspect Incident Modal */}
           {selectedIncident && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <div className={`w-full max-w-lg rounded-xl p-6 space-y-4 shadow-xl ${cardClass}`}>
-                <div className="flex justify-between items-center border-b pb-3 border-slate-800">
-                  <h3 className="font-bold text-sm flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-red-500" /> Incident Detail #{selectedIncident.id}
-                  </h3>
-                  <button onClick={() => setSelectedIncident(null)} className="p-1 rounded-lg hover:bg-slate-800">
-                    <X className="w-4 h-4" />
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setSelectedIncident(null)
+                }
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="incident-modal-title"
+                className={`${cardClass} max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-xl p-5 shadow-xl md:p-6`}
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
+                  <h2
+                    id="incident-modal-title"
+                    className="flex items-center gap-2 text-sm font-bold"
+                  >
+                    <ShieldAlert className="h-4 w-4 text-red-500" />
+                    Incident Detail #{selectedIncident.id ?? 'N/A'}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIncident(null)}
+                    aria-label="Close incident details"
+                    className="rounded-lg p-1 hover:bg-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  <div className={`p-3 rounded-lg ${subcardClass}`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Location & Unit</span>
-                    <p className="font-bold text-sm mt-0.5">{selectedIncident.pu}</p>
-                    <p className="text-slate-400 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> LGA: {selectedIncident.lga}</p>
+                  <div className={`${subcardClass} rounded-lg p-3`}>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Location & Unit
+                    </span>
+                    <p className="mt-1 text-sm font-bold">
+                      {selectedIncident.pu}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1 text-slate-400">
+                      <MapPin className="h-3 w-3" />
+                      LGA: {selectedIncident.lga}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className={`p-3 rounded-lg ${subcardClass}`}>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Category</span>
-                      <p className="font-bold mt-0.5">{selectedIncident.category}</p>
+                    <div className={`${subcardClass} rounded-lg p-3`}>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">
+                        Category
+                      </span>
+                      <p className="mt-1 font-bold">
+                        {selectedIncident.category}
+                      </p>
                     </div>
-                    <div className={`p-3 rounded-lg ${subcardClass}`}>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Severity / Status</span>
-                      <p className="font-bold mt-0.5">{selectedIncident.severity} / {selectedIncident.status}</p>
+                    <div className={`${subcardClass} rounded-lg p-3`}>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">
+                        Severity / Status
+                      </span>
+                      <p className="mt-1 font-bold">
+                        {selectedIncident.severity} / {selectedIncident.status}
+                      </p>
                     </div>
                   </div>
 
-                  <div className={`p-3 rounded-lg ${subcardClass}`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Reporter Information</span>
-                    <p className="font-bold mt-0.5">{selectedIncident.reporter}</p>
-                    <p className="text-slate-400 flex items-center gap-1 mt-1"><Phone className="w-3 h-3" /> {selectedIncident.phone}</p>
-                  </div>
-
-                  <div className={`p-3 rounded-lg ${subcardClass}`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Description</span>
-                    <p className="mt-1 leading-relaxed text-slate-300">{selectedIncident.desc}</p>
-                  </div>
-
-                  {/* Situation Room Escalation & Status Updater */}
-                  <div className={`p-3 rounded-lg ${subcardClass} space-y-2`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                      Situation Room Escalation & Dispatch Action
+                  <div className={`${subcardClass} rounded-lg p-3`}>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Reporter Information
                     </span>
+                    <p className="mt-1 font-bold">
+                      {selectedIncident.reporter}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1 text-slate-400">
+                      <Phone className="h-3 w-3" />
+                      {selectedIncident.phone}
+                    </p>
+                  </div>
 
-                    {statusMsg && (
-                      <div className={`p-2 rounded text-xs flex items-center gap-1.5 ${
-                        statusMsg.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300'
-                      }`}>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{statusMsg.text}</span>
-                      </div>
-                    )}
+                  <div className={`${subcardClass} rounded-lg p-3`}>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Reported At
+                    </span>
+                    <p className="mt-1">{formatDate(selectedIncident.time)}</p>
+                  </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {['REPORTED', 'INVESTIGATING', 'RESOLVED', 'DISMISSED'].map((st) => (
-                        <button
-                          key={st}
-                          disabled={updatingStatus || selectedIncident.status === st}
-                          onClick={() => handleStatusUpdate(selectedIncident.id, st)}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-[10px] transition flex items-center gap-1 ${
-                            selectedIncident.status === st
-                              ? 'bg-emerald-600 text-white font-extrabold cursor-default shadow-sm'
-                              : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                          } disabled:opacity-50`}
-                        >
-                          {updatingStatus && selectedIncident.status !== st ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : null}
-                          {st === 'RESOLVED' ? '✓ Mark Resolved' : st === 'INVESTIGATING' ? '⚡ Dispatch / Investigate' : st}
-                        </button>
-                      ))}
-                    </div>
+                  <div className={`${subcardClass} rounded-lg p-3`}>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                      Description
+                    </span>
+                    <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                      {selectedIncident.desc}
+                    </p>
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
-                  <button 
-                    onClick={() => {
-                      setSelectedIncident(null)
-                      setStatusMsg(null)
-                    }}
-                    className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200"
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIncident(null)}
+                    className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
                   >
                     Close
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-          {/* Report New Incident Modal */}
-          {showIncidentModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className={`${cardClass} w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4`}>
-                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    <AlertTriangle className="w-4 h-4 text-amber-500" /> Report Field Security / BVAS Incident
-                  </h3>
-                  <button onClick={() => setShowIncidentModal(false)} className="text-slate-400 hover:text-white">✕</button>
-                </div>
-
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  const f = e.target;
-                  try {
-                    await apiFetch('/incidents', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        polling_unit_id: Number(f.polling_unit_id.value),
-                        incident_type: f.incident_type.value,
-                        severity: f.severity.value,
-                        description: f.description.value
-                      })
-                    });
-                    alert('Field incident reported successfully!');
-                    setShowIncidentModal(false);
-                    window.location.reload();
-                  } catch (err) {
-                    alert('Error reporting incident: ' + err.message);
-                  }
-                }} className="space-y-3 text-xs">
-                  <div>
-                    <label className="block font-bold mb-1 text-slate-400">Polling Unit</label>
-                    <select required name="polling_unit_id" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
-                      {pollingUnitsList.length > 0 ? (
-                        pollingUnitsList.map(pu => (
-                          <option key={pu.id} value={pu.id}>{pu.code} - {pu.name}</option>
-                        ))
-                      ) : (
-                        <option value="1">PU 001 - Limawa Ward (Dutse)</option>
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1 text-slate-400">Incident Category</label>
-                    <select name="incident_type" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
-                      <option value="BVAS Issues">BVAS Malfunction</option>
-                      <option value="Violence">Violence / Clash</option>
-                      <option value="Intimidation">Voter Intimidation</option>
-                      <option value="Vote Buying">Vote Buying Activity</option>
-                      <option value="Late Officials">Late INEC Staff Arrival</option>
-                      <option value="Ballot Shortage">Shortage of Electoral Materials</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1 text-slate-400">Severity Rating</label>
-                    <select name="severity" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
-                      <option value="CRITICAL">CRITICAL (Emergency Intervention Needed)</option>
-                      <option value="HIGH">HIGH Priority</option>
-                      <option value="MEDIUM">MEDIUM Priority</option>
-                      <option value="LOW">LOW Priority</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1 text-slate-400">Detailed Incident Description</label>
-                    <textarea required name="description" rows={3} placeholder="Describe the field incident situation..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none resize-none"></textarea>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setShowIncidentModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-lg hover:bg-slate-700">Cancel</button>
-                    <button type="submit" className="px-4 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700">Submit Incident</button>
-                  </div>
-                </form>
               </div>
             </div>
           )}
