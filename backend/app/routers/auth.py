@@ -2,7 +2,7 @@
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.models import User
 from app import schemas
 from app.core.config import settings
 from app.core import security
+from app.core.audit import write_audit_log
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -59,9 +60,12 @@ def get_current_user(
 
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(
+    request: Request,
     db: Session = Depends(get_db),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
+    client_ip = request.client.host if request.client else "unknown"
+
     # 1. Authenticate user by username or phone number
     input_str = form_data.username.strip()
     digits_only = "".join(c for c in input_str if c.isdigit())
@@ -102,6 +106,14 @@ def login_for_access_token(
         form_data.password,
         user.hashed_password,
     ):
+        write_audit_log(
+            db=db,
+            user=user if user else None,
+            action="LOGIN_FAILED",
+            details=f"Invalid credentials submitted for identity '{input_str}'",
+            ip_address=client_ip,
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -109,10 +121,28 @@ def login_for_access_token(
         )
 
     if not user.is_active:
+        write_audit_log(
+            db=db,
+            user=user,
+            action="LOGIN_BLOCKED",
+            details=f"Suspended/inactive account '{user.username}' attempted to log in",
+            ip_address=client_ip,
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user account",
         )
+
+    # Log successful login
+    write_audit_log(
+        db=db,
+        user=user,
+        action="USER_LOGIN",
+        details=f"User '{user.username}' logged in successfully ({user.role})",
+        ip_address=client_ip,
+    )
+    db.commit()
 
     # 4. Generate access token
     access_token_expires = timedelta(

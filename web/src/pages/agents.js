@@ -23,6 +23,10 @@ import {
   User,
   X,
   AlertTriangle,
+  Trash2,
+  UserCheck,
+  UserX,
+  AlertCircle,
 } from 'lucide-react'
 
 export default function AgentsPage() {
@@ -37,6 +41,9 @@ export default function AgentsPage() {
   const [error, setError] = useState('')
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [actionLoading, setActionLoading] = useState(null)
+  const [deleteConfirmAgent, setDeleteConfirmAgent] = useState(null)
+  const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
@@ -81,6 +88,50 @@ export default function AgentsPage() {
   useEffect(() => {
     loadAgents()
   }, [loadAgents])
+
+  const handleToggleSuspend = async (agent) => {
+    const newStatus = !getActive(agent)
+    const actionName = newStatus ? 'activate' : 'suspend'
+    if (!window.confirm(`Are you sure you want to ${actionName} agent @${agent.username || agent.name}?`)) {
+      return
+    }
+    setActionLoading(agent.id)
+    try {
+      await apiFetch(`/agents/${agent.id}/status?active=${newStatus}`, {
+        method: 'PATCH'
+      })
+      setAgentsList(prev => prev.map(a => a.id === agent.id ? { ...a, is_active: newStatus } : a))
+      if (selectedAgent && selectedAgent.id === agent.id) {
+        setSelectedAgent(prev => ({ ...prev, is_active: newStatus }))
+      }
+      setToastMessage(`Agent @${agent.username} ${newStatus ? 'activated' : 'suspended'} successfully!`)
+      setTimeout(() => setToastMessage(''), 4000)
+    } catch (err) {
+      alert(`Failed to update agent status: ${err.message || 'Server error'}`)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDeleteAgent = async (agent) => {
+    setActionLoading(agent.id)
+    try {
+      const res = await apiFetch(`/agents/${agent.id}`, {
+        method: 'DELETE'
+      })
+      setAgentsList(prev => prev.filter(a => a.id !== agent.id))
+      if (selectedAgent && selectedAgent.id === agent.id) {
+        setSelectedAgent(null)
+      }
+      setDeleteConfirmAgent(null)
+      setToastMessage(res?.message || `Agent @${agent.username} deleted successfully!`)
+      setTimeout(() => setToastMessage(''), 4000)
+    } catch (err) {
+      alert(`Failed to delete agent: ${err.message || 'Server error'}`)
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const getActive = (agent) =>
     agent.is_active === true ||
@@ -392,7 +443,7 @@ export default function AgentsPage() {
                       <th className="py-3 px-3">Polling Unit</th>
                       <th className="py-3 px-3 text-center">Account Status</th>
                       <th className="py-3 px-3 text-center">Connection</th>
-                      <th className="py-3 px-3 text-center">Details</th>
+                      <th className="py-3 px-3 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y font-medium ${
@@ -441,13 +492,50 @@ export default function AgentsPage() {
                           {onlineBadge(agent)}
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <button
-                            onClick={() => setSelectedAgent(agent)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-pdp border border-pdp/30 hover:bg-pdp hover:text-white transition"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            View Details
-                          </button>
+                          <div className="inline-flex items-center gap-1.5 justify-center">
+                            <button
+                              onClick={() => setSelectedAgent(agent)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-pdp border border-pdp/30 hover:bg-pdp hover:text-white transition"
+                              title="View Details"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleToggleSuspend(agent)}
+                              disabled={actionLoading === agent.id}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                getActive(agent)
+                                  ? 'text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                  : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                              }`}
+                              title={getActive(agent) ? 'Suspend Agent Account' : 'Activate Agent Account'}
+                            >
+                              {actionLoading === agent.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : getActive(agent) ? (
+                                <>
+                                  <UserX className="w-3 h-3" />
+                                  <span>Suspend</span>
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="w-3 h-3" />
+                                  <span>Activate</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => setDeleteConfirmAgent(agent)}
+                              disabled={actionLoading === agent.id}
+                              className="inline-flex items-center p-1 rounded-lg text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition"
+                              title="Delete Agent"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -548,12 +636,89 @@ export default function AgentsPage() {
               </p>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleToggleSuspend(selectedAgent)}
+                  disabled={actionLoading === selectedAgent.id}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition inline-flex items-center gap-1.5 ${
+                    getActive(selectedAgent)
+                      ? 'text-amber-400 border-amber-500/40 hover:bg-amber-500/20'
+                      : 'text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/20'
+                  }`}
+                >
+                  {getActive(selectedAgent) ? (
+                    <>
+                      <UserX className="w-3.5 h-3.5" />
+                      <span>Suspend Account</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>Activate Account</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setDeleteConfirmAgent(selectedAgent)}
+                  disabled={actionLoading === selectedAgent.id}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-500/40 text-rose-400 hover:bg-rose-500/20 transition inline-flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Agent</span>
+                </button>
+              </div>
+
               <button
                 onClick={() => setSelectedAgent(null)}
-                className="px-4 py-2 rounded-lg bg-pdp text-white text-xs font-bold hover:bg-pdp-dark"
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-xl flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmAgent && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`${cardClass} max-w-md w-full rounded-2xl p-6 border border-rose-500/30 shadow-2xl space-y-4`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Confirm Delete Agent</h3>
+                <p className="text-xs text-slate-400">@{deleteConfirmAgent.username} ({deleteConfirmAgent.full_name || 'Agent'})</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to delete this agent? If this agent has already submitted election results or incident reports, they will be safely deactivated to preserve legal tribunal integrity.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmAgent(null)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteAgent(deleteConfirmAgent)}
+                disabled={actionLoading === deleteConfirmAgent.id}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg"
+              >
+                {actionLoading === deleteConfirmAgent.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm Delete</span>
               </button>
             </div>
           </div>
