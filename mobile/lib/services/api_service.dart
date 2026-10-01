@@ -1,119 +1,22 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'socket_service.dart';
 
 class ApiService {
-  // Default to live Vercel cloud deployment for worldwide access
-  static String baseUrl = 'https://jigawa-pdp-pollwatch-backend.vercel.app/api';
+  // Render Cloud Production Backend (Sole, Permanent Endpoint)
+  static const String baseUrl = 'https://pdp-pollwatch-backend.onrender.com/api';
 
   static String? token;
   static Map<String, dynamic>? currentUser;
   static Map<String, dynamic>? currentPu;
   static String lastErrorMessage = '';
 
-  static String normalizeUrl(String raw) {
-    var trimmed = raw.trim();
-    if (trimmed.isEmpty) return baseUrl;
-    // Prepend https:// or http:// if missing scheme
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      if (trimmed.contains('vercel.app') || !trimmed.contains(':8000')) {
-        trimmed = 'https://$trimmed';
-      } else {
-        trimmed = 'http://$trimmed';
-      }
-    }
-    // Remove trailing slashes
-    while (trimmed.endsWith('/')) {
-      trimmed = trimmed.substring(0, trimmed.length - 1);
-    }
-    // Ensure /api is appended
-    if (!trimmed.endsWith('/api')) {
-      trimmed = '$trimmed/api';
-    }
-    return trimmed;
-  }
-
-  static void setBaseUrl(String url) {
-    baseUrl = normalizeUrl(url);
-  }
-
-  /// Ping the backend to check network reachability
-  static Future<Map<String, dynamic>> testConnection([String? customUrl]) async {
-    final target = customUrl != null ? normalizeUrl(customUrl) : baseUrl;
-    final rootTarget = target.replaceAll(RegExp(r'/api$'), '');
-    final stopwatch = Stopwatch()..start();
-    try {
-      final uri = Uri.parse('$rootTarget/');
-      final res = await http.get(uri).timeout(const Duration(seconds: 4));
-      stopwatch.stop();
-      if (res.statusCode == 200) {
-        return {
-          'success': true,
-          'latencyMs': stopwatch.elapsedMilliseconds,
-          'message': 'Connected (${stopwatch.elapsedMilliseconds}ms)',
-          'url': target,
-        };
-      } else {
-        return {
-          'success': false,
-          'message': 'Server returned HTTP ${res.statusCode}',
-          'url': target,
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Cannot reach server at $rootTarget',
-        'error': e.toString(),
-        'url': target,
-      };
-    }
-  }
-
-  /// Concurrently probe candidate URLs and automatically lock on the fastest working one
-  static Future<Map<String, dynamic>> autoDetectServer() async {
-    final candidates = [
-      'https://pdp-pollwatch-backend.onrender.com',      // Render Cloud (Blueprint)
-      'https://jigawa-pdp-pollwatch.onrender.com',       // Render Cloud
-      'https://api.pdpjigawa2027.com',                   // Neotech Hosting
-      'https://jigawa-pdp-pollwatch-backend.vercel.app', // Vercel Cloud
-      'http://127.0.0.1:8000',                            // USB Reverse Tunnel via adb
-      'http://192.168.1.164:8000',                        // Wi-Fi LAN
-      'http://10.0.2.2:8000',                             // Android Emulator
-    ];
-
-    for (final candidate in candidates) {
-      final res = await testConnection(candidate);
-      if (res['success'] == true) {
-        setBaseUrl(candidate);
-        String mode = 'Cloud';
-        if (candidate.contains('onrender.com')) mode = 'Render Cloud';
-        if (candidate.contains('pdpjigawa2027.com')) mode = 'Neotech Hosting';
-        if (candidate.contains('vercel.app')) mode = 'Vercel Cloud';
-        if (candidate.contains('127.0.0.1')) mode = 'USB Tunnel';
-        if (candidate.contains('192.168.')) mode = 'Wi-Fi LAN';
-        if (candidate.contains('10.0.2.2')) mode = 'Emulator';
-        return {
-          'success': true,
-          'url': candidate,
-          'mode': mode,
-          'latencyMs': res['latencyMs'],
-          'message': 'Connected via $mode (${res['latencyMs']}ms)',
-        };
-      }
-    }
-
-    return {
-      'success': false,
-      'message': 'Could not reach server on Cloud, USB, or Wi-Fi. Check connection.',
-    };
-  }
-
   static Map<String, String> get headers => {
     'Content-Type': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
   };
 
-  /// Authenticate agent with username & password
+  /// Authenticate agent with username & password against Render Cloud
   static Future<bool> login(String username, String password) async {
     lastErrorMessage = '';
     try {
@@ -140,6 +43,12 @@ class ApiService {
           'ward_id': data['ward_id'],
           'allowed_pages': data['allowed_pages'],
         };
+
+        // Initialize and establish WebSocket connection to Render Cloud
+        SocketService.init();
+        if (token != null) {
+          SocketService.connect(token!);
+        }
 
         // Attempt non-blocking profile enrichment
         try {
@@ -189,10 +98,17 @@ class ApiService {
         return false;
       }
     } catch (e) {
-      lastErrorMessage = 'Network error connecting to $baseUrl ($e). Check your Wi-Fi, mobile data, or server IP.';
-      print('Login error: $e');
+      lastErrorMessage = 'Cannot connect to Render Cloud ($baseUrl). Please check internet connectivity.';
       return false;
     }
+  }
+
+  /// Logout and disconnect WebSocket
+  static void logout() {
+    SocketService.disconnect();
+    token = null;
+    currentUser = null;
+    currentPu = null;
   }
 
   /// Submit Form EC8A Result (Multi-Category: Governorship, Senatorial, House of Reps, Presidential)
@@ -342,6 +258,20 @@ class ApiService {
     if (response.statusCode == 200) {
       return json.decode(response.body);
     }
+    return [];
+  }
+
+  /// Fetch Recent Broadcasts from Situation Room
+  static Future<List<dynamic>> getBroadcasts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/broadcasts'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (_) {}
     return [];
   }
 }

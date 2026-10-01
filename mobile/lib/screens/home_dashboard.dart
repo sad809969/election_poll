@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'timeline_tracker_screen.dart';
 import 'incident_report_screen.dart';
 import 'result_submission_screen.dart';
+import 'notifications_screen.dart';
 import 'login_screen.dart';
+import '../services/socket_service.dart';
+import '../services/api_service.dart';
 
 class HomeDashboard extends StatefulWidget {
   final String agentName;
@@ -28,7 +31,16 @@ class HomeDashboard extends StatefulWidget {
 
 class _HomeDashboardState extends State<HomeDashboard> {
   bool _isOnline = true;
-  int _offlineQueueCount = 0;
+  final int _offlineQueueCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    SocketService.init();
+    if (ApiService.token != null && !SocketService.isConnected) {
+      SocketService.connect(ApiService.token!);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,22 +55,79 @@ class _HomeDashboardState extends State<HomeDashboard> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('JIGAWA PDP POLLWATCH', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF008751))),
+                const Text(
+                  'JIGAWA PDP POLLWATCH',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF008751)),
+                ),
                 Text(widget.lgaName, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
               ],
             ),
           ],
         ),
         actions: [
+          // Notification Bell with Badge
+          ValueListenableBuilder<int>(
+            valueListenable: SocketService.unreadCountNotifier,
+            builder: (context, unreadCount, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                    tooltip: 'Situation Alerts',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE11D48),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : '$unreadCount',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
-            icon: Icon(_isOnline ? Icons.wifi : Icons.wifi_off, color: _isOnline ? const Color(0xFF10B981) : Colors.red),
+            icon: Icon(
+              _isOnline ? Icons.wifi : Icons.wifi_off,
+              color: _isOnline ? const Color(0xFF10B981) : Colors.red,
+            ),
             onPressed: () => setState(() => _isOnline = !_isOnline),
             tooltip: _isOnline ? 'Online (Connected)' : 'Offline (Queue Mode)',
           ),
           IconButton(
             icon: const Icon(Icons.logout, color: Color(0xFF94A3B8)),
+            tooltip: 'Logout',
             onPressed: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+              ApiService.logout();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
             },
           ),
         ],
@@ -81,7 +150,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: const Color(0xFF008751).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                    BoxShadow(
+                      color: const Color(0xFF008751).withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
                 child: Column(
@@ -96,21 +169,33 @@ class _HomeDashboardState extends State<HomeDashboard> {
                             color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Row(
-                            children: const [
+                          child: const Row(
+                            children: [
                               Icon(Icons.check_circle, size: 12, color: Colors.white),
                               SizedBox(width: 4),
-                              Text('AGENT CHECKED-IN', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white)),
+                              Text(
+                                'AGENT CHECKED-IN',
+                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.white),
+                              ),
                             ],
                           ),
                         ),
-                        const Text('PDP POWER TO THE PEOPLE!', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
+                        const Text(
+                          'PDP POWER TO THE PEOPLE!',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(widget.agentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
+                    Text(
+                      widget.agentName,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white),
+                    ),
                     const SizedBox(height: 4),
-                    Text('Assigned: ${widget.assignedPu}', style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Assigned: ${widget.assignedPu}',
+                      style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -125,7 +210,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                             children: [
                               Icon(Icons.location_on, size: 11, color: Color(0xFF10B981)),
                               SizedBox(width: 4),
-                              Text('GPS Geofenced & Active', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                              Text(
+                                'GPS Geofenced & Active',
+                                style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
                             ],
                           ),
                         ),
@@ -141,7 +229,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                             children: [
                               Icon(Icons.camera_alt, size: 11, color: Color(0xFF10B981)),
                               SizedBox(width: 4),
-                              Text('Camera Ready', style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                              Text(
+                                'Camera Ready',
+                                style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
                             ],
                           ),
                         ),
@@ -153,7 +244,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
               const SizedBox(height: 20),
 
-              const Text('FIELD OPERATIVE ACTIONS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 0.8)),
+              const Text(
+                'FIELD OPERATIVE ACTIONS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF94A3B8),
+                  letterSpacing: 0.8,
+                ),
+              ),
               const SizedBox(height: 12),
 
               // 4 Main Action Cards Grid
@@ -219,53 +318,76 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ),
                   _buildActionCard(
                     context,
-                    title: 'Situation Desk',
-                    subtitle: 'Call Coordinator',
-                    icon: Icons.phone_in_talk,
+                    title: 'Situation Alerts',
+                    subtitle: 'Broadcast Feed & Audio',
+                    icon: Icons.campaign_rounded,
                     color: const Color(0xFF8B5CF6),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Calling LGA Coordinator: 0812 345 6789...')),
-                      );
-                    },
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    ),
                   ),
                 ],
               ),
 
               const SizedBox(height: 20),
 
-              // Queue Status Footer
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141E38),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF1E293B)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _isOnline ? Icons.cloud_done : Icons.cloud_off,
-                      color: _isOnline ? const Color(0xFF10B981) : Colors.amber,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _isOnline ? 'Real-Time Sync Active' : 'Offline Queue Active',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _isOnline ? const Color(0xFF10B981) : Colors.amber),
-                          ),
-                          Text(
-                            _isOnline ? 'All telemetry synced with Situation Room' : '$_offlineQueueCount items queued for automatic sync',
-                            style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
-                          ),
-                        ],
+              // Queue Status Footer with Reactive WebSocket Telemetry
+              ValueListenableBuilder<bool>(
+                valueListenable: SocketService.connectionState,
+                builder: (context, isWsConnected, _) {
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141E38),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isWsConnected
+                            ? const Color(0xFF008751).withOpacity(0.5)
+                            : const Color(0xFF1E293B),
                       ),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isWsConnected ? Icons.cloud_done : (_isOnline ? Icons.cloud_sync : Icons.cloud_off),
+                          color: isWsConnected
+                              ? const Color(0xFF10B981)
+                              : (_isOnline ? Colors.amber : Colors.redAccent),
+                          size: 22,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isWsConnected
+                                    ? 'Render Cloud WebSocket Active'
+                                    : (_isOnline ? 'Connecting to Render Cloud...' : 'Offline Queue Active'),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: isWsConnected
+                                      ? const Color(0xFF10B981)
+                                      : (_isOnline ? Colors.amber : Colors.redAccent),
+                                ),
+                              ),
+                              Text(
+                                isWsConnected
+                                    ? 'Live telemetry streaming to Jigawa Situation Room'
+                                    : '$_offlineQueueCount items queued for automatic sync',
+                                style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -310,9 +432,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white)),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ],
