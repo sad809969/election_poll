@@ -14,7 +14,7 @@ Render provides persistent web services and managed PostgreSQL databases with au
 3. Connect your GitHub repository: `sad809969/election_poll` on the `main` branch.
 
 ### Step 2: Automatic Blueprint Deployment
-Render reads the included [render.yaml](file:///home/fox/election_poll/render.yaml) file automatically:
+Render reads the included [render.yaml](render.yaml) file automatically:
 - **Web Service**: `pdp-pollwatch-backend` (FastAPI + Uvicorn)
 - **Database**: `pdp-pollwatch-db` (Managed Persistent PostgreSQL)
 - **Automatic Variables**: Sets `DATABASE_URL` directly from the managed PostgreSQL database.

@@ -59,6 +59,23 @@ def create_announcement(
     db.commit()
     db.refresh(announcement)
 
+    try:
+        from app.routers.ws import dispatch_live_event
+        dispatch_live_event({
+            "type": "broadcast",
+            "id": announcement.id,
+            "title": announcement.title,
+            "message": announcement.message,
+            "urgency": announcement.urgency or "Normal",
+            "sender_name": announcement.sender_name,
+            "target_role": announcement.target_role,
+            "target_lga_id": announcement.target_lga_id,
+            "is_pinned": announcement.is_pinned,
+            "timestamp": announcement.created_at.isoformat() if announcement.created_at else None,
+        })
+    except Exception:
+        pass
+
     return announcement
 
 
@@ -81,3 +98,14 @@ def delete_announcement(
     db.commit()
 
     return {"message": "Announcement deleted successfully"}
+
+
+# Alias router so /api/broadcasts maps 1:1 to announcements
+broadcasts_router = APIRouter(
+    prefix="/broadcasts",
+    tags=["Broadcasts"],
+)
+broadcasts_router.add_api_route("", get_announcements, methods=["GET"], response_model=list[AnnouncementResponse])
+broadcasts_router.add_api_route("", create_announcement, methods=["POST"], response_model=AnnouncementResponse, status_code=status.HTTP_201_CREATED)
+broadcasts_router.add_api_route("/{announcement_id}", delete_announcement, methods=["DELETE"], response_model=MessageResponse)
+

@@ -80,6 +80,7 @@ app.include_router(electoral.router, prefix=settings.API_V1_STR)
 if communication:
     app.include_router(communication.router, prefix=settings.API_V1_STR)
 app.include_router(announcements.router, prefix=settings.API_V1_STR)
+app.include_router(announcements.broadcasts_router, prefix=settings.API_V1_STR)
 app.include_router(audit.router, prefix=settings.API_V1_STR)
 app.include_router(dashboard.router, prefix=settings.API_V1_STR)
 app.include_router(activities.router, prefix=settings.API_V1_STR)

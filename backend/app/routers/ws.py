@@ -43,6 +43,28 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+def dispatch_live_event(message: dict):
+    """
+    Safely dispatches a live WebSocket event to all connected clients
+    from either async or synchronous route handlers without blocking.
+    """
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            asyncio.create_task(manager.broadcast(message))
+        else:
+            asyncio.run(manager.broadcast(message))
+    except RuntimeError:
+        try:
+            asyncio.run(manager.broadcast(message))
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+
 @router.websocket("/live-feed")
 async def websocket_live_feed(
     websocket: WebSocket,

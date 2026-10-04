@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/socket_service.dart';
+import '../services/api_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -10,6 +11,18 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String _selectedFilter = 'All';
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshAlerts();
+  }
+
+  Future<void> _refreshAlerts() async {
+    try {
+      await ApiService.getBroadcasts();
+    } catch (_) {}
+  }
 
   String _formatTimestamp(DateTime dt) {
     final now = DateTime.now();
@@ -159,13 +172,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             // Notifications List
             Expanded(
-              child: ValueListenableBuilder<List<AppNotification>>(
-                valueListenable: SocketService.notificationsNotifier,
-                builder: (context, notifications, _) {
-                  final filtered = notifications.where((n) {
-                    if (_selectedFilter == 'All') return true;
-                    return n.type.toLowerCase() == _selectedFilter.toLowerCase();
-                  }).toList();
+              child: RefreshIndicator(
+                onRefresh: _refreshAlerts,
+                color: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF0B132B),
+                child: ValueListenableBuilder<List<AppNotification>>(
+                  valueListenable: SocketService.notificationsNotifier,
+                  builder: (context, notifications, _) {
+                    final filtered = notifications.where((n) {
+                      if (_selectedFilter == 'All') return true;
+                      return n.type.toLowerCase() == _selectedFilter.toLowerCase();
+                    }).toList();
 
                   if (filtered.isEmpty) {
                     return Center(
@@ -331,7 +348,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 },
               ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );

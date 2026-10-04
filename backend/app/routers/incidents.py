@@ -164,12 +164,29 @@ def create_incident(
    )
 
     db.add(incident)
-
     db.commit()
-
     db.refresh(incident)
 
-    return enrich_incident(incident, fallback_reporter=current_user)
+    enriched = enrich_incident(incident, fallback_reporter=current_user)
+
+    try:
+        from app.routers.ws import dispatch_live_event
+        dispatch_live_event({
+            "type": "incident",
+            "id": incident.id,
+            "title": f"Incident Reported: {incident.incident_type}",
+            "message": f"{incident.severity.upper()} incident at {enriched.polling_unit_name or 'PU ' + str(incident.polling_unit_id)}: {incident.description}",
+            "severity": incident.severity,
+            "incident_type": incident.incident_type,
+            "polling_unit_id": incident.polling_unit_id,
+            "polling_unit_name": enriched.polling_unit_name,
+            "lga_name": enriched.lga_name,
+            "timestamp": incident.created_at.isoformat() if incident.created_at else None,
+        })
+    except Exception:
+        pass
+
+    return enriched
 
 
 # ==========================================================

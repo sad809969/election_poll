@@ -217,6 +217,26 @@ class SocketService {
     _updateUnreadCount();
   }
 
+  /// Add incoming notifications from REST history without duplicates
+  static void mergeHistoricalNotifications(List<dynamic> items) {
+    final current = List<AppNotification>.from(notificationsNotifier.value);
+    final existingIds = current.map((n) => n.id).toSet();
+
+    for (var item in items) {
+      if (item is Map<String, dynamic>) {
+        final id = item['id']?.toString() ?? '';
+        if (id.isNotEmpty && !existingIds.contains(id)) {
+          existingIds.add(id);
+          current.add(AppNotification.fromJson(item));
+        }
+      }
+    }
+    // Sort newest first
+    current.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    notificationsNotifier.value = current;
+    _updateUnreadCount();
+  }
+
   static void _updateUnreadCount() {
     unreadCountNotifier.value =
         notificationsNotifier.value.where((n) => !n.isRead).length;

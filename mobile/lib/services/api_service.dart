@@ -261,17 +261,37 @@ class ApiService {
     return [];
   }
 
-  /// Fetch Recent Broadcasts from Situation Room
+  /// Fetch Recent Broadcasts from Situation Room and merge into socket state
   static Future<List<dynamic>> getBroadcasts() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/broadcasts'),
+        Uri.parse('$baseUrl/announcements'),
         headers: headers,
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 8));
+
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final data = json.decode(response.body);
+        if (data is List) {
+          SocketService.mergeHistoricalNotifications(data);
+          return data;
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      try {
+        final fallback = await http.get(
+          Uri.parse('$baseUrl/broadcasts'),
+          headers: headers,
+        ).timeout(const Duration(seconds: 8));
+
+        if (fallback.statusCode == 200) {
+          final data = json.decode(fallback.body);
+          if (data is List) {
+            SocketService.mergeHistoricalNotifications(data);
+            return data;
+          }
+        }
+      } catch (_) {}
+    }
     return [];
   }
 }

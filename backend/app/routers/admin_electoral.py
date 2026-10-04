@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models import LGA, Ward, PollingUnit, User, Party, ElectionResult, Incident
+from app.models import LGA, Ward, PollingUnit, User, Party, ElectionResult, Incident, VoteResult
 from app.core.config import settings
 from app.core.permissions import require_admin
 
@@ -113,9 +113,18 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     users_count = db.query(User).count()
     active_agents = db.query(User).filter(User.role == "Polling Unit Agent", User.is_active == True).count()
     
-    results_count = db.query(ElectionResult).count()
-    verified_results = db.query(ElectionResult).filter(ElectionResult.verification_status == "VERIFIED").count()
-    flagged_results = db.query(ElectionResult).filter(ElectionResult.verification_status == "FLAGGED").count()
+    # Support both VoteResult (live submissions) and ElectionResult (formal archive)
+    vote_res_count = db.query(VoteResult).count()
+    elec_res_count = db.query(ElectionResult).count()
+    results_count = max(vote_res_count, elec_res_count)
+
+    verified_vote = db.query(VoteResult).filter(VoteResult.verification_status == "VERIFIED").count()
+    verified_elec = db.query(ElectionResult).filter(ElectionResult.verification_status == "VERIFIED").count()
+    verified_results = max(verified_vote, verified_elec)
+
+    flagged_vote = db.query(VoteResult).filter(VoteResult.verification_status == "FLAGGED").count()
+    flagged_elec = db.query(ElectionResult).filter(ElectionResult.verification_status == "FLAGGED").count()
+    flagged_results = max(flagged_vote, flagged_elec)
     incidents_count = db.query(Incident).count()
 
     db_driver = "PostgreSQL" if "postgresql" in settings.DATABASE_URL else "SQLite"

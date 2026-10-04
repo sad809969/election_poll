@@ -69,6 +69,23 @@ def create_announcement(
     db.commit()
     db.refresh(announcement)
 
+    try:
+        from app.routers.ws import dispatch_live_event
+        dispatch_live_event({
+            "type": "broadcast",
+            "id": announcement.id,
+            "title": announcement.title,
+            "message": announcement.message,
+            "urgency": announcement.urgency or "Normal",
+            "sender_name": announcement.sender_name,
+            "target_role": announcement.target_role,
+            "target_lga_id": announcement.target_lga_id,
+            "is_pinned": announcement.is_pinned,
+            "timestamp": announcement.created_at.isoformat() if announcement.created_at else None,
+        })
+    except Exception:
+        pass
+
     return announcement
 
 
@@ -145,6 +162,21 @@ def send_message(
     db.add(message)
     db.commit()
     db.refresh(message)
+
+    try:
+        from app.routers.ws import dispatch_live_event
+        dispatch_live_event({
+            "type": "message",
+            "id": message.id,
+            "title": f"Message: {message.channel.title()}",
+            "message": message.content,
+            "channel": message.channel,
+            "sender_id": message.sender_id,
+            "recipient_id": message.recipient_id,
+            "timestamp": message.created_at.isoformat() if message.created_at else None,
+        })
+    except Exception:
+        pass
 
     return message
 

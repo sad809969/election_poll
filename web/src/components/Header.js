@@ -143,12 +143,13 @@ export default function Header({
         {/* Notifications */}
         <button
           onClick={() => router.push('/notifications')}
-          className={controlClass}
+          className={`${controlClass} relative`}
           aria-label="Notifications"
-          title="View Notifications"
+          title="View Notifications & Live Alerts"
           type="button"
         >
           <Bell className="w-4 h-4" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-400/40 animate-pulse" />
         </button>
 
         {/* Messages */}

@@ -347,6 +347,25 @@ def submit_result(
     db.commit()
     db.refresh(result)
 
+    try:
+        from app.routers.ws import dispatch_live_event
+        dispatch_live_event({
+            "type": "result",
+            "id": result.id,
+            "title": f"Result Submitted: {polling_unit.name}",
+            "message": f"Form EC8A result submitted for {polling_unit.name} ({election_type}): PDP {pdp}, APC {apc}. Status: {result.verification_status}",
+            "polling_unit_id": polling_unit.id,
+            "polling_unit_name": polling_unit.name,
+            "election_type": result.election_type,
+            "verification_status": result.verification_status,
+            "is_overvoting": is_overvoting,
+            "pdp_votes": pdp,
+            "apc_votes": apc,
+            "timestamp": result.created_at.isoformat() if result.created_at else None,
+        })
+    except Exception:
+        pass
+
     return {
         "message": f"{election_type} Result {'updated' if is_update else 'submitted'} successfully",
         "id": result.id,

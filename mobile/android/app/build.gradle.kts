@@ -38,3 +38,7 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Xlint:-options")
+}
