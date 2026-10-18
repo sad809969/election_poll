@@ -23,11 +23,7 @@ class JigawaPollWatchApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: const Color(0xFF070D1E),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF141E38),
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
+        cardColor: const Color(0xFF141E38),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF0B132B),
           foregroundColor: Colors.white,
