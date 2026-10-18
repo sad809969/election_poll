@@ -26,24 +26,16 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.9"
 
-  # 2. Next.js Web Frontend Service
+  # 2. Flutter Web Unified Situation Room & Admin Portal
   - type: web
     name: pdp-pollwatch-web
-    runtime: node
-    rootDir: web
+    runtime: docker
+    rootDir: mobile
+    dockerfilePath: Dockerfile
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    healthCheckPath: /login
+    healthCheckPath: /
     autoDeploy: true
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://pdp-pollwatch-backend.onrender.com/api
-      - key: NEXT_PUBLIC_API_BASE_URL
-        value: https://pdp-pollwatch-backend.onrender.com/api
-      - key: NODE_VERSION
-        value: 20.12.2
 
 databases:
   # 3. Managed Persistent PostgreSQL Database

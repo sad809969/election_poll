@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_dashboard.dart';
+import 'admin/admin_dashboard_screen.dart';
 import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -39,27 +40,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success && mounted) {
       final user = ApiService.currentUser;
-      final pu = ApiService.currentPu;
-      final agentName = user?['full_name'] ?? 'Agent $username';
-      final assignedPu = pu?['name'] ?? 'Assigned Polling Unit';
-      final puCode = pu?['code'] ?? 'PU-001';
-      final lgaName = pu?['lga']?['name'] ?? pu?['lga_name'] ?? 'Jigawa Command';
-      final puId = user?['polling_unit_id'] ?? pu?['id'] ?? 1;
-      final registeredVoters = pu?['registered_voters'] ?? 650;
+      final roleStr = (user?['role'] ?? '').toString().toLowerCase();
+      final bool isAdminRole = roleStr.contains('admin') ||
+          roleStr.contains('officer') ||
+          roleStr.contains('director') ||
+          roleStr.contains('chairman') ||
+          roleStr.contains('coordinator') ||
+          roleStr.contains('supervisor') ||
+          roleStr.contains('analyst') ||
+          roleStr.contains('candidate') ||
+          roleStr.contains('collator');
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeDashboard(
-            agentName: agentName,
-            assignedPu: assignedPu,
-            lgaName: lgaName,
-            puCode: puCode,
-            pollingUnitId: puId,
-            registeredVoters: registeredVoters,
+      if (isAdminRole) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AdminDashboardScreen(),
           ),
-        ),
-      );
+        );
+      } else {
+        final pu = ApiService.currentPu;
+        final agentName = user?['full_name'] ?? 'Agent $username';
+        final assignedPu = pu?['name'] ?? 'Assigned Polling Unit';
+        final puCode = pu?['code'] ?? 'PU-001';
+        final lgaName = pu?['lga']?['name'] ?? pu?['lga_name'] ?? 'Jigawa Command';
+        final puId = user?['polling_unit_id'] ?? pu?['id'] ?? 1;
+        final registeredVoters = pu?['registered_voters'] ?? 650;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeDashboard(
+              agentName: agentName,
+              assignedPu: assignedPu,
+              lgaName: lgaName,
+              puCode: puCode,
+              pollingUnitId: puId,
+              registeredVoters: registeredVoters,
+            ),
+          ),
+        );
+      }
     } else if (mounted) {
       showDialog(
         context: context,

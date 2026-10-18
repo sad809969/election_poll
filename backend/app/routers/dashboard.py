@@ -18,6 +18,8 @@ router = APIRouter(
 
 
 @router.get("")
+@router.get("/")
+@router.get("/summary")
 def dashboard(
     db: Session = Depends(get_db),
     _: User = Depends(require_viewer),

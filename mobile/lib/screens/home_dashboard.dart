@@ -3,6 +3,7 @@ import 'timeline_tracker_screen.dart';
 import 'incident_report_screen.dart';
 import 'result_submission_screen.dart';
 import 'notifications_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import '../services/socket_service.dart';
 import '../services/api_service.dart';
@@ -108,6 +109,16 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       ),
                     ),
                 ],
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF10B981)),
+            tooltip: 'Situation Room & Admin Portal',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
               );
             },
           ),

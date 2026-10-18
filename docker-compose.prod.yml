@@ -40,18 +40,15 @@ services:
     volumes:
       - backend_uploads:/app/uploads
 
-  # 3. Next.js Web Frontend Service
+  # 3. Flutter Web Frontend Service (Unified Admin Situation Room & Command Portal)
   web:
     build:
-      context: ./web
+      context: ./mobile
       dockerfile: Dockerfile
     container_name: pdp_pollwatch_web
     restart: always
     depends_on:
       - backend
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
-      - PORT=3000
     ports:
       - "3000:3000"
 

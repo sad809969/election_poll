@@ -36,7 +36,10 @@ class AppNotification {
 
 class SocketService {
   // Render Cloud Production WebSocket
-  static const String wsBaseUrl = 'wss://pdp-pollwatch-backend.onrender.com/ws/live-feed';
+  static const String wsBaseUrl = String.fromEnvironment(
+    'WS_BASE_URL',
+    defaultValue: 'wss://pdp-pollwatch-backend.onrender.com/ws/live-feed',
+  );
 
   static WebSocket? _socket;
   static bool _isConnecting = false;

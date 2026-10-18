@@ -12,16 +12,22 @@ Jigawa PDP PollWatch is a secure, real-time Election Situation Room and Monitori
 - **Demo Electoral Data (development)**: Seeds all **27 Jigawa State LGAs** (Dutse, Hadejia, Gumel, Kazaure, Ringim, Birnin Kudu, Babura, Jahun, Guri, Kaugama, Kiyawa, etc.), Wards, Polling Units, and 9 Authorization Roles.
 - **Real-Time Vote Aggregation Engine**: Instant calculation of party vote tallies (PDP, APC, NNPP, LP, Others) and LGA completion rates.
 
-### 2. Next.js Command Center Dashboard (`/web`)
-- **Situation Room Monitoring Dashboard (Dark Theme `#0F172A`)**: Interactive Jigawa State vector map, color-coded PU health pins (Normal, Attention, Critical, No Report), live report stream, hourly timeline graph, incident pie chart, LGA progress bars, and critical alert panel.
-- **Admin & User Management Portal (Light Theme)**: User management table across all 9 roles, role distribution donut chart, system stats, and Excel agent import launcher.
-- **Communication Center**: Broadcast channels, chat thread inspector, pinned guidelines, message templates, and delivery metrics.
-- **Results Dashboard & Collation Engine**: Party vote share donut chart, 27 LGA collation table, recent PU results feed with EC8A sheet photo proof verification status, and PDF/Excel export center.
+### 2. Unified Flutter Command Center & Situation Room (`/mobile`)
+- **100% Flutter & Dart (Cross-Platform Web, Mobile, Desktop)**:
+  - Replaced legacy JS/Next.js with an adaptive, responsive Flutter Web & Mobile Command Suite.
+  - **Situation Room Dashboard**: Live Jigawa KPI metrics, popular vote tallies (PDP, APC, NNPP, LP, Others), 27 LGA collation overview, and real-time incident alert ticker.
+  - **Form EC8A Proof Inspection & Verification**: Pan/zoom official result sheet photos, approve verified results, or flag discrepancies for field correction.
+  - **LGA Collation Center**: Real-time aggregate returning monitoring across all 27 Jigawa LGAs.
+  - **Incident Command & Triage**: Severity-based incident resolution, GPS coordinates, and evidence photo viewer.
+  - **Polling Unit Directory**: Monitor accreditation, voting, and counting across all 4,827 Jigawa polling units.
+  - **Agent Roster & Accreditation**: Enroll and manage accredited field agents and coordinators.
+  - **Broadcast Dispatch**: Send high-priority Situation Room instructions to field agents.
+  - **Security & Audit Trail**: Real-time event logging and telemetry endpoint switcher.
 
-### 3. Flutter Polling Unit Agent Mobile App (`/mobile`)
-- **Agent Exclusive Auth**: Locked login credentials tied to pre-assigned Polling Unit.
+### 3. Field Agent Mode (`/mobile`)
+- **Agent Exclusive Auth**: Locked login credentials tied to pre-assigned Polling Unit with automatic role-based routing.
 - **Election Timeline Tracker**: Log Accreditation, Voting, and Counting milestones with system timestamps.
-- **Incident Reporting**: Categorize incidents (Violence, BVAS Issues, Intimidation, etc.), select severity, attach photos, and tag GPS coordinates.
+- **Incident Reporting**: Categorize incidents, attach photos, and tag GPS coordinates.
 - **Result Submission**: Input party vote counts, validate voter totals, and photograph and upload the official Form EC8A result sheet.
 
 ---
@@ -85,20 +91,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 Run the test suite with `PYTHONPATH=. pytest tests -q`.
 
-### Web Dashboard Setup
-```bash
-cd web
-npm install
-npm run dev
-```
-*Web Command Center: `http://localhost:3000`*
-
-### Mobile App Setup
+### Running the Flutter Unified Application (Web & Mobile)
 ```bash
 cd mobile
 flutter pub get
+
+# 1. Run as Web Application (in Chrome or Edge)
+flutter run -d chrome
+
+# 2. Build Web Production Bundle
+flutter build web --release
+
+# 3. Run on Android / iOS / Linux desktop
 flutter run
 ```
+
+*Serve locally on port 3000:*
+```bash
+cd mobile/build/web
+python3 -m http.server 3000
+```
+*Unified Situation Room & Agent Portal: `http://localhost:3000`*
 
 ---
 

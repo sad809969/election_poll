@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'socket_service.dart';
+import '../utils/file_download_helper.dart';
 
 class ApiService {
-  // Render Cloud Production Backend (Sole, Permanent Endpoint)
-  static const String baseUrl = 'https://pdp-pollwatch-backend.onrender.com/api';
+  // Render Cloud Production Backend (Default Endpoint, can be toggled)
+  static String baseUrl = const String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://pdp-pollwatch-backend.onrender.com/api',
+  );
 
   static String? token;
   static Map<String, dynamic>? currentUser;
@@ -293,5 +297,552 @@ class ApiService {
       } catch (_) {}
     }
     return [];
+  }
+
+  // =========================================================================
+  // ADMINISTRATION & SITUATION ROOM APIs
+  // =========================================================================
+
+  /// Switch the active base API URL (e.g. localhost or custom deployment)
+  static void setBaseUrl(String url) {
+    baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+  }
+
+  /// Situation Room Overview Metrics (KPIs, aggregated party votes)
+  static Future<Map<String, dynamic>> getDashboardSummary() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/dashboard'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (_) {}
+
+    try {
+      final fallback = await http.get(
+        Uri.parse('$baseUrl/dashboard/summary'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+      if (fallback.statusCode == 200) {
+        return json.decode(fallback.body);
+      }
+    } catch (_) {}
+    return {
+      'kpi': {'polling_units': 4827, 'agents': 8, 'reports': 0, 'incidents': 0, 'pending': 4827},
+      'votes': {'pdp': 0, 'apc': 0, 'nnpp': 0, 'lp': 0, 'others': 0, 'total': 0},
+    };
+  }
+
+  /// Admin Electoral Statistics (total LGAs, wards, PUs, agents, results)
+  static Future<Map<String, dynamic>> getAdminStats() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/dashboard-stats'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to load admin stats (${response.statusCode})');
+  }
+
+  /// Get Live Results and verification feed
+  static Future<Map<String, dynamic>> getResults({
+    String? electionType = 'GOVERNORSHIP',
+    int? lgaId,
+    String? status,
+    String? search,
+    int limit = 100,
+    int skip = 0,
+  }) async {
+    final queryParams = <String, String>{
+      'limit': limit.toString(),
+      'skip': skip.toString(),
+    };
+    if (electionType != null && electionType.isNotEmpty) {
+      queryParams['election_type'] = electionType;
+    }
+    if (lgaId != null) queryParams['lga_id'] = lgaId.toString();
+    if (status != null && status.isNotEmpty) queryParams['status'] = status;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+    final uri = Uri.parse('$baseUrl/results').replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to load election results (${response.statusCode})');
+  }
+
+  /// Approve / Verify a submitted polling unit result
+  static Future<Map<String, dynamic>> approveResult(int resultId) async {
+    final uri = Uri.parse('$baseUrl/results/approve/$resultId');
+    final response = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to approve result');
+  }
+
+  /// Flag a submitted result for over-voting or discrepancy
+  static Future<Map<String, dynamic>> flagResult(int resultId, String reason) async {
+    final uri = Uri.parse('$baseUrl/results/flag/$resultId');
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: json.encode({'reason': reason}),
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to flag result');
+  }
+
+  /// Collation Signoffs List
+  static Future<List<dynamic>> getCollationSignoffs() async {
+    final uri = Uri.parse('$baseUrl/collation/signoffs');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return [];
+  }
+
+  /// LGA Collation Details
+  static Future<Map<String, dynamic>> getLgaCollation(int lgaId) async {
+    final uri = Uri.parse('$baseUrl/collation/lga/$lgaId');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to load collation for LGA $lgaId');
+  }
+
+  /// List of all 27 LGAs
+  static Future<List<dynamic>> getLgas() async {
+    try {
+      final uri = Uri.parse('$baseUrl/admin/lgas');
+      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final res = json.decode(response.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+
+    try {
+      final fallbackUri = Uri.parse('$baseUrl/electoral/lgas');
+      final fallbackResp = await http.get(fallbackUri, headers: headers).timeout(const Duration(seconds: 10));
+      if (fallbackResp.statusCode == 200) {
+        final res = json.decode(fallbackResp.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// List Wards (optionally filtered by LGA)
+  static Future<List<dynamic>> getWards({int? lgaId}) async {
+    String url = '$baseUrl/admin/wards';
+    if (lgaId != null) url += '?lga_id=$lgaId';
+    try {
+      final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final res = json.decode(response.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+
+    try {
+      String fallbackUrl = '$baseUrl/electoral/wards';
+      if (lgaId != null) fallbackUrl += '?lga_id=$lgaId';
+      final fb = await http.get(Uri.parse(fallbackUrl), headers: headers).timeout(const Duration(seconds: 10));
+      if (fb.statusCode == 200) {
+        final res = json.decode(fb.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// List Polling Units (with search / filter)
+  static Future<List<dynamic>> getPollingUnits({int? lgaId, int? wardId, String? search}) async {
+    final query = <String, String>{};
+    if (lgaId != null) query['lga_id'] = lgaId.toString();
+    if (wardId != null) query['ward_id'] = wardId.toString();
+    if (search != null && search.isNotEmpty) query['search'] = search;
+
+    try {
+      final uri = Uri.parse('$baseUrl/admin/polling-units').replace(queryParameters: query);
+      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final res = json.decode(response.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+
+    try {
+      final uriFb = Uri.parse('$baseUrl/electoral/polling-units').replace(queryParameters: query);
+      final fb = await http.get(uriFb, headers: headers).timeout(const Duration(seconds: 12));
+      if (fb.statusCode == 200) {
+        final res = json.decode(fb.body);
+        if (res is List) return res;
+        if (res is Map && res['items'] is List) return res['items'];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Get Incidents List
+  static Future<List<dynamic>> getIncidents({
+    String? status,
+    String? severity,
+    int? lgaId,
+  }) async {
+    final query = <String, String>{};
+    if (status != null && status.isNotEmpty) query['status'] = status;
+    if (severity != null && severity.isNotEmpty) query['severity'] = severity;
+    if (lgaId != null) query['lga_id'] = lgaId.toString();
+
+    final uri = Uri.parse('$baseUrl/incidents').replace(queryParameters: query);
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return [];
+  }
+
+  /// Update Incident Status / Resolution
+  static Future<Map<String, dynamic>> updateIncident(
+    int incidentId, {
+    required String status,
+    String? resolutionNotes,
+  }) async {
+    final uri = Uri.parse('$baseUrl/incidents/$incidentId');
+    final response = await http.patch(
+      uri,
+      headers: headers,
+      body: json.encode({
+        'status': status,
+        if (resolutionNotes != null) 'resolution_notes': resolutionNotes,
+      }),
+    ).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Failed to update incident');
+  }
+
+  /// List Field Agents & Users
+  static Future<List<dynamic>> getAgents({String? status, String? search, int? lgaId}) async {
+    final query = <String, String>{};
+    if (status != null && status.isNotEmpty) query['status'] = status;
+    if (search != null && search.isNotEmpty) query['search'] = search;
+    if (lgaId != null) query['lga_id'] = lgaId.toString();
+
+    final uri = Uri.parse('$baseUrl/agents').replace(queryParameters: query);
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return [];
+  }
+
+  /// Create new Field Agent or Supervisor
+  static Future<Map<String, dynamic>> createAgent(Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/agents');
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: json.encode(data),
+    ).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to register agent');
+  }
+
+  /// Fetch System Audit Logs
+  static Future<List<dynamic>> getAuditLogs({int limit = 100}) async {
+    final uri = Uri.parse('$baseUrl/audit?limit=$limit');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return [];
+  }
+
+  /// Dispatch Broadcast Announcement from Situation Room
+  static Future<Map<String, dynamic>> createBroadcast({
+    required String title,
+    required String message,
+    String priority = 'HIGH',
+    String? targetRole,
+    int? lgaId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/announcements');
+    String urgency = 'Normal';
+    if (priority.toUpperCase().contains('HIGH') || priority.toUpperCase().contains('CRITICAL')) {
+      urgency = 'High';
+    } else if (priority.toUpperCase().contains('LOW')) {
+      urgency = 'Low';
+    }
+
+    final body = json.encode({
+      'title': title,
+      'message': message,
+      'urgency': urgency,
+      'target_role': targetRole ?? 'All',
+      if (lgaId != null) 'target_lga_id': lgaId,
+    });
+    final response = await http.post(uri, headers: headers, body: body).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to send broadcast');
+  }
+
+  /// Delete a Situation Room Announcement
+  static Future<void> deleteBroadcast(int announcementId) async {
+    final uri = Uri.parse('$baseUrl/announcements/$announcementId');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete broadcast');
+    }
+  }
+
+  /// Download and trigger browser file export
+  static Future<void> downloadExport(String exportPath, String filename) async {
+    final cleanPath = exportPath.startsWith('/') ? exportPath : '/$exportPath';
+    final uri = Uri.parse('$baseUrl$cleanPath');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 45));
+    if (response.statusCode == 200) {
+      downloadBytes(response.bodyBytes, filename);
+      return;
+    }
+    String msg = 'Export failed (${response.statusCode})';
+    try {
+      final err = json.decode(response.body);
+      if (err is Map && err['detail'] != null) msg = err['detail'];
+    } catch (_) {}
+    throw Exception(msg);
+  }
+
+  // =========================================================================
+  // SIDE A: SYSTEM ADMIN & ELECTORAL MASTER ENGINE
+  // =========================================================================
+
+  /// Trigger seeding of 4,827 INEC polling units
+  static Future<Map<String, dynamic>> seedPollingUnits({bool force = false}) async {
+    final uri = Uri.parse('$baseUrl/admin/seed-polling-units?force=$force');
+    final response = await http.post(uri, headers: headers).timeout(const Duration(seconds: 45));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to seed polling units');
+  }
+
+  /// Get Electoral Hierarchy (LGAs -> Wards -> Polling Units)
+  static Future<Map<String, dynamic>> getElectoralHierarchy() async {
+    final uri = Uri.parse('$baseUrl/admin/electoral-hierarchy');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    return {};
+  }
+
+  /// List Political Parties
+  static Future<List<dynamic>> getParties() async {
+    final uri = Uri.parse('$baseUrl/admin/parties');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      final res = json.decode(response.body);
+      if (res is List) return res;
+      if (res is Map && res['items'] is List) return res['items'];
+    }
+    return [];
+  }
+
+  /// Create Political Party
+  static Future<Map<String, dynamic>> createParty(Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/parties');
+    final response = await http.post(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to register party');
+  }
+
+  /// Delete Political Party
+  static Future<void> deleteParty(int partyId) async {
+    final uri = Uri.parse('$baseUrl/admin/parties/$partyId');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete party');
+    }
+  }
+
+  /// Get Role Permissions Matrix
+  static Future<List<dynamic>> getPermissions() async {
+    final uri = Uri.parse('$baseUrl/admin/permissions');
+    final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      final res = json.decode(response.body);
+      if (res is List) return res;
+      if (res is Map && res['items'] is List) return res['items'];
+    }
+    return [];
+  }
+
+  /// Update User Allowed Pages / Permissions
+  static Future<Map<String, dynamic>> updateUserPermissions(int userId, List<String> allowedPages) async {
+    final uri = Uri.parse('$baseUrl/admin/permissions/update');
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: json.encode({'user_id': userId, 'allowed_pages': allowedPages}),
+    ).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      if (currentUser != null && currentUser!['id'] == userId) {
+        currentUser!['allowed_pages'] = allowedPages;
+      }
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update user permissions');
+  }
+
+  /// Update Role Allowed Pages
+  static Future<Map<String, dynamic>> updateRolePermissions(String role, List<String> allowedPages) async {
+    final uri = Uri.parse('$baseUrl/admin/permissions/role-update');
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: json.encode({'role': role, 'allowed_pages': allowedPages}),
+    ).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update role permissions');
+  }
+
+  // --- LGA CRUD ---
+  static Future<Map<String, dynamic>> createLga(Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/lgas');
+    final response = await http.post(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200 || response.statusCode == 201) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to create LGA');
+  }
+
+  static Future<Map<String, dynamic>> updateLga(int id, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/lgas/$id');
+    final response = await http.patch(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update LGA');
+  }
+
+  static Future<void> deleteLga(int id) async {
+    final uri = Uri.parse('$baseUrl/admin/lgas/$id');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete LGA');
+    }
+  }
+
+  // --- Ward CRUD ---
+  static Future<Map<String, dynamic>> createWard(Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/wards');
+    final response = await http.post(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200 || response.statusCode == 201) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to create Ward');
+  }
+
+  static Future<Map<String, dynamic>> updateWard(int id, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/wards/$id');
+    final response = await http.patch(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update Ward');
+  }
+
+  static Future<void> deleteWard(int id) async {
+    final uri = Uri.parse('$baseUrl/admin/wards/$id');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete Ward');
+    }
+  }
+
+  // --- Polling Unit CRUD ---
+  static Future<Map<String, dynamic>> createPollingUnit(Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/polling-units');
+    final response = await http.post(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200 || response.statusCode == 201) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to create Polling Unit');
+  }
+
+  static Future<Map<String, dynamic>> updatePollingUnit(int id, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/polling-units/$id');
+    final response = await http.patch(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update Polling Unit');
+  }
+
+  static Future<void> deletePollingUnit(int id) async {
+    final uri = Uri.parse('$baseUrl/admin/polling-units/$id');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete Polling Unit');
+    }
+  }
+
+  // --- Party Update ---
+  static Future<Map<String, dynamic>> updateParty(int id, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/admin/parties/$id');
+    final response = await http.patch(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update party');
+  }
+
+  // --- User / Agent Management ---
+  static Future<Map<String, dynamic>> updateUser(int id, Map<String, dynamic> data) async {
+    final uri = Uri.parse('$baseUrl/agents/$id');
+    final response = await http.patch(uri, headers: headers, body: json.encode(data)).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 200) return json.decode(response.body);
+    final err = json.decode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to update user');
+  }
+
+  static Future<void> deleteUser(int id) async {
+    final uri = Uri.parse('$baseUrl/agents/$id');
+    final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      final err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to delete user');
+    }
   }
 }
