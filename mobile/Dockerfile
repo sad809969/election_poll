@@ -9,7 +9,7 @@ RUN flutter config --enable-web && flutter pub get
 
 # Copy application source code
 COPY . .
-RUN flutter build web --release --no-wasm-dry-run
+RUN flutter build web --release
 
 # Production Lightweight Web Server
 FROM nginx:alpine

@@ -61,7 +61,7 @@ If you prefer Render's static CDN hosting (which never sleeps after 15 minutes o
 1. Build the Flutter web app locally:
    ```bash
    cd mobile
-   flutter build web --release --no-wasm-dry-run
+   flutter build web --release
    ```
 2. In Render Dashboard, click **New +** &rarr; Select **Static Site**.
 3. Connect the repository.
