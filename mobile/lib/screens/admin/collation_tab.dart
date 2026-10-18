@@ -146,7 +146,7 @@ class _CollationTabState extends State<CollationTab> {
                 color: const Color(0xFF141E38),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isExpanded ? const Color(0xFF008751).withValues(alpha: 0.5) : Colors.white10,
+                  color: isExpanded ? const Color(0xFF008751).withOpacity(0.5) : Colors.white10,
                 ),
               ),
               child: Column(
@@ -166,7 +166,7 @@ class _CollationTabState extends State<CollationTab> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF008751).withValues(alpha: 0.15),
+                            color: const Color(0xFF008751).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: const Color(0xFF008751), width: 0.8),
                           ),
@@ -247,7 +247,7 @@ class _CollationTabState extends State<CollationTab> {
       decoration: BoxDecoration(
         color: const Color(0xFF0B132B),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         children: [

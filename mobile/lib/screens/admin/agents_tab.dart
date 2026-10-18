@@ -306,7 +306,7 @@ class _AgentsTabState extends State<AgentsTab> {
           children: [
             Container(
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.2), shape: BoxShape.circle),
               child: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 22),
             ),
             const SizedBox(width: 10),
@@ -327,7 +327,7 @@ class _AgentsTabState extends State<AgentsTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF0B132B),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,10 +422,10 @@ class _AgentsTabState extends State<AgentsTab> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 6),
                       decoration: BoxDecoration(
-                        color: isChecked ? const Color(0xFF008751).withValues(alpha: 0.15) : const Color(0xFF0B132B),
+                        color: isChecked ? const Color(0xFF008751).withOpacity(0.15) : const Color(0xFF0B132B),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isChecked ? const Color(0xFF10B981).withValues(alpha: 0.4) : Colors.white10,
+                          color: isChecked ? const Color(0xFF10B981).withOpacity(0.4) : Colors.white10,
                         ),
                       ),
                       child: CheckboxListTile(
@@ -597,7 +597,7 @@ class _AgentsTabState extends State<AgentsTab> {
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF141E38),
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: isSuper ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : Colors.white10),
+                                  border: Border.all(color: isSuper ? const Color(0xFFF59E0B).withOpacity(0.3) : Colors.white10),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -608,7 +608,7 @@ class _AgentsTabState extends State<AgentsTab> {
                                           Container(
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: isSuper ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF008751).withValues(alpha: 0.15),
+                                              color: isSuper ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFF008751).withOpacity(0.15),
                                               shape: BoxShape.circle,
                                             ),
                                             child: Icon(
@@ -632,7 +632,7 @@ class _AgentsTabState extends State<AgentsTab> {
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                       decoration: BoxDecoration(
-                                                        color: isSuper ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                                                        color: isSuper ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFF3B82F6).withOpacity(0.15),
                                                         borderRadius: BorderRadius.circular(4),
                                                       ),
                                                       child: Text(

@@ -107,7 +107,7 @@ class _MapTabState extends State<MapTab> {
           decoration: BoxDecoration(
             color: const Color(0xFF141E38),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

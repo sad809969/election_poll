@@ -276,7 +276,7 @@ class _IncidentsTabState extends State<IncidentsTab> {
       decoration: BoxDecoration(
         color: const Color(0xFF141E38),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: sevColor.withValues(alpha: 0.3)),
+        border: Border.all(color: sevColor.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +289,7 @@ class _IncidentsTabState extends State<IncidentsTab> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: sevColor.withValues(alpha: 0.15),
+                      color: sevColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: sevColor, width: 0.8),
                     ),
@@ -305,7 +305,7 @@ class _IncidentsTabState extends State<IncidentsTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: status == 'RESOLVED' ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.amberAccent.withValues(alpha: 0.15),
+                  color: status == 'RESOLVED' ? const Color(0xFF10B981).withOpacity(0.15) : Colors.amberAccent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(

@@ -221,7 +221,7 @@ class _OverviewTabState extends State<OverviewTab> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF008751).withValues(alpha: 0.25),
+            color: const Color(0xFF008751).withOpacity(0.25),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -232,7 +232,7 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.shield_outlined, color: Colors.white, size: 28),
@@ -255,7 +255,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 const SizedBox(height: 4),
                 Text(
                   'Monitoring 27 LGAs • 287 Wards • 4,827 Polling Units | Reporting Completion: $reportingPct%',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12),
+                  style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12),
                 ),
               ],
             ),
@@ -353,7 +353,7 @@ class _OverviewTabState extends State<OverviewTab> {
         decoration: BoxDecoration(
           color: const Color(0xFF141E38),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
+          border: Border.all(color: color.withOpacity(0.25), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,7 +373,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
+                    color: color.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(icon, color: color, size: 18),
@@ -390,7 +390,7 @@ class _OverviewTabState extends State<OverviewTab> {
               subtext,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: color.withValues(alpha: 0.9), fontSize: 11),
+              style: TextStyle(color: color.withOpacity(0.9), fontSize: 11),
             ),
           ],
         ),
@@ -511,7 +511,7 @@ class _OverviewTabState extends State<OverviewTab> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF008751).withValues(alpha: 0.2),
+                      color: const Color(0xFF008751).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: const Color(0xFF008751), width: 0.8),
                     ),
@@ -604,7 +604,7 @@ class _OverviewTabState extends State<OverviewTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.15),
+                        color: color.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: color, width: 0.8),
                       ),
@@ -770,7 +770,7 @@ class _LivePulseBadgeState extends State<_LivePulseBadge> with SingleTickerProvi
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.15 + (_animController.value * 0.2)),
+            color: Colors.redAccent.withOpacity(0.15 + (_animController.value * 0.2)),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: Colors.redAccent, width: 0.8),
           ),

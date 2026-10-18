@@ -496,7 +496,7 @@ class _ResultsTabState extends State<ResultsTab> {
       decoration: BoxDecoration(
         color: const Color(0xFF141E38),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        border: Border.all(color: statusColor.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,7 +524,7 @@ class _ResultsTabState extends State<ResultsTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
+                  color: statusColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: statusColor, width: 0.8),
                 ),

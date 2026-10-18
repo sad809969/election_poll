@@ -135,7 +135,7 @@ class _JigawaMapWidgetState extends State<JigawaMapWidget> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF008751).withValues(alpha: 0.2),
+                        color: const Color(0xFF008751).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.map, color: Color(0xFF10B981), size: 18),
@@ -256,7 +256,7 @@ class _JigawaMapWidgetState extends State<JigawaMapWidget> {
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: color.withValues(alpha: 0.6),
+                                            color: color.withOpacity(0.6),
                                             blurRadius: isSel ? 8 : 4,
                                             spreadRadius: isSel ? 2 : 0,
                                           ),
@@ -297,9 +297,9 @@ class _JigawaMapWidgetState extends State<JigawaMapWidget> {
                       width: 280,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0B132B).withValues(alpha: 0.95),
+                        color: const Color(0xFF0B132B).withOpacity(0.95),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
                         boxShadow: const [
                           BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4)),
                         ],
@@ -335,7 +335,7 @@ class _JigawaMapWidgetState extends State<JigawaMapWidget> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: _getStatusColor(_selectedLga!.status).withValues(alpha: 0.2),
+                                  color: _getStatusColor(_selectedLga!.status).withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
                                     color: _getStatusColor(_selectedLga!.status),
@@ -390,7 +390,7 @@ class _JigawaMapWidgetState extends State<JigawaMapWidget> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF070D1E).withValues(alpha: 0.85),
+                      color: const Color(0xFF070D1E).withOpacity(0.85),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.white10),
                     ),
@@ -453,7 +453,7 @@ class _JigawaMapPainter extends CustomPainter {
 
     // 1. Grid Background Lines
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.03)
+      ..color = Colors.white.withOpacity(0.03)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
@@ -500,7 +500,7 @@ class _JigawaMapPainter extends CustomPainter {
 
     // Stroke Outline
     final strokePaint = Paint()
-      ..color = const Color(0xFF10B981).withValues(alpha: 0.5)
+      ..color = const Color(0xFF10B981).withOpacity(0.5)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, strokePaint);
@@ -510,7 +510,7 @@ class _JigawaMapPainter extends CustomPainter {
       text: TextSpan(
         text: 'JIGAWA STATE',
         style: TextStyle(
-          color: const Color(0xFF10B981).withValues(alpha: 0.08),
+          color: const Color(0xFF10B981).withOpacity(0.08),
           fontSize: 34 * scaleX,
           fontWeight: FontWeight.w900,
           letterSpacing: 8.0,
@@ -526,7 +526,7 @@ class _JigawaMapPainter extends CustomPainter {
 
     // 4. Inter-Emirate Zone Lines (Dotted connection network)
     final linePaint = Paint()
-      ..color = const Color(0xFF10B981).withValues(alpha: 0.15)
+      ..color = const Color(0xFF10B981).withOpacity(0.15)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 

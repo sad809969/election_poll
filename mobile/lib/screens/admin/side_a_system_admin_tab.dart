@@ -513,10 +513,10 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
                     return Container(
                       margin: const EdgeInsets.only(bottom: 6),
                       decoration: BoxDecoration(
-                        color: isChecked ? const Color(0xFF008751).withValues(alpha: 0.15) : const Color(0xFF0B132B),
+                        color: isChecked ? const Color(0xFF008751).withOpacity(0.15) : const Color(0xFF0B132B),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isChecked ? const Color(0xFF10B981).withValues(alpha: 0.4) : Colors.white10,
+                          color: isChecked ? const Color(0xFF10B981).withOpacity(0.4) : Colors.white10,
                         ),
                       ),
                       child: CheckboxListTile(
@@ -674,10 +674,10 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+            color: const Color(0xFFF59E0B).withOpacity(0.2),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -688,7 +688,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+              color: const Color(0xFFF59E0B).withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
             ),
@@ -805,7 +805,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
       decoration: BoxDecoration(
         color: const Color(0xFF141E38),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1017,7 +1017,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                                        color: const Color(0xFF3B82F6).withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(pu['code'] ?? 'PU', style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1240,7 +1240,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
                 decoration: BoxDecoration(
                   color: const Color(0xFF141E38),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isSuper ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : Colors.white10),
+                  border: Border.all(color: isSuper ? const Color(0xFFF59E0B).withOpacity(0.3) : Colors.white10),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1256,7 +1256,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: isSuper ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                                  color: isSuper ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFF3B82F6).withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -1343,7 +1343,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
           children: [
             Container(
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.2), shape: BoxShape.circle),
               child: const Icon(Icons.delete_forever, color: Colors.redAccent, size: 22),
             ),
             const SizedBox(width: 10),
@@ -1364,7 +1364,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
               decoration: BoxDecoration(
                 color: const Color(0xFF0B132B),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1488,7 +1488,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
         decoration: BoxDecoration(
           color: const Color(0xFF141E38),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: color.withOpacity(0.3)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1498,7 +1498,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
                     child: Icon(icon, color: color, size: 20),
                   ),
                   const SizedBox(width: 14),
@@ -1520,7 +1520,7 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0B132B),
                 foregroundColor: Colors.white,
-                side: BorderSide(color: color.withValues(alpha: 0.5)),
+                side: BorderSide(color: color.withOpacity(0.5)),
               ),
               onPressed: isDownloading
                   ? null
@@ -1555,7 +1555,7 @@ class _SideABadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+        color: const Color(0xFFF59E0B).withOpacity(0.2),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: const Color(0xFFF59E0B), width: 0.8),
       ),

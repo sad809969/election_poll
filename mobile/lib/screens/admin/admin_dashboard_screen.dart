@@ -224,7 +224,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF008751).withValues(alpha: 0.2),
+                color: const Color(0xFF008751).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFF008751), width: 1),
               ),
@@ -253,10 +253,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: _autoRefreshEnabled ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.white10,
+              color: _autoRefreshEnabled ? const Color(0xFF10B981).withOpacity(0.15) : Colors.white10,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: _autoRefreshEnabled ? const Color(0xFF10B981).withValues(alpha: 0.6) : Colors.white24,
+                color: _autoRefreshEnabled ? const Color(0xFF10B981).withOpacity(0.6) : Colors.white24,
                 width: 1,
               ),
             ),
@@ -314,7 +314,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+              color: const Color(0xFF3B82F6).withOpacity(0.15),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -433,14 +433,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               decoration: BoxDecoration(
                                 color: isSel
                                     ? (item.isHighlighted
-                                        ? const Color(0xFFF59E0B).withValues(alpha: 0.22)
-                                        : const Color(0xFF008751).withValues(alpha: 0.18))
-                                    : (item.isHighlighted ? const Color(0xFFF59E0B).withValues(alpha: 0.08) : Colors.transparent),
+                                        ? const Color(0xFFF59E0B).withOpacity(0.22)
+                                        : const Color(0xFF008751).withOpacity(0.18))
+                                    : (item.isHighlighted ? const Color(0xFFF59E0B).withOpacity(0.08) : Colors.transparent),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSel
                                       ? (item.isHighlighted ? const Color(0xFFF59E0B) : const Color(0xFF008751))
-                                      : (item.isHighlighted ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : Colors.transparent),
+                                      : (item.isHighlighted ? const Color(0xFFF59E0B).withOpacity(0.3) : Colors.transparent),
                                   width: item.isHighlighted ? 1.2 : 1.0,
                                 ),
                               ),
@@ -470,7 +470,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                        color: const Color(0xFFF59E0B).withOpacity(0.2),
                                         borderRadius: BorderRadius.circular(3),
                                       ),
                                       child: const Text('CORE', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 8, fontWeight: FontWeight.bold)),

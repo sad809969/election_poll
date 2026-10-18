@@ -230,7 +230,7 @@ class _BroadcastTabState extends State<BroadcastTab> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: isCrit ? Colors.redAccent.withValues(alpha: 0.2) : const Color(0xFF10B981).withValues(alpha: 0.2),
+                                color: isCrit ? Colors.redAccent.withOpacity(0.2) : const Color(0xFF10B981).withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
