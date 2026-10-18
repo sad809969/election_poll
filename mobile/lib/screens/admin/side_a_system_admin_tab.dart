@@ -38,6 +38,10 @@ class _SideASystemAdminTabState extends State<SideASystemAdminTab> with SingleTi
   // Master catalog of all system pages
   static const List<Map<String, String>> systemPages = [
     {'path': '/', 'label': 'Situation Room Overview', 'desc': 'Central dashboard and KPIs'},
+    {'path': '/governor-dashboard', 'label': '🏛️ Governor Command Dashboard', 'desc': 'Gubernatorial election race and 2/3 constitutional threshold'},
+    {'path': '/senate-dashboard', 'label': '🎖️ Senate Command Dashboard', 'desc': '3 Senatorial Districts live returns and red chamber seats'},
+    {'path': '/house-of-reps-dashboard', 'label': '🏢 House of Reps Dashboard', 'desc': '11 Federal Constituencies live returns and green chamber seats'},
+    {'path': '/assembly-dashboard', 'label': '📜 State Assembly Dashboard', 'desc': '30 State Constituencies and 16-seat majority monitor'},
     {'path': '/map', 'label': 'Interactive Geospatial Map', 'desc': '27 LGA vector surveillance'},
     {'path': '/results', 'label': 'Results & EC8A Inspection', 'desc': 'Form EC8A approvals and proofs'},
     {'path': '/collation', 'label': 'LGA Collation Center', 'desc': 'State and LGA vote returns'},

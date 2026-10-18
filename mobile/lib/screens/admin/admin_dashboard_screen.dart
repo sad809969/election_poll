@@ -14,6 +14,10 @@ import 'broadcast_tab.dart';
 import 'audit_logs_tab.dart';
 import 'side_a_system_admin_tab.dart';
 import 'admin_settings_tab.dart';
+import 'governor_dashboard_tab.dart';
+import 'senate_dashboard_tab.dart';
+import 'house_of_reps_dashboard_tab.dart';
+import 'assembly_dashboard_tab.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -132,6 +136,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     final allItems = [
       const _NavDestination(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Situation Room', path: '/'),
+
+      // Dedicated 2027 Electoral Race Dashboards
+      const _NavDestination(icon: Icons.account_balance_outlined, selectedIcon: Icons.account_balance, label: '🏛️ Governor Command', path: '/governor-dashboard'),
+      const _NavDestination(icon: Icons.military_tech_outlined, selectedIcon: Icons.military_tech, label: '🎖️ Senate Command', path: '/senate-dashboard'),
+      const _NavDestination(icon: Icons.apartment_outlined, selectedIcon: Icons.apartment, label: '🏢 House of Reps', path: '/house-of-reps-dashboard'),
+      const _NavDestination(icon: Icons.history_edu_outlined, selectedIcon: Icons.history_edu, label: '📜 State Assembly', path: '/assembly-dashboard'),
+
+      // Operations & Field Management
       const _NavDestination(icon: Icons.map_outlined, selectedIcon: Icons.map, label: 'Interactive Map', path: '/map'),
       const _NavDestination(icon: Icons.verified_outlined, selectedIcon: Icons.verified, label: 'Results & EC8A', path: '/results'),
       const _NavDestination(icon: Icons.table_chart_outlined, selectedIcon: Icons.table_chart, label: 'LGA Collation', path: '/collation'),
@@ -171,6 +183,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onNavigateToIncidents: () => _navigateToPath('/incidents', navItems),
           onNavigateToCollation: () => _navigateToPath('/collation', navItems),
           onNavigateToMap: () => _navigateToPath('/map', navItems),
+        );
+      case '/governor-dashboard':
+        return GovernorDashboardTab(
+          onNavigateToResults: () => _navigateToPath('/results', navItems),
+          onNavigateToCollation: () => _navigateToPath('/collation', navItems),
+        );
+      case '/senate-dashboard':
+        return SenateDashboardTab(
+          onNavigateToResults: () => _navigateToPath('/results', navItems),
+          onNavigateToCollation: () => _navigateToPath('/collation', navItems),
+        );
+      case '/house-of-reps-dashboard':
+        return HouseOfRepsDashboardTab(
+          onNavigateToResults: () => _navigateToPath('/results', navItems),
+          onNavigateToCollation: () => _navigateToPath('/collation', navItems),
+        );
+      case '/assembly-dashboard':
+        return AssemblyDashboardTab(
+          onNavigateToResults: () => _navigateToPath('/results', navItems),
+          onNavigateToCollation: () => _navigateToPath('/collation', navItems),
         );
       case '/map':
         return MapTab(
@@ -307,6 +339,57 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             tooltip: 'Sync Telemetry Now',
             icon: const Icon(Icons.refresh, color: Colors.white70, size: 20),
             onPressed: _manualRefresh,
+          ),
+          const SizedBox(width: 6),
+
+          // Race Switcher Quick Menu
+          PopupMenuButton<String>(
+            tooltip: 'Switch Electoral Race Dashboard',
+            icon: const Icon(Icons.how_to_vote, color: Color(0xFF10B981), size: 20),
+            color: const Color(0xFF0B132B),
+            onSelected: (path) => _navigateToPath(path, navItems),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: '/governor-dashboard',
+                child: Row(
+                  children: [
+                    Text('🏛️', style: TextStyle(fontSize: 16)),
+                    SizedBox(width: 8),
+                    Text('Governor Dashboard', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: '/senate-dashboard',
+                child: Row(
+                  children: [
+                    Text('🎖️', style: TextStyle(fontSize: 16)),
+                    SizedBox(width: 8),
+                    Text('Senate Dashboard (3 Districts)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: '/house-of-reps-dashboard',
+                child: Row(
+                  children: [
+                    Text('🏢', style: TextStyle(fontSize: 16)),
+                    SizedBox(width: 8),
+                    Text('House of Reps (11 Seats)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: '/assembly-dashboard',
+                child: Row(
+                  children: [
+                    Text('📜', style: TextStyle(fontSize: 16)),
+                    SizedBox(width: 8),
+                    Text('State Assembly (30 Seats)', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 6),
 

@@ -1,12 +1,12 @@
 {
-    "name": "jigawa_pdp_pollwatch_mobile",
-    "short_name": "jigawa_pdp_pollwatch_mobile",
+    "name": "PDP PollWatch 2027 Situation Room",
+    "short_name": "PDP PollWatch",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#070D1E",
+    "theme_color": "#008751",
+    "description": "Jigawa PDP PollWatch 2027 Command Center & Situation Room",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
